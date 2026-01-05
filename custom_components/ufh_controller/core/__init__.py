@@ -9,14 +9,34 @@ from .history import (
     get_window_open_average,
 )
 from .pid import PIDController, PIDState
+from .zone import (
+    CircuitType,
+    ControllerState,
+    TimingParams,
+    ZoneAction,
+    ZoneState,
+    aggregate_heat_request,
+    calculate_requested_duration,
+    evaluate_zone,
+    should_request_heat,
+)
 
 __all__ = [
+    "CircuitType",
+    "ControllerState",
     "PIDController",
     "PIDState",
+    "TimingParams",
+    "ZoneAction",
+    "ZoneState",
+    "aggregate_heat_request",
+    "calculate_requested_duration",
+    "evaluate_zone",
     "get_duty_cycle_window",
     "get_numeric_average",
     "get_observation_start",
     "get_state_average",
     "get_valve_open_window",
     "get_window_open_average",
+    "should_request_heat",
 ]
