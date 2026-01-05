@@ -8,6 +8,7 @@ __pycache__
 
 # misc
 .coverage
+.idea
 .vscode
 coverage.xml
 .ruff_cache
