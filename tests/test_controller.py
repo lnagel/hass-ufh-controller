@@ -22,7 +22,6 @@ def basic_config() -> ControllerConfig:
     return ControllerConfig(
         controller_id="heating",
         name="Heating Controller",
-        heat_request_entity="switch.boiler",
         zones=[
             ZoneConfig(
                 zone_id="living_room",
@@ -46,7 +45,6 @@ def flush_config() -> ControllerConfig:
     return ControllerConfig(
         controller_id="heating",
         name="Heating Controller",
-        heat_request_entity="switch.boiler",
         zones=[
             ZoneConfig(
                 zone_id="living_room",
@@ -480,7 +478,6 @@ class TestGetSummerModeValue:
         config = ControllerConfig(
             controller_id="heating",
             name="Heating",
-            heat_request_entity="switch.boiler",
             summer_mode_entity="select.boiler_summer",
             zones=[],
         )
@@ -493,7 +490,6 @@ class TestGetSummerModeValue:
         config = ControllerConfig(
             controller_id="heating",
             name="Heating",
-            heat_request_entity="switch.boiler",
             summer_mode_entity="select.boiler_summer",
             zones=[],
         )
@@ -506,7 +502,6 @@ class TestGetSummerModeValue:
         config = ControllerConfig(
             controller_id="heating",
             name="Heating",
-            heat_request_entity="switch.boiler",
             summer_mode_entity="select.boiler_summer",
             zones=[],
         )
@@ -519,7 +514,6 @@ class TestGetSummerModeValue:
         config = ControllerConfig(
             controller_id="heating",
             name="Heating",
-            heat_request_entity="switch.boiler",
             summer_mode_entity="select.boiler_summer",
             zones=[],
         )
@@ -532,7 +526,6 @@ class TestGetSummerModeValue:
         config = ControllerConfig(
             controller_id="heating",
             name="Heating",
-            heat_request_entity="switch.boiler",
             summer_mode_entity="select.boiler_summer",
             zones=[],
         )
@@ -544,7 +537,6 @@ class TestGetSummerModeValue:
         config = ControllerConfig(
             controller_id="heating",
             name="Heating",
-            heat_request_entity="switch.boiler",
             summer_mode_entity="select.boiler_summer",
             zones=[],
         )
@@ -590,7 +582,6 @@ class TestControllerConfig:
         config = ControllerConfig(
             controller_id="heating",
             name="Heating",
-            heat_request_entity="switch.boiler",
         )
         assert config.dhw_active_entity is None
         assert config.summer_mode_entity is None
@@ -601,7 +592,6 @@ class TestControllerConfig:
         config = ControllerConfig(
             controller_id="heating",
             name="Heating",
-            heat_request_entity="switch.boiler",
             dhw_active_entity="binary_sensor.dhw",
             summer_mode_entity="select.summer",
         )

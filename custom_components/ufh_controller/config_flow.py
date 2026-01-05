@@ -20,7 +20,6 @@ from .const import (
 
 CONF_NAME = "name"
 CONF_CONTROLLER_ID = "controller_id"
-CONF_HEAT_REQUEST_ENTITY = "heat_request_entity"
 CONF_DHW_ACTIVE_ENTITY = "dhw_active_entity"
 CONF_CIRCULATION_ENTITY = "circulation_entity"
 CONF_SUMMER_MODE_ENTITY = "summer_mode_entity"
@@ -55,7 +54,6 @@ class UFHControllerFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 data={
                     CONF_NAME: user_input[CONF_NAME],
                     CONF_CONTROLLER_ID: controller_id,
-                    CONF_HEAT_REQUEST_ENTITY: user_input[CONF_HEAT_REQUEST_ENTITY],
                     CONF_DHW_ACTIVE_ENTITY: user_input.get(CONF_DHW_ACTIVE_ENTITY),
                     CONF_CIRCULATION_ENTITY: user_input.get(CONF_CIRCULATION_ENTITY),
                     CONF_SUMMER_MODE_ENTITY: user_input.get(CONF_SUMMER_MODE_ENTITY),
@@ -72,9 +70,6 @@ class UFHControllerFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 {
                     vol.Required(CONF_NAME): selector.TextSelector(
                         selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
-                    ),
-                    vol.Required(CONF_HEAT_REQUEST_ENTITY): selector.EntitySelector(
-                        selector.EntitySelectorConfig(domain="switch")
                     ),
                     vol.Optional(CONF_DHW_ACTIVE_ENTITY): selector.EntitySelector(
                         selector.EntitySelectorConfig(domain="binary_sensor")

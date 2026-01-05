@@ -52,7 +52,6 @@ class ControllerConfig:
 
     controller_id: str
     name: str
-    heat_request_entity: str
     dhw_active_entity: str | None = None
     circulation_entity: str | None = None
     summer_mode_entity: str | None = None

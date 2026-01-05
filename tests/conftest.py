@@ -23,7 +23,6 @@ from custom_components.ufh_controller.const import (
 )
 
 MOCK_CONTROLLER_ID = "test_controller"
-MOCK_HEAT_REQUEST_ENTITY = "switch.test_heat_request"
 
 
 @pytest.fixture
@@ -35,7 +34,6 @@ def mock_config_entry() -> MockConfigEntry:
         data={
             "name": "Test Controller",
             "controller_id": MOCK_CONTROLLER_ID,
-            "heat_request_entity": MOCK_HEAT_REQUEST_ENTITY,
         },
         options={
             "timing": DEFAULT_TIMING,
@@ -72,7 +70,6 @@ def mock_config_entry_no_zones() -> MockConfigEntry:
         data={
             "name": "Test Controller",
             "controller_id": MOCK_CONTROLLER_ID,
-            "heat_request_entity": MOCK_HEAT_REQUEST_ENTITY,
         },
         options={
             "timing": DEFAULT_TIMING,
