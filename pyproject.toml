@@ -67,4 +67,22 @@ max-complexity = 25
     "S101", # Allow assert in tests
     "S106", # Allow hardcoded passwords in tests
     "ARG001", # Allow unused arguments in fixtures
+    "PLR2004", # Allow magic values in tests
 ]
+
+[tool.coverage.run]
+source = ["custom_components/ufh_controller"]
+branch = true
+omit = ["tests/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+]
+fail_under = 80
+show_missing = true
+
+[tool.ty.environment]
+python-version = "3.13"

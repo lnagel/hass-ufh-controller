@@ -663,7 +663,7 @@ hass-ufh-controller/
 │       └── validate.yml             # CI pipeline
 │       └── checks.yml               # CI pipeline
 │
-├── pyproject.toml                   # Project config (uv/pip, pytest, mypy, ruff)
+├── pyproject.toml                   # Project config (uv/pip, pytest, ty, ruff)
 ├── README.md                        # User documentation
 └── LICENSE
 ```
@@ -834,8 +834,8 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras --dev
 
-      - name: Mypy
-        run: uv run mypy custom_components/ufh_controller
+      - name: Type check
+        run: uv run ty check .
 ```
 
 ### 11.2 Pre-commit Hooks (Optional)
