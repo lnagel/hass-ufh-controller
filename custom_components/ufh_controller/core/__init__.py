@@ -1,5 +1,11 @@
 """Core control logic for UFH Controller."""
 
+from .controller import (
+    ControllerConfig,
+    HeatingController,
+    ZoneConfig,
+    ZoneRuntime,
+)
 from .history import (
     get_duty_cycle_window,
     get_numeric_average,
@@ -23,11 +29,15 @@ from .zone import (
 
 __all__ = [
     "CircuitType",
+    "ControllerConfig",
     "ControllerState",
+    "HeatingController",
     "PIDController",
     "PIDState",
     "TimingParams",
     "ZoneAction",
+    "ZoneConfig",
+    "ZoneRuntime",
     "ZoneState",
     "aggregate_heat_request",
     "calculate_requested_duration",
