@@ -227,9 +227,6 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
                         "kp", default=DEFAULT_PID["kp"]
                     ): selector.NumberSelector(
                         selector.NumberSelectorConfig(
-                            min=0,
-                            max=200,
-                            step=0.1,
                             mode=selector.NumberSelectorMode.BOX,
                         )
                     ),
@@ -237,9 +234,6 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
                         "ki", default=DEFAULT_PID["ki"]
                     ): selector.NumberSelector(
                         selector.NumberSelectorConfig(
-                            min=0,
-                            max=1,
-                            step=0.001,
                             mode=selector.NumberSelectorMode.BOX,
                         )
                     ),
@@ -247,9 +241,6 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
                         "kd", default=DEFAULT_PID["kd"]
                     ): selector.NumberSelector(
                         selector.NumberSelectorConfig(
-                            min=0,
-                            max=100,
-                            step=0.1,
                             mode=selector.NumberSelectorMode.BOX,
                         )
                     ),
@@ -430,9 +421,6 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
                         "kp", default=pid.get("kp", DEFAULT_PID["kp"])
                     ): selector.NumberSelector(
                         selector.NumberSelectorConfig(
-                            min=0,
-                            max=200,
-                            step=0.1,
                             mode=selector.NumberSelectorMode.BOX,
                         )
                     ),
@@ -440,9 +428,6 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
                         "ki", default=pid.get("ki", DEFAULT_PID["ki"])
                     ): selector.NumberSelector(
                         selector.NumberSelectorConfig(
-                            min=0,
-                            max=1,
-                            step=0.001,
                             mode=selector.NumberSelectorMode.BOX,
                         )
                     ),
@@ -450,9 +435,6 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
                         "kd", default=pid.get("kd", DEFAULT_PID["kd"])
                     ): selector.NumberSelector(
                         selector.NumberSelectorConfig(
-                            min=0,
-                            max=100,
-                            step=0.1,
                             mode=selector.NumberSelectorMode.BOX,
                         )
                     ),
