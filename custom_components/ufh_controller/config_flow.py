@@ -193,22 +193,45 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
                     vol.Optional(
                         "setpoint_min", default=DEFAULT_SETPOINT["min"]
                     ): selector.NumberSelector(
-                        selector.NumberSelectorConfig(min=5, max=30, step=0.5)
+                        selector.NumberSelectorConfig(
+                            min=5,
+                            max=30,
+                            step=0.1,
+                            unit_of_measurement="°C",
+                            mode=selector.NumberSelectorMode.SLIDER,
+                        )
                     ),
                     vol.Optional(
                         "setpoint_max", default=DEFAULT_SETPOINT["max"]
                     ): selector.NumberSelector(
-                        selector.NumberSelectorConfig(min=5, max=35, step=0.5)
+                        selector.NumberSelectorConfig(
+                            min=5,
+                            max=35,
+                            step=0.1,
+                            unit_of_measurement="°C",
+                            mode=selector.NumberSelectorMode.SLIDER,
+                        )
                     ),
                     vol.Optional(
                         "setpoint_default", default=DEFAULT_SETPOINT["default"]
                     ): selector.NumberSelector(
-                        selector.NumberSelectorConfig(min=5, max=35, step=0.5)
+                        selector.NumberSelectorConfig(
+                            min=5,
+                            max=35,
+                            step=0.1,
+                            unit_of_measurement="°C",
+                            mode=selector.NumberSelectorMode.SLIDER,
+                        )
                     ),
                     vol.Optional(
                         "kp", default=DEFAULT_PID["kp"]
                     ): selector.NumberSelector(
-                        selector.NumberSelectorConfig(min=0, max=200, step=1)
+                        selector.NumberSelectorConfig(
+                            min=0,
+                            max=200,
+                            step=0.1,
+                            mode=selector.NumberSelectorMode.BOX,
+                        )
                     ),
                     vol.Optional(
                         "ki", default=DEFAULT_PID["ki"]
@@ -223,7 +246,12 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
                     vol.Optional(
                         "kd", default=DEFAULT_PID["kd"]
                     ): selector.NumberSelector(
-                        selector.NumberSelectorConfig(min=0, max=100, step=1)
+                        selector.NumberSelectorConfig(
+                            min=0,
+                            max=100,
+                            step=0.1,
+                            mode=selector.NumberSelectorMode.BOX,
+                        )
                     ),
                 }
             ),
@@ -366,24 +394,47 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
                         "setpoint_min",
                         default=setpoint.get("min", DEFAULT_SETPOINT["min"]),
                     ): selector.NumberSelector(
-                        selector.NumberSelectorConfig(min=5, max=30, step=0.5)
+                        selector.NumberSelectorConfig(
+                            min=5,
+                            max=30,
+                            step=0.1,
+                            unit_of_measurement="°C",
+                            mode=selector.NumberSelectorMode.SLIDER,
+                        )
                     ),
                     vol.Optional(
                         "setpoint_max",
                         default=setpoint.get("max", DEFAULT_SETPOINT["max"]),
                     ): selector.NumberSelector(
-                        selector.NumberSelectorConfig(min=5, max=35, step=0.5)
+                        selector.NumberSelectorConfig(
+                            min=5,
+                            max=35,
+                            step=0.1,
+                            unit_of_measurement="°C",
+                            mode=selector.NumberSelectorMode.SLIDER,
+                        )
                     ),
                     vol.Optional(
                         "setpoint_default",
                         default=setpoint.get("default", DEFAULT_SETPOINT["default"]),
                     ): selector.NumberSelector(
-                        selector.NumberSelectorConfig(min=5, max=35, step=0.5)
+                        selector.NumberSelectorConfig(
+                            min=5,
+                            max=35,
+                            step=0.1,
+                            unit_of_measurement="°C",
+                            mode=selector.NumberSelectorMode.SLIDER,
+                        )
                     ),
                     vol.Optional(
                         "kp", default=pid.get("kp", DEFAULT_PID["kp"])
                     ): selector.NumberSelector(
-                        selector.NumberSelectorConfig(min=0, max=200, step=1)
+                        selector.NumberSelectorConfig(
+                            min=0,
+                            max=200,
+                            step=0.1,
+                            mode=selector.NumberSelectorMode.BOX,
+                        )
                     ),
                     vol.Optional(
                         "ki", default=pid.get("ki", DEFAULT_PID["ki"])
@@ -398,7 +449,12 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
                     vol.Optional(
                         "kd", default=pid.get("kd", DEFAULT_PID["kd"])
                     ): selector.NumberSelector(
-                        selector.NumberSelectorConfig(min=0, max=100, step=1)
+                        selector.NumberSelectorConfig(
+                            min=0,
+                            max=100,
+                            step=0.1,
+                            mode=selector.NumberSelectorMode.BOX,
+                        )
                     ),
                 }
             ),
