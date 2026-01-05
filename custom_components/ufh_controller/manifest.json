@@ -1,0 +1,12 @@
+{
+  "domain": "ufh_controller",
+  "name": "Home Assistant UFH Controller",
+  "codeowners": [
+    "@lnagel"
+  ],
+  "config_flow": true,
+  "documentation": "https://github.com/lnagel/hass-ufh-controller",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/lnagel/hass-ufh-controller/issues",
+  "version": "0.1.0"
+}
