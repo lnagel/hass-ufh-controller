@@ -11,7 +11,7 @@ from homeassistant.components.climate import (
     HVACMode,
 )
 
-from .const import DEFAULT_SETPOINT, DOMAIN
+from .const import DEFAULT_SETPOINT
 from .entity import UFHControllerZoneEntity
 
 if TYPE_CHECKING:

@@ -5,7 +5,6 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
-from homeassistant.helpers.recorder import DATA_INSTANCE as RECORDER_DATA_INSTANCE
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import CONTROLLER_LOOP_INTERVAL, DOMAIN, LOGGER
@@ -187,45 +186,35 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # Query historical data from Recorder
         timing = self._controller.config.timing
-        period_state_avg = 0.0
-        open_state_avg = 0.0
-        window_open_avg = 0.0
 
-        # Check if Recorder is available (should be due to manifest dependency)
-        if RECORDER_DATA_INSTANCE not in self.hass.data:
-            LOGGER.warning(
-                "Recorder not available. Historical state queries disabled. "
-                "Ensure the Recorder integration is enabled."
-            )
-        else:
-            # Valve state since observation start (for used_duration)
-            period_start = self._controller.state.observation_start
-            period_state_avg = await get_state_average(
-                self.hass,
-                runtime.config.valve_switch,
-                period_start,
-                now,
-                on_value="on",
-            )
+        # Valve state since observation start (for used_duration)
+        period_start = self._controller.state.observation_start
+        period_state_avg = await get_state_average(
+            self.hass,
+            runtime.config.valve_switch,
+            period_start,
+            now,
+            on_value="on",
+        )
 
-            # Valve state for open detection (recent window)
-            valve_start, valve_end = get_valve_open_window(now, timing.valve_open_time)
-            open_state_avg = await get_state_average(
-                self.hass,
-                runtime.config.valve_switch,
-                valve_start,
-                valve_end,
-                on_value="on",
-            )
+        # Valve state for open detection (recent window)
+        valve_start, valve_end = get_valve_open_window(now, timing.valve_open_time)
+        open_state_avg = await get_state_average(
+            self.hass,
+            runtime.config.valve_switch,
+            valve_start,
+            valve_end,
+            on_value="on",
+        )
 
-            # Window sensors average
-            duty_start, duty_end = get_duty_cycle_window(now, timing.duty_cycle_window)
-            window_open_avg = await get_window_open_average(
-                self.hass,
-                runtime.config.window_sensors,
-                duty_start,
-                duty_end,
-            )
+        # Window sensors average
+        duty_start, duty_end = get_duty_cycle_window(now, timing.duty_cycle_window)
+        window_open_avg = await get_window_open_average(
+            self.hass,
+            runtime.config.window_sensors,
+            duty_start,
+            duty_end,
+        )
 
         # Update zone with historical data
         self._controller.update_zone_historical(

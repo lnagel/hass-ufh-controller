@@ -6,7 +6,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.recorder import DATA_INSTANCE as RECORDER_DATA_INSTANCE
+from homeassistant.helpers.recorder import (
+    DATA_INSTANCE as RECORDER_DATA_INSTANCE,
+)
+from homeassistant.helpers.recorder import (
+    DATA_RECORDER,
+    RecorderData,
+)
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ufh_controller.const import (
@@ -114,13 +120,35 @@ def mock_setup_entry() -> Generator[None]:
 
 @pytest.fixture(autouse=True)
 def mock_recorder(hass: HomeAssistant) -> Generator[MagicMock]:
-    """Mock the Recorder for all tests."""
+    """
+    Mock the Recorder for all tests.
+
+    This fixture sets up both DATA_RECORDER (required for recorder initialization)
+    and DATA_INSTANCE (required for state history queries), and mocks the recorder
+    component's async_setup to succeed without actually starting the recorder.
+    """
+    # Create the RecorderData with a completed db_connected future
+    recorder_data = RecorderData()
+    recorder_data.db_connected.set_result(True)
+    hass.data[DATA_RECORDER] = recorder_data
+
+    # Create a mock recorder instance for history queries
     mock_instance = MagicMock()
     mock_instance.async_add_executor_job = AsyncMock(return_value={})
 
-    with patch(
-        "homeassistant.components.recorder.get_instance",
-        return_value=mock_instance,
-    ):
+    async def mock_recorder_setup(hass: HomeAssistant, config: dict) -> bool:
+        """Mock recorder setup that succeeds without starting the actual recorder."""
         hass.data[RECORDER_DATA_INSTANCE] = mock_instance
+        return True
+
+    with (
+        patch(
+            "homeassistant.components.recorder.async_setup",
+            side_effect=mock_recorder_setup,
+        ),
+        patch(
+            "homeassistant.components.recorder.get_instance",
+            return_value=mock_instance,
+        ),
+    ):
         yield mock_instance

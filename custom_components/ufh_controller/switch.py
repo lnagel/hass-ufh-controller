@@ -56,12 +56,10 @@ class UFHHeatRequestSwitch(UFHControllerEntity, SwitchEntity):
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on is not supported (read-only switch)."""
         # Heat request is calculated, not directly controllable
-        pass
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off is not supported (read-only switch)."""
         # Heat request is calculated, not directly controllable
-        pass
 
 
 class UFHFlushEnabledSwitch(UFHControllerEntity, SwitchEntity):
