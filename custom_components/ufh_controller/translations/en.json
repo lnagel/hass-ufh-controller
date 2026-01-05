@@ -2,20 +2,22 @@
     "config": {
         "step": {
             "user": {
-                "description": "If you need help with the configuration have a look here: https://github.com/lnagel/hass-ufh-controller",
+                "description": "Set up a new UFH Controller. For more information, see: https://github.com/lnagel/hass-ufh-controller",
                 "data": {
-                    "username": "Username",
-                    "password": "Password"
+                    "name": "Controller Name",
+                    "heat_request_entity": "Heat Request Switch"
+                },
+                "data_description": {
+                    "name": "A friendly name for this heating controller",
+                    "heat_request_entity": "Switch entity that signals heat demand to your boiler"
                 }
             }
         },
         "error": {
-            "auth": "Username/Password is wrong.",
-            "connection": "Unable to connect to the server.",
             "unknown": "Unknown error occurred."
         },
         "abort": {
-            "already_configured": "This entry is already configured."
+            "already_configured": "This controller is already configured."
         }
     }
 }

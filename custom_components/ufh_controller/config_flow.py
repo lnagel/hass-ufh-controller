@@ -1,21 +1,19 @@
-"""Adds config flow for UFH Controller."""
+"""Config flow for UFH Controller."""
 
 from __future__ import annotations
 
+from typing import Any
+
 import voluptuous as vol
 from homeassistant import config_entries
-from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.helpers import selector
-from homeassistant.helpers.aiohttp_client import async_create_clientsession
 from slugify import slugify
 
-from .api import (
-    UFHControllerApiClient,
-    UFHControllerApiClientAuthenticationError,
-    UFHControllerApiClientCommunicationError,
-    UFHControllerApiClientError,
-)
 from .const import DOMAIN, LOGGER
+
+CONF_NAME = "name"
+CONF_CONTROLLER_ID = "controller_id"
+CONF_HEAT_REQUEST_ENTITY = "heat_request_entity"
 
 
 class UFHControllerFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
@@ -25,65 +23,43 @@ class UFHControllerFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_user(
         self,
-        user_input: dict | None = None,
+        user_input: dict[str, Any] | None = None,
     ) -> config_entries.ConfigFlowResult:
         """Handle a flow initialized by the user."""
-        _errors = {}
+        errors: dict[str, str] = {}
+
         if user_input is not None:
-            try:
-                await self._test_credentials(
-                    username=user_input[CONF_USERNAME],
-                    password=user_input[CONF_PASSWORD],
-                )
-            except UFHControllerApiClientAuthenticationError as exception:
-                LOGGER.warning(exception)
-                _errors["base"] = "auth"
-            except UFHControllerApiClientCommunicationError as exception:
-                LOGGER.error(exception)
-                _errors["base"] = "connection"
-            except UFHControllerApiClientError as exception:
-                LOGGER.exception(exception)
-                _errors["base"] = "unknown"
-            else:
-                await self.async_set_unique_id(
-                    ## Do NOT use this in production code
-                    ## The unique_id should never be something that can change
-                    ## https://developers.home-assistant.io/docs/config_entries_config_flow_handler#unique-ids
-                    unique_id=slugify(user_input[CONF_USERNAME])
-                )
-                self._abort_if_unique_id_configured()
-                return self.async_create_entry(
-                    title=user_input[CONF_USERNAME],
-                    data=user_input,
-                )
+            # Generate controller_id from name if not provided
+            controller_id = user_input.get(CONF_CONTROLLER_ID) or slugify(
+                user_input[CONF_NAME]
+            )
+
+            # Check for duplicate controller_id
+            await self.async_set_unique_id(controller_id)
+            self._abort_if_unique_id_configured()
+
+            LOGGER.debug("Creating UFH Controller entry: %s", controller_id)
+
+            return self.async_create_entry(
+                title=user_input[CONF_NAME],
+                data={
+                    CONF_NAME: user_input[CONF_NAME],
+                    CONF_CONTROLLER_ID: controller_id,
+                    CONF_HEAT_REQUEST_ENTITY: user_input[CONF_HEAT_REQUEST_ENTITY],
+                },
+            )
 
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema(
                 {
-                    vol.Required(
-                        CONF_USERNAME,
-                        default=(user_input or {}).get(CONF_USERNAME, vol.UNDEFINED),
-                    ): selector.TextSelector(
-                        selector.TextSelectorConfig(
-                            type=selector.TextSelectorType.TEXT,
-                        ),
+                    vol.Required(CONF_NAME): selector.TextSelector(
+                        selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
                     ),
-                    vol.Required(CONF_PASSWORD): selector.TextSelector(
-                        selector.TextSelectorConfig(
-                            type=selector.TextSelectorType.PASSWORD,
-                        ),
+                    vol.Required(CONF_HEAT_REQUEST_ENTITY): selector.EntitySelector(
+                        selector.EntitySelectorConfig(domain="switch")
                     ),
-                },
+                }
             ),
-            errors=_errors,
+            errors=errors,
         )
-
-    async def _test_credentials(self, username: str, password: str) -> None:
-        """Validate credentials."""
-        client = UFHControllerApiClient(
-            username=username,
-            password=password,
-            session=async_create_clientsession(self.hass),
-        )
-        await client.async_get_data()

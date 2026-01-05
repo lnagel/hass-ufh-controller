@@ -21,6 +21,7 @@ test = [
 ]
 dev = [
     "ruff>=0.14.10",
+    "ty>=0.0.1a11",
 ]
 
 [project.urls]

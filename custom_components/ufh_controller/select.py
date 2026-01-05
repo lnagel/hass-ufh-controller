@@ -1,4 +1,4 @@
-"""Binary sensor platform for UFH Controller."""
+"""Select platform for UFH Controller."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """
-    Set up the binary sensor platform.
+    Set up the select platform.
 
-    Binary sensors will be implemented in Phase 11.
+    Select entities will be implemented in Phase 12.
     """
