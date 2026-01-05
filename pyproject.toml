@@ -1,0 +1,69 @@
+[project]
+name = "hass-ufh-controller"
+version = "0.1.0"
+description = "A Home Assistant integration for underfloor heating controller"
+readme = "README.md"
+requires-python = ">=3.13.2"
+authors = [
+    { name = "lnagel", email = "lnagel@users.noreply.github.com" }
+]
+dependencies = [
+    "colorlog>=6.10.1",
+    "homeassistant>=2025.10.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.20.0",
+    "pytest-cov>=4.0.0",
+    "pytest-homeassistant-custom-component>=0.13.285",
+]
+dev = [
+    "ruff>=0.14.10",
+]
+
+[project.urls]
+Documentation = "https://github.com/lnagel/hass-ufh-controller"
+Repository = "https://github.com/lnagel/hass-ufh-controller"
+Issues = "https://github.com/lnagel/hass-ufh-controller/issues"
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+pythonpath = "."
+asyncio_mode = "auto"
+testpaths = ["tests"]
+norecursedirs = [".git", "testing_config"]
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.ruff]
+line-length = 88
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "ANN401", # Dynamically typed expressions (typing.Any) are disallowed
+    "D203", # no-blank-line-before-class (incompatible with formatter)
+    "D212", # multi-line-summary-first-line (incompatible with formatter)
+    "COM812", # incompatible with formatter
+    "ISC001", # incompatible with formatter
+]
+
+[tool.ruff.lint.flake8-pytest-style]
+fixture-parentheses = false
+
+[tool.ruff.lint.pyupgrade]
+keep-runtime-typing = true
+
+[tool.ruff.lint.mccabe]
+max-complexity = 25
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = [
+    "S101", # Allow assert in tests
+    "S106", # Allow hardcoded passwords in tests
+    "ARG001", # Allow unused arguments in fixtures
+]

@@ -1,0 +1,38 @@
+name: Code Quality Checks
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  run-unittest:
+    runs-on: ubuntu-latest
+    name: Run unit tests
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Show Python version
+        run: python --version
+
+      - name: Install dependencies
+        run: uv sync --extra test
+
+      - name: Run tests
+        run: uv run pytest
