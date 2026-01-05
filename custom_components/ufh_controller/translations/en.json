@@ -2,14 +2,21 @@
     "config": {
         "step": {
             "user": {
-                "description": "Set up a new UFH Controller. For more information, see: https://github.com/lnagel/hass-ufh-controller",
+                "title": "Set up UFH Controller",
+                "description": "Configure a new underfloor heating controller.",
                 "data": {
                     "name": "Controller Name",
-                    "heat_request_entity": "Heat Request Switch"
+                    "heat_request_entity": "Heat Request Switch",
+                    "dhw_active_entity": "DHW Active Sensor",
+                    "circulation_entity": "Circulation Sensor",
+                    "summer_mode_entity": "Summer Mode Select"
                 },
                 "data_description": {
                     "name": "A friendly name for this heating controller",
-                    "heat_request_entity": "Switch entity that signals heat demand to your boiler"
+                    "heat_request_entity": "Switch entity that signals heat demand to your boiler",
+                    "dhw_active_entity": "Binary sensor indicating domestic hot water is heating (optional)",
+                    "circulation_entity": "Binary sensor indicating circulation pump is running (optional)",
+                    "summer_mode_entity": "Select entity to control boiler summer/winter mode (optional)"
                 }
             }
         },
@@ -18,6 +25,137 @@
         },
         "abort": {
             "already_configured": "This controller is already configured."
+        }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "title": "Configure UFH Controller",
+                "menu_options": {
+                    "add_zone": "Add Zone",
+                    "manage_zones": "Manage Zones",
+                    "timing": "Timing Parameters"
+                }
+            },
+            "add_zone": {
+                "title": "Add Zone",
+                "description": "Configure a new heating zone.",
+                "data": {
+                    "name": "Zone Name",
+                    "temp_sensor": "Temperature Sensor",
+                    "valve_switch": "Valve Switch",
+                    "circuit_type": "Circuit Type",
+                    "window_sensors": "Window Sensors",
+                    "setpoint_min": "Minimum Setpoint",
+                    "setpoint_max": "Maximum Setpoint",
+                    "setpoint_default": "Default Setpoint",
+                    "kp": "Proportional Gain (Kp)",
+                    "ki": "Integral Gain (Ki)",
+                    "kd": "Derivative Gain (Kd)"
+                }
+            },
+            "edit_zone": {
+                "title": "Edit Zone",
+                "description": "Modify zone configuration.",
+                "data": {
+                    "name": "Zone Name",
+                    "temp_sensor": "Temperature Sensor",
+                    "valve_switch": "Valve Switch",
+                    "circuit_type": "Circuit Type",
+                    "window_sensors": "Window Sensors",
+                    "setpoint_min": "Minimum Setpoint",
+                    "setpoint_max": "Maximum Setpoint",
+                    "setpoint_default": "Default Setpoint",
+                    "kp": "Proportional Gain (Kp)",
+                    "ki": "Integral Gain (Ki)",
+                    "kd": "Derivative Gain (Kd)"
+                }
+            },
+            "manage_zones": {
+                "title": "Manage Zones",
+                "description": "Select a zone to edit or delete.",
+                "data": {
+                    "zone": "Zone",
+                    "action": "Action"
+                }
+            },
+            "timing": {
+                "title": "Timing Parameters",
+                "description": "Configure timing parameters for the controller.",
+                "data": {
+                    "observation_period": "Observation Period",
+                    "duty_cycle_window": "Duty Cycle Window",
+                    "min_run_time": "Minimum Run Time",
+                    "valve_open_time": "Valve Open Detection Time",
+                    "closing_warning_duration": "Closing Warning Duration",
+                    "window_block_threshold": "Window Block Threshold"
+                },
+                "data_description": {
+                    "observation_period": "Time window for quota-based scheduling (default: 2 hours)",
+                    "duty_cycle_window": "Rolling window for duty cycle calculation (default: 1 hour)",
+                    "min_run_time": "Minimum valve on time before turning off (default: 9 minutes)",
+                    "valve_open_time": "Time to detect valve fully open (default: 3.5 minutes)",
+                    "closing_warning_duration": "Time before valve closes to stop heat request (default: 4 minutes)",
+                    "window_block_threshold": "Window open average threshold to block heating (default: 0.05)"
+                }
+            }
+        },
+        "error": {
+            "zone_id_exists": "A zone with this ID already exists."
+        },
+        "abort": {
+            "no_zones": "No zones configured. Add a zone first.",
+            "zone_not_found": "Zone not found."
+        }
+    },
+    "entity": {
+        "climate": {
+            "zone": {
+                "name": "Climate"
+            }
+        },
+        "sensor": {
+            "duty_cycle": {
+                "name": "Duty Cycle"
+            },
+            "pid_error": {
+                "name": "PID Error"
+            },
+            "pid_integral": {
+                "name": "PID Integral"
+            },
+            "requesting_zones": {
+                "name": "Requesting Zones"
+            }
+        },
+        "binary_sensor": {
+            "blocked": {
+                "name": "Blocked"
+            },
+            "heat_request": {
+                "name": "Heat Request"
+            }
+        },
+        "select": {
+            "mode": {
+                "name": "Mode",
+                "state": {
+                    "auto": "Automatic",
+                    "flush": "Flush",
+                    "cycle": "Cycle",
+                    "all_on": "All On",
+                    "all_off": "All Off",
+                    "disabled": "Disabled"
+                }
+            }
+        },
+        "switch": {
+            "heat_request": {
+                "name": "Heat Request"
+            },
+            "flush_enabled": {
+                "name": "Flush Enabled"
+            }
         }
     }
 }

@@ -22,8 +22,8 @@ from custom_components.ufh_controller.const import DOMAIN
 @pytest.fixture
 def climate_entity_id() -> str:
     """Return the climate entity ID."""
-    # Entity ID is based on device name (zone name) since name=None for primary entity
-    return "climate.test_zone_1"
+    # Entity ID is device name + entity name ("Climate")
+    return "climate.test_zone_1_climate"
 
 
 async def test_climate_entity_created(

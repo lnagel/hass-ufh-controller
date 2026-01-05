@@ -95,12 +95,6 @@ class UFHZoneClimate(UFHControllerZoneEntity, ClimateEntity):
         self._attr_preset_mode: str | None = None
 
     @property
-    def name(self) -> str:
-        """Return the name of the entity."""
-        # Zone name is used as the device name, so entity name is None for primary entity
-        return None  # type: ignore[return-value]
-
-    @property
     def hvac_mode(self) -> HVACMode:
         """Return the current HVAC mode."""
         zone_data = self.coordinator.data.get("zones", {}).get(self._zone_id, {})
