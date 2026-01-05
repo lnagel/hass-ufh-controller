@@ -1,10 +1,12 @@
 """Common fixtures for UFH Controller tests."""
 
 from collections.abc import Generator
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from homeassistant.const import Platform
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.recorder import DATA_INSTANCE as RECORDER_DATA_INSTANCE
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ufh_controller.const import (
@@ -108,3 +110,17 @@ def mock_setup_entry() -> Generator[None]:
         return_value=True,
     ):
         yield
+
+
+@pytest.fixture(autouse=True)
+def mock_recorder(hass: HomeAssistant) -> Generator[MagicMock]:
+    """Mock the Recorder for all tests."""
+    mock_instance = MagicMock()
+    mock_instance.async_add_executor_job = AsyncMock(return_value={})
+
+    with patch(
+        "homeassistant.components.recorder.get_instance",
+        return_value=mock_instance,
+    ):
+        hass.data[RECORDER_DATA_INSTANCE] = mock_instance
+        yield mock_instance

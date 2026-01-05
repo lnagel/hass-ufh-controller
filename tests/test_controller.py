@@ -197,9 +197,7 @@ class TestUpdateZonePID:
         assert state.current_temp == 20.0
         assert state.duty_cycle == duty_cycle
 
-    def test_update_with_none_temperature(
-        self, basic_config: ControllerConfig
-    ) -> None:
+    def test_update_with_none_temperature(self, basic_config: ControllerConfig) -> None:
         """Test PID update with no temperature reading."""
         controller = HeatingController(basic_config)
 
@@ -382,9 +380,7 @@ class TestEvaluateZonesCycleMode:
         assert actions["living_room"] == ZoneAction.STAY_OFF
         assert actions["bedroom"] == ZoneAction.STAY_OFF
 
-    def test_cycle_mode_first_zone_active(
-        self, basic_config: ControllerConfig
-    ) -> None:
+    def test_cycle_mode_first_zone_active(self, basic_config: ControllerConfig) -> None:
         """Test first zone active during hour 1."""
         controller = HeatingController(basic_config)
         controller.mode = "cycle"
