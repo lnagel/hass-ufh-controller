@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 
 async def async_setup_entry(
-    hass: HomeAssistant,
+    _hass: HomeAssistant,
     entry: UFHControllerConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
@@ -83,12 +83,12 @@ class UFHFlushEnabledSwitch(UFHControllerEntity, SwitchEntity):
         """Return the flush enabled status."""
         return self.coordinator.controller.state.flush_enabled
 
-    async def async_turn_on(self, **kwargs: Any) -> None:
+    async def async_turn_on(self, **_kwargs: Any) -> None:
         """Enable DHW latent heat capture."""
         self.coordinator.controller.state.flush_enabled = True
         self.async_write_ha_state()
 
-    async def async_turn_off(self, **kwargs: Any) -> None:
+    async def async_turn_off(self, **_kwargs: Any) -> None:
         """Disable DHW latent heat capture."""
         self.coordinator.controller.state.flush_enabled = False
         self.async_write_ha_state()

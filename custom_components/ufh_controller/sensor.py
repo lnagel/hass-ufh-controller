@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -16,6 +15,8 @@ from homeassistant.components.sensor import (
 from .entity import UFHControllerEntity, UFHControllerZoneEntity
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -60,32 +61,29 @@ ZONE_SENSORS: tuple[UFHZoneSensorEntityDescription, ...] = (
 
 
 async def async_setup_entry(
-    hass: HomeAssistant,
+    _hass: HomeAssistant,
     entry: UFHControllerConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the sensor platform."""
     coordinator = entry.runtime_data.coordinator
 
-    entities: list[SensorEntity] = []
-
-    # Add controller-level sensors
-    entities.append(UFHRequestingZonesSensor(coordinator))
+    entities: list[SensorEntity] = [UFHRequestingZonesSensor(coordinator)]
 
     # Add zone-level sensors for each zone
     for zone_config in entry.options.get("zones", []):
         zone_id = zone_config["id"]
         zone_name = zone_config["name"]
 
-        for description in ZONE_SENSORS:
-            entities.append(
-                UFHZoneSensor(
-                    coordinator=coordinator,
-                    zone_id=zone_id,
-                    zone_name=zone_name,
-                    description=description,
-                )
+        entities.extend(
+            UFHZoneSensor(
+                coordinator=coordinator,
+                zone_id=zone_id,
+                zone_name=zone_name,
+                description=description,
             )
+            for description in ZONE_SENSORS
+        )
 
     async_add_entities(entities)
 
@@ -137,4 +135,6 @@ class UFHRequestingZonesSensor(UFHControllerEntity, SensorEntity):
     def native_value(self) -> int:
         """Return the count of zones requesting heat."""
         zones = self.coordinator.data.get("zones", {})
-        return sum(1 for zone in zones.values() if zone.get("is_requesting_heat", False))
+        return sum(
+            1 for zone in zones.values() if zone.get("is_requesting_heat", False)
+        )

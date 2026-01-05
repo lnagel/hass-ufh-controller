@@ -88,7 +88,7 @@ class UFHControllerFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     @staticmethod
     @callback
     def async_get_options_flow(
-        config_entry: config_entries.ConfigEntry,
+        config_entry: config_entries.ConfigEntry,  # noqa: ARG004
     ) -> UFHControllerOptionsFlowHandler:
         """Get the options flow for this handler."""
         return UFHControllerOptionsFlowHandler()
@@ -103,7 +103,7 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
 
     async def async_step_init(
         self,
-        user_input: dict[str, Any] | None = None,
+        _user_input: dict[str, Any] | None = None,
     ) -> config_entries.ConfigFlowResult:
         """Manage options."""
         return self.async_show_menu(
@@ -173,10 +173,14 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
                     vol.Required("valve_switch"): selector.EntitySelector(
                         selector.EntitySelectorConfig(domain="switch")
                     ),
-                    vol.Optional("circuit_type", default="regular"): selector.SelectSelector(
+                    vol.Optional(
+                        "circuit_type", default="regular"
+                    ): selector.SelectSelector(
                         selector.SelectSelectorConfig(
                             options=[
-                                selector.SelectOptionDict(value="regular", label="Regular"),
+                                selector.SelectOptionDict(
+                                    value="regular", label="Regular"
+                                ),
                                 selector.SelectOptionDict(value="flush", label="Flush"),
                             ]
                         )
@@ -201,15 +205,24 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
                     ): selector.NumberSelector(
                         selector.NumberSelectorConfig(min=5, max=35, step=0.5)
                     ),
-                    vol.Optional("kp", default=DEFAULT_PID["kp"]): selector.NumberSelector(
+                    vol.Optional(
+                        "kp", default=DEFAULT_PID["kp"]
+                    ): selector.NumberSelector(
                         selector.NumberSelectorConfig(min=0, max=200, step=1)
                     ),
-                    vol.Optional("ki", default=DEFAULT_PID["ki"]): selector.NumberSelector(
+                    vol.Optional(
+                        "ki", default=DEFAULT_PID["ki"]
+                    ): selector.NumberSelector(
                         selector.NumberSelectorConfig(
-                            min=0, max=1, step=0.001, mode=selector.NumberSelectorMode.BOX
+                            min=0,
+                            max=1,
+                            step=0.001,
+                            mode=selector.NumberSelectorMode.BOX,
                         )
                     ),
-                    vol.Optional("kd", default=DEFAULT_PID["kd"]): selector.NumberSelector(
+                    vol.Optional(
+                        "kd", default=DEFAULT_PID["kd"]
+                    ): selector.NumberSelector(
                         selector.NumberSelectorConfig(min=0, max=100, step=1)
                     ),
                 }
@@ -259,7 +272,9 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
                         selector.SelectSelectorConfig(
                             options=[
                                 selector.SelectOptionDict(value="edit", label="Edit"),
-                                selector.SelectOptionDict(value="delete", label="Delete"),
+                                selector.SelectOptionDict(
+                                    value="delete", label="Delete"
+                                ),
                             ]
                         )
                     ),
@@ -289,7 +304,9 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
                 "min": user_input.get("setpoint_min", DEFAULT_SETPOINT["min"]),
                 "max": user_input.get("setpoint_max", DEFAULT_SETPOINT["max"]),
                 "step": zone.get("setpoint", {}).get("step", DEFAULT_SETPOINT["step"]),
-                "default": user_input.get("setpoint_default", DEFAULT_SETPOINT["default"]),
+                "default": user_input.get(
+                    "setpoint_default", DEFAULT_SETPOINT["default"]
+                ),
             }
             zone["pid"] = {
                 "kp": user_input.get("kp", DEFAULT_PID["kp"]),
@@ -331,7 +348,9 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
                     ): selector.SelectSelector(
                         selector.SelectSelectorConfig(
                             options=[
-                                selector.SelectOptionDict(value="regular", label="Regular"),
+                                selector.SelectOptionDict(
+                                    value="regular", label="Regular"
+                                ),
                                 selector.SelectOptionDict(value="flush", label="Flush"),
                             ]
                         )
@@ -344,12 +363,14 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
                         )
                     ),
                     vol.Optional(
-                        "setpoint_min", default=setpoint.get("min", DEFAULT_SETPOINT["min"])
+                        "setpoint_min",
+                        default=setpoint.get("min", DEFAULT_SETPOINT["min"]),
                     ): selector.NumberSelector(
                         selector.NumberSelectorConfig(min=5, max=30, step=0.5)
                     ),
                     vol.Optional(
-                        "setpoint_max", default=setpoint.get("max", DEFAULT_SETPOINT["max"])
+                        "setpoint_max",
+                        default=setpoint.get("max", DEFAULT_SETPOINT["max"]),
                     ): selector.NumberSelector(
                         selector.NumberSelectorConfig(min=5, max=35, step=0.5)
                     ),
@@ -367,7 +388,12 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
                     vol.Optional(
                         "ki", default=pid.get("ki", DEFAULT_PID["ki"])
                     ): selector.NumberSelector(
-                        selector.NumberSelectorConfig(min=0, max=1, step=0.001, mode=selector.NumberSelectorMode.BOX)
+                        selector.NumberSelectorConfig(
+                            min=0,
+                            max=1,
+                            step=0.001,
+                            mode=selector.NumberSelectorMode.BOX,
+                        )
                     ),
                     vol.Optional(
                         "kd", default=pid.get("kd", DEFAULT_PID["kd"])
@@ -428,7 +454,9 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
                     ),
                     vol.Required(
                         "min_run_time",
-                        default=timing.get("min_run_time", DEFAULT_TIMING["min_run_time"]),
+                        default=timing.get(
+                            "min_run_time", DEFAULT_TIMING["min_run_time"]
+                        ),
                     ): selector.NumberSelector(
                         selector.NumberSelectorConfig(
                             min=60, max=1800, step=60, unit_of_measurement="s"
@@ -462,7 +490,12 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
                             DEFAULT_TIMING["window_block_threshold"],
                         ),
                     ): selector.NumberSelector(
-                        selector.NumberSelectorConfig(min=0, max=1, step=0.01, mode=selector.NumberSelectorMode.BOX)
+                        selector.NumberSelectorConfig(
+                            min=0,
+                            max=1,
+                            step=0.01,
+                            mode=selector.NumberSelectorMode.BOX,
+                        )
                     ),
                 }
             ),

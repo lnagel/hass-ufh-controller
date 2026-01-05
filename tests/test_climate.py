@@ -68,6 +68,7 @@ async def test_climate_hvac_modes(
     state = hass.states.get(climate_entity_id)
     assert state is not None
     hvac_modes = state.attributes.get("hvac_modes")
+    assert hvac_modes is not None
     assert HVACMode.HEAT in hvac_modes
     assert HVACMode.OFF in hvac_modes
 
@@ -90,6 +91,7 @@ async def test_climate_set_hvac_mode_off(
     )
 
     state = hass.states.get(climate_entity_id)
+    assert state is not None
     assert state.state == HVACMode.OFF
     assert state.attributes.get(ATTR_HVAC_ACTION) == HVACAction.OFF
 
@@ -121,6 +123,7 @@ async def test_climate_set_hvac_mode_heat(
     )
 
     state = hass.states.get(climate_entity_id)
+    assert state is not None
     assert state.state == HVACMode.HEAT
 
 
@@ -142,6 +145,7 @@ async def test_climate_set_temperature(
     )
 
     state = hass.states.get(climate_entity_id)
+    assert state is not None
     assert state.attributes.get("temperature") == 23.0
 
 
@@ -156,6 +160,7 @@ async def test_climate_temperature_limits(
     await hass.async_block_till_done()
 
     state = hass.states.get(climate_entity_id)
+    assert state is not None
     assert state.attributes.get("min_temp") == 16.0
     assert state.attributes.get("max_temp") == 28.0
     assert state.attributes.get("target_temp_step") == 0.5
@@ -172,7 +177,9 @@ async def test_climate_preset_modes(
     await hass.async_block_till_done()
 
     state = hass.states.get(climate_entity_id)
+    assert state is not None
     preset_modes = state.attributes.get("preset_modes")
+    assert preset_modes is not None
     assert "comfort" in preset_modes
     assert "eco" in preset_modes
     assert "away" in preset_modes
@@ -197,6 +204,7 @@ async def test_climate_set_preset_comfort(
     )
 
     state = hass.states.get(climate_entity_id)
+    assert state is not None
     assert state.attributes.get("preset_mode") == "comfort"
     assert state.attributes.get("temperature") == 22.0
 
@@ -219,6 +227,7 @@ async def test_climate_set_preset_eco(
     )
 
     state = hass.states.get(climate_entity_id)
+    assert state is not None
     assert state.attributes.get("preset_mode") == "eco"
     assert state.attributes.get("temperature") == 19.0
 
@@ -234,6 +243,7 @@ async def test_climate_extra_attributes(
     await hass.async_block_till_done()
 
     state = hass.states.get(climate_entity_id)
+    assert state is not None
     attrs = state.attributes
 
     # Check extra attributes are present
@@ -255,6 +265,7 @@ async def test_climate_hvac_action_idle(
     await hass.async_block_till_done()
 
     state = hass.states.get(climate_entity_id)
+    assert state is not None
     # Default state: enabled (HEAT mode) but valve_on=False
     assert state.state == HVACMode.HEAT
     assert state.attributes.get(ATTR_HVAC_ACTION) == HVACAction.IDLE

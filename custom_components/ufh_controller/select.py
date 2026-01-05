@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 from homeassistant.components.select import SelectEntity
 
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 
 async def async_setup_entry(
-    hass: HomeAssistant,
+    _hass: HomeAssistant,
     entry: UFHControllerConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
@@ -32,7 +32,7 @@ class UFHModeSelect(UFHControllerEntity, SelectEntity):
     """Select entity for controller operation mode."""
 
     _attr_translation_key = "mode"
-    _attr_options = [mode.value for mode in OperationMode]
+    _attr_options: ClassVar[list[str]] = [mode.value for mode in OperationMode]
 
     def __init__(
         self,

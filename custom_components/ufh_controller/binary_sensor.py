@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -15,6 +14,8 @@ from homeassistant.components.binary_sensor import (
 from .entity import UFHControllerZoneEntity
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -46,7 +47,7 @@ ZONE_BINARY_SENSORS: tuple[UFHZoneBinarySensorEntityDescription, ...] = (
 
 
 async def async_setup_entry(
-    hass: HomeAssistant,
+    _hass: HomeAssistant,
     entry: UFHControllerConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
@@ -60,15 +61,15 @@ async def async_setup_entry(
         zone_id = zone_config["id"]
         zone_name = zone_config["name"]
 
-        for description in ZONE_BINARY_SENSORS:
-            entities.append(
-                UFHZoneBinarySensor(
-                    coordinator=coordinator,
-                    zone_id=zone_id,
-                    zone_name=zone_name,
-                    description=description,
-                )
+        entities.extend(
+            UFHZoneBinarySensor(
+                coordinator=coordinator,
+                zone_id=zone_id,
+                zone_name=zone_name,
+                description=description,
             )
+            for description in ZONE_BINARY_SENSORS
+        )
 
     async_add_entities(entities)
 

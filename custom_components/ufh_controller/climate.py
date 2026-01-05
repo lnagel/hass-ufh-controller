@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from homeassistant.components.climate import (
     ClimateEntity,
@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 
 async def async_setup_entry(
-    hass: HomeAssistant,
+    _hass: HomeAssistant,
     entry: UFHControllerConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
@@ -31,16 +31,15 @@ async def async_setup_entry(
     coordinator = entry.runtime_data.coordinator
 
     # Create a climate entity for each zone
-    entities: list[UFHZoneClimate] = []
-    for zone_config in entry.options.get("zones", []):
-        entities.append(
-            UFHZoneClimate(
-                coordinator=coordinator,
-                zone_id=zone_config["id"],
-                zone_name=zone_config["name"],
-                zone_config=zone_config,
-            )
+    entities = [
+        UFHZoneClimate(
+            coordinator=coordinator,
+            zone_id=zone_config["id"],
+            zone_name=zone_config["name"],
+            zone_config=zone_config,
         )
+        for zone_config in entry.options.get("zones", [])
+    ]
 
     async_add_entities(entities)
 
@@ -48,7 +47,7 @@ async def async_setup_entry(
 class UFHZoneClimate(UFHControllerZoneEntity, ClimateEntity):
     """Climate entity for a UFH zone."""
 
-    _attr_hvac_modes = [HVACMode.HEAT, HVACMode.OFF]
+    _attr_hvac_modes: ClassVar[list[HVACMode]] = [HVACMode.HEAT, HVACMode.OFF]
     _attr_temperature_unit = "°C"
     _enable_turn_on_off_backwards_compat = False
 
