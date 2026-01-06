@@ -86,6 +86,16 @@ class PIDController:
         """Reset the PID controller state."""
         self._state = PIDState()
 
+    def set_integral(self, value: float) -> None:
+        """Set the integral value directly (for state restoration)."""
+        self._state.integral = max(
+            self.integral_min, min(self.integral_max, value)
+        )
+
+    def set_last_error(self, value: float) -> None:
+        """Set the last error value directly (for state restoration)."""
+        self._state.last_error = value
+
     def get_terms(self, setpoint: float, current: float, dt: float) -> dict[str, float]:
         """
         Calculate and return individual PID terms without updating state.

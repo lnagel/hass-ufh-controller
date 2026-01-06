@@ -88,6 +88,11 @@ async def async_unload_entry(
 ) -> bool:
     """Handle removal of an entry."""
     LOGGER.debug("Unloading UFH Controller entry: %s", entry.entry_id)
+
+    # Save state before unloading
+    coordinator = entry.runtime_data.coordinator
+    await coordinator.async_save_state()
+
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
 

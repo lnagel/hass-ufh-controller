@@ -1,5 +1,7 @@
 """Tests for UFH Controller climate platform."""
 
+from unittest.mock import patch
+
 import pytest
 from homeassistant.components.climate import (
     ATTR_HVAC_ACTION,
@@ -283,3 +285,68 @@ async def test_climate_no_zones(
     # No climate entities should be created
     states = hass.states.async_entity_ids(CLIMATE_DOMAIN)
     assert len(states) == 0
+
+
+async def test_climate_restore_setpoint_from_store(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    climate_entity_id: str,
+) -> None:
+    """Test climate entity restores setpoint from Store API (not RestoreEntity)."""
+    # Store API should be authoritative for setpoint, not RestoreEntity
+    stored_data = {
+        "version": 1,
+        "controller_mode": "auto",
+        "zones": {
+            "zone1": {
+                "integral": 0.0,
+                "last_error": 0.0,
+                "setpoint": 23.5,
+                "enabled": True,
+            },
+        },
+    }
+
+    with patch(
+        "homeassistant.helpers.storage.Store.async_load",
+        return_value=stored_data,
+    ):
+        mock_config_entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    state = hass.states.get(climate_entity_id)
+    assert state is not None
+    assert state.attributes.get(ATTR_TEMPERATURE) == 23.5
+
+
+async def test_climate_restore_hvac_mode_off_from_store(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    climate_entity_id: str,
+) -> None:
+    """Test climate entity restores HVAC mode OFF from Store API."""
+    stored_data = {
+        "version": 1,
+        "controller_mode": "auto",
+        "zones": {
+            "zone1": {
+                "integral": 0.0,
+                "last_error": 0.0,
+                "setpoint": 21.0,
+                "enabled": False,
+            },
+        },
+    }
+
+    with patch(
+        "homeassistant.helpers.storage.Store.async_load",
+        return_value=stored_data,
+    ):
+        mock_config_entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    state = hass.states.get(climate_entity_id)
+    assert state is not None
+    assert state.state == HVACMode.OFF

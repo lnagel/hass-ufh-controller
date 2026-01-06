@@ -112,6 +112,27 @@ class TestPIDController:
         assert pid.state.integral == 0.0
         assert pid.state.last_error == 0.0
 
+    def test_set_integral(self) -> None:
+        """Test that set_integral sets the integral value."""
+        pid = PIDController(kp=50.0, ki=0.1, kd=0.0, integral_max=100.0)
+
+        pid.set_integral(50.0)
+        assert pid.state.integral == 50.0
+
+    def test_set_integral_respects_max(self) -> None:
+        """Test that set_integral clamps to maximum."""
+        pid = PIDController(integral_max=100.0)
+
+        pid.set_integral(150.0)
+        assert pid.state.integral == 100.0
+
+    def test_set_integral_respects_min(self) -> None:
+        """Test that set_integral clamps to minimum."""
+        pid = PIDController(integral_min=0.0, integral_max=100.0)
+
+        pid.set_integral(-10.0)
+        assert pid.state.integral == 0.0
+
     def test_zero_dt(self) -> None:
         """Test that zero dt returns 0 output."""
         pid = PIDController(kp=50.0, ki=0.1, kd=1.0)

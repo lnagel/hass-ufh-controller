@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
+from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import (
@@ -13,6 +14,7 @@ from .const import (
     LOGGER,
     SUBENTRY_TYPE_CONTROLLER,
     SUBENTRY_TYPE_ZONE,
+    OperationMode,
 )
 from .core import (
     ControllerConfig,
@@ -27,6 +29,10 @@ from .core import (
     get_window_open_average,
 )
 from .core.zone import _VALVE_OPEN_THRESHOLD, CircuitType
+
+# Storage constants
+STORAGE_VERSION = 1
+STORAGE_KEY = "ufh_controller"
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -53,6 +59,14 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         self.config_entry = entry
         self._last_update: datetime | None = None
+
+        # Storage for crash resilience
+        self._store: Store[dict[str, Any]] = Store(
+            hass,
+            STORAGE_VERSION,
+            f"{STORAGE_KEY}.{entry.entry_id}",
+        )
+        self._state_restored: bool = False
 
         # Build controller from config entry
         self._controller = self._build_controller(entry)
@@ -126,8 +140,87 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Return the heating controller."""
         return self._controller
 
+    async def async_load_stored_state(self) -> None:
+        """Load state from storage (fallback if RestoreEntity fails)."""
+        if self._state_restored:
+            return
+
+        stored_data = await self._store.async_load()
+        if stored_data is None:
+            self._state_restored = True
+            return
+
+        # Restore controller mode
+        if "controller_mode" in stored_data:
+            stored_mode = stored_data["controller_mode"]
+            if stored_mode in [mode.value for mode in OperationMode]:
+                self._controller.mode = stored_mode
+
+        # Restore zone state
+        zones_data = stored_data.get("zones", {})
+        for zone_id, zone_state in zones_data.items():
+            self._restore_zone_state(zone_id, zone_state)
+
+        self._state_restored = True
+
+    def _restore_zone_state(
+        self, zone_id: str, zone_state: dict[str, Any]
+    ) -> None:
+        """Restore state for a single zone from storage."""
+        runtime = self._controller.get_zone_runtime(zone_id)
+        if runtime is None:
+            return
+
+        # Restore PID integral
+        if runtime.state.integral == 0.0:
+            integral = zone_state.get("integral", 0.0)
+            last_error = zone_state.get("last_error", 0.0)
+            if integral != 0.0:
+                runtime.pid.set_integral(integral)
+                runtime.pid.set_last_error(last_error)
+                runtime.state.integral = integral
+
+        # Restore setpoint
+        if "setpoint" in zone_state:
+            stored_setpoint = zone_state["setpoint"]
+            if stored_setpoint != runtime.state.setpoint:
+                self._controller.set_zone_setpoint(zone_id, stored_setpoint)
+
+        # Restore enabled state
+        if "enabled" in zone_state:
+            stored_enabled = zone_state["enabled"]
+            if stored_enabled != runtime.state.enabled:
+                self._controller.set_zone_enabled(zone_id, enabled=stored_enabled)
+
+    async def async_save_state(self) -> None:
+        """Save current state to storage."""
+        zones_data: dict[str, dict[str, Any]] = {}
+
+        for zone_id in self._controller.zone_ids:
+            runtime = self._controller.get_zone_runtime(zone_id)
+            if runtime is not None:
+                zones_data[zone_id] = {
+                    "integral": runtime.pid.state.integral,
+                    "last_error": runtime.pid.state.last_error,
+                    "setpoint": runtime.state.setpoint,
+                    "enabled": runtime.state.enabled,
+                }
+
+        data = {
+            "version": STORAGE_VERSION,
+            "saved_at": datetime.now(UTC).isoformat(),
+            "controller_mode": self._controller.mode,
+            "zones": zones_data,
+        }
+
+        await self._store.async_save(data)
+
     async def _async_update_data(self) -> dict[str, Any]:
         """Update data via controller logic."""
+        # Load stored state on first run (fallback restoration)
+        if not self._state_restored:
+            await self.async_load_stored_state()
+
         now = datetime.now(UTC)
         dt = CONTROLLER_LOOP_INTERVAL
         if self._last_update is not None:
@@ -163,6 +256,9 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # Update summer mode if configured
         await self._update_summer_mode(heat_request=heat_request)
+
+        # Save state after every update for crash resilience
+        await self.async_save_state()
 
         return self._build_state_dict()
 
@@ -350,13 +446,16 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Set zone setpoint and trigger update."""
         if self._controller.set_zone_setpoint(zone_id, setpoint):
             self.async_set_updated_data(self._build_state_dict())
+            self.hass.async_create_task(self.async_save_state())
 
     def set_zone_enabled(self, zone_id: str, *, enabled: bool) -> None:
         """Enable or disable a zone and trigger update."""
         if self._controller.set_zone_enabled(zone_id, enabled=enabled):
             self.async_set_updated_data(self._build_state_dict())
+            self.hass.async_create_task(self.async_save_state())
 
     def set_mode(self, mode: str) -> None:
         """Set controller operation mode and trigger update."""
         self._controller.mode = mode
         self.async_set_updated_data(self._build_state_dict())
+        self.hass.async_create_task(self.async_save_state())
