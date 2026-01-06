@@ -80,7 +80,17 @@
             "setpoint_default": "Default setpoint",
             "kp": "PID proportional gain (Kp)",
             "ki": "PID integral gain (Ki)",
-            "kd": "PID derivative gain (Kd)"
+            "kd": "PID derivative gain (Kd)",
+            "preset_comfort": "Comfort preset setpoint",
+            "preset_eco": "Eco preset setpoint",
+            "preset_away": "Away preset setpoint",
+            "preset_boost": "Boost preset setpoint"
+          },
+          "data_description": {
+            "preset_comfort": "Leave empty to disable this preset",
+            "preset_eco": "Leave empty to disable this preset",
+            "preset_away": "Leave empty to disable this preset",
+            "preset_boost": "Leave empty to disable this preset. Boost mode disables PID control."
           }
         },
         "reconfigure": {
@@ -97,7 +107,17 @@
             "setpoint_default": "Default setpoint",
             "kp": "PID proportional gain (Kp)",
             "ki": "PID integral gain (Ki)",
-            "kd": "PID derivative gain (Kd)"
+            "kd": "PID derivative gain (Kd)",
+            "preset_comfort": "Comfort preset setpoint",
+            "preset_eco": "Eco preset setpoint",
+            "preset_away": "Away preset setpoint",
+            "preset_boost": "Boost preset setpoint"
+          },
+          "data_description": {
+            "preset_comfort": "Leave empty to disable this preset",
+            "preset_eco": "Leave empty to disable this preset",
+            "preset_away": "Leave empty to disable this preset",
+            "preset_boost": "Leave empty to disable this preset. Boost mode disables PID control."
           }
         }
       },

@@ -619,3 +619,47 @@ def test_build_zone_data_with_all_values() -> None:
     assert result["pid"]["kp"] == 60.0
     assert result["pid"]["ki"] == 0.1
     assert result["pid"]["kd"] == 0.5
+
+
+def test_build_zone_data_with_presets() -> None:
+    """Test building zone data with preset values provided."""
+    user_input: dict[str, Any] = {
+        "name": "Preset Zone",
+        "temp_sensor": "sensor.preset_temp",
+        "valve_switch": "switch.preset_valve",
+        "preset_comfort": 22.0,
+        "preset_eco": 19.0,
+        "preset_away": 16.0,
+        "preset_boost": 25.0,
+    }
+
+    result = build_zone_data(user_input)
+
+    assert result["presets"] == {
+        "comfort": {"setpoint": 22.0},
+        "eco": {"setpoint": 19.0},
+        "away": {"setpoint": 16.0},
+        "boost": {"setpoint": 25.0, "pid_enabled": False},
+    }
+
+
+def test_build_zone_data_with_partial_presets() -> None:
+    """Test building zone data with only some preset values provided."""
+    user_input: dict[str, Any] = {
+        "name": "Partial Preset Zone",
+        "temp_sensor": "sensor.partial_temp",
+        "valve_switch": "switch.partial_valve",
+        "preset_comfort": 22.0,
+        "preset_boost": 28.0,
+        # eco and away not provided - should not appear in presets
+    }
+
+    result = build_zone_data(user_input)
+
+    assert result["presets"] == {
+        "comfort": {"setpoint": 22.0},
+        "boost": {"setpoint": 28.0, "pid_enabled": False},
+    }
+    # Verify that eco and away are not in presets
+    assert "eco" not in result["presets"]
+    assert "away" not in result["presets"]

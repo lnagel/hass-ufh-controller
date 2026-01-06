@@ -57,5 +57,13 @@ DEFAULT_SETPOINT = {
     "default": 21.0,
 }
 
+# Default preset configuration
+DEFAULT_PRESETS = {
+    "comfort": {"setpoint": 22.0},
+    "eco": {"setpoint": 19.0},
+    "away": {"setpoint": 16.0},
+    "boost": {"setpoint": 25.0, "pid_enabled": False},
+}
+
 # Controller loop interval in seconds
 CONTROLLER_LOOP_INTERVAL = 60

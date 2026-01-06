@@ -112,6 +112,7 @@ def get_zone_schema(
     defaults = defaults or {}
     setpoint = defaults.get("setpoint", DEFAULT_SETPOINT)
     pid = defaults.get("pid", DEFAULT_PID)
+    presets = defaults.get("presets", {})
 
     return vol.Schema(
         {
@@ -196,6 +197,61 @@ def get_zone_schema(
                     mode=selector.NumberSelectorMode.BOX,
                 )
             ),
+            # Preset setpoints - leave empty to disable a preset
+            vol.Optional(
+                "preset_comfort",
+                description={
+                    "suggested_value": presets.get("comfort", {}).get("setpoint")
+                },
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=5,
+                    max=35,
+                    step=0.5,
+                    unit_of_measurement="°C",
+                    mode=selector.NumberSelectorMode.BOX,
+                )
+            ),
+            vol.Optional(
+                "preset_eco",
+                description={"suggested_value": presets.get("eco", {}).get("setpoint")},
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=5,
+                    max=35,
+                    step=0.5,
+                    unit_of_measurement="°C",
+                    mode=selector.NumberSelectorMode.BOX,
+                )
+            ),
+            vol.Optional(
+                "preset_away",
+                description={
+                    "suggested_value": presets.get("away", {}).get("setpoint")
+                },
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=5,
+                    max=35,
+                    step=0.5,
+                    unit_of_measurement="°C",
+                    mode=selector.NumberSelectorMode.BOX,
+                )
+            ),
+            vol.Optional(
+                "preset_boost",
+                description={
+                    "suggested_value": presets.get("boost", {}).get("setpoint")
+                },
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=5,
+                    max=35,
+                    step=0.5,
+                    unit_of_measurement="°C",
+                    mode=selector.NumberSelectorMode.BOX,
+                )
+            ),
         }
     )
 
@@ -203,6 +259,21 @@ def get_zone_schema(
 def build_zone_data(user_input: dict[str, Any]) -> dict[str, Any]:
     """Build zone data from user input."""
     zone_id = user_input.get("zone_id") or slugify(user_input["name"])
+
+    # Build presets from user input - only include if setpoint is provided
+    presets: dict[str, dict[str, Any]] = {}
+    if user_input.get("preset_comfort") is not None:
+        presets["comfort"] = {"setpoint": user_input["preset_comfort"]}
+    if user_input.get("preset_eco") is not None:
+        presets["eco"] = {"setpoint": user_input["preset_eco"]}
+    if user_input.get("preset_away") is not None:
+        presets["away"] = {"setpoint": user_input["preset_away"]}
+    if user_input.get("preset_boost") is not None:
+        presets["boost"] = {
+            "setpoint": user_input["preset_boost"],
+            "pid_enabled": False,
+        }
+
     return {
         "id": zone_id,
         "name": user_input["name"],
@@ -223,7 +294,7 @@ def build_zone_data(user_input: dict[str, Any]) -> dict[str, Any]:
             "integral_min": DEFAULT_PID["integral_min"],
             "integral_max": DEFAULT_PID["integral_max"],
         },
-        "presets": {},
+        "presets": presets,
     }
 
 
