@@ -34,31 +34,6 @@ STORAGE_VERSION = 1
 STORAGE_KEY = "ufh_controller"
 
 
-def calculate_aligned_interval(now: datetime, interval: int) -> timedelta:
-    """
-    Calculate time until next wall-clock-aligned update slot.
-
-    For deterministic timing, updates are aligned to wall clock times
-    based on seconds since midnight. E.g., with 60s interval, updates
-    fire at :00, :01, :02, etc.
-
-    Args:
-        now: Current datetime.
-        interval: Loop interval in seconds.
-
-    Returns:
-        Timedelta until the next aligned slot (minimum 1 second).
-
-    """
-    midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    seconds_since_midnight = (now - midnight).total_seconds()
-    slot_index = int(seconds_since_midnight // interval)
-    next_slot = (slot_index + 1) * interval
-    seconds_until_next = next_slot - seconds_since_midnight
-    # Ensure minimum 1 second delay to avoid tight loops
-    return timedelta(seconds=max(1.0, seconds_until_next))
-
-
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
@@ -251,9 +226,6 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self._last_update is not None:
             dt = (now - self._last_update).total_seconds()
         self._last_update = now
-
-        # Align next update to wall clock
-        self.update_interval = calculate_aligned_interval(now, self._loop_interval)
 
         # Skip if no zones configured
         if not self._controller.zone_ids:
