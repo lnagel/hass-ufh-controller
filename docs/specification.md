@@ -707,7 +707,6 @@ hass-ufh-controller/
 │       │   ├── pid.py               # PID controller class
 │       │   └── history.py           # Recorder query helpers
 │       │
-│       ├── services.yaml            # Service definitions
 │       ├── strings.json             # Config flow strings
 │       └── translations/
 │           └── en.json              # English translations
@@ -1004,48 +1003,4 @@ state: auto
 attributes:
   options: [auto, flush, cycle, all_on, all_off, disabled]
   friendly_name: Heating Mode
-```
-
----
-
-## Appendix C: Services
-
-Standard climate services (`climate.set_temperature`, `climate.set_hvac_mode`, `climate.set_preset_mode`, etc.) work with zone climate entities. The following are integration-specific services:
-
-```yaml
-# services.yaml
-reset_observation_period:
-  name: Reset Observation Period
-  description: Reset the observation period quota tracking
-  target:
-    device:
-      integration: ufh_controller
-
-force_zone_state:
-  name: Force Zone State
-  description: Temporarily force a zone valve on or off
-  target:
-    entity:
-      domain: climate
-      integration: ufh_controller
-  fields:
-    state:
-      name: State
-      description: Valve state to force
-      required: true
-      selector:
-        select:
-          options:
-            - "on"
-            - "off"
-            - "auto"
-    duration:
-      name: Duration
-      description: How long to maintain forced state (0 = indefinite)
-      required: false
-      selector:
-        number:
-          min: 0
-          max: 3600
-          unit_of_measurement: "seconds"
 ```
