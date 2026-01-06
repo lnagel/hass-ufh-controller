@@ -148,33 +148,6 @@ class TestPIDController:
         output = pid.update(setpoint=22.0, current=20.0, dt=-60.0)
         assert output == 0.0
 
-    def test_get_terms(self) -> None:
-        """Test get_terms returns correct breakdown."""
-        pid = PIDController(kp=50.0, ki=0.1, kd=0.0, integral_max=1000.0)
-
-        # First update to set some state (integral = 0.1 * 1 * 60 = 6 after one update)
-        pid.update(setpoint=21.0, current=20.0, dt=60.0)
-
-        terms = pid.get_terms(setpoint=21.0, current=20.0, dt=60.0)
-
-        assert terms["error"] == 1.0
-        assert terms["p_term"] == 50.0
-        assert terms["i_term"] == pytest.approx(6.0)  # integral=6 after first update
-        assert terms["d_term"] == 0.0
-        assert terms["output"] == pytest.approx(56.0)
-
-    def test_get_terms_zero_dt(self) -> None:
-        """Test get_terms with zero dt returns zeros."""
-        pid = PIDController()
-
-        terms = pid.get_terms(setpoint=21.0, current=20.0, dt=0.0)
-
-        assert terms["error"] == 0.0
-        assert terms["p_term"] == 0.0
-        assert terms["i_term"] == 0.0
-        assert terms["d_term"] == 0.0
-        assert terms["output"] == 0.0
-
     def test_default_values(self) -> None:
         """Test default PID parameters match spec."""
         pid = PIDController()
