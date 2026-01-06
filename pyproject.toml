@@ -20,6 +20,7 @@ test = [
     "pytest-homeassistant-custom-component>=0.13.285",
 ]
 dev = [
+    "hass-ufh-controller[test]",
     "ruff>=0.14.10",
     "ty>=0.0.1a11",
 ]

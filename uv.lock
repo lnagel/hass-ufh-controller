@@ -1247,6 +1247,10 @@ dependencies = [
 
 [package.optional-dependencies]
 dev = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-cov" },
+    { name = "pytest-homeassistant-custom-component" },
     { name = "ruff" },
     { name = "ty" },
 ]
@@ -1260,6 +1264,7 @@ test = [
 [package.metadata]
 requires-dist = [
     { name = "colorlog", specifier = ">=6.10.1" },
+    { name = "hass-ufh-controller", extras = ["test"], marker = "extra == 'dev'" },
     { name = "homeassistant", specifier = ">=2025.10.0" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=7.0.0" },
     { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.20.0" },
