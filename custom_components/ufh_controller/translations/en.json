@@ -121,6 +121,9 @@
             "pid_error": {
                 "name": "PID Error"
             },
+            "pid_proportional": {
+                "name": "PID Proportional"
+            },
             "pid_integral": {
                 "name": "PID Integral"
             },

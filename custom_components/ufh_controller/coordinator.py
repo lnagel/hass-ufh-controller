@@ -308,14 +308,16 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         }
 
         for zone_id in self._controller.zone_ids:
-            state = self._controller.get_zone_state(zone_id)
-            if state is not None:
+            runtime = self._controller.get_zone_runtime(zone_id)
+            if runtime is not None:
+                state = runtime.state
                 result["zones"][zone_id] = {
                     "current_temp": state.current_temp,
                     "setpoint": state.setpoint,
                     "duty_cycle": state.duty_cycle,
                     "error": state.error,
                     "integral": state.integral,
+                    "p_term": runtime.config.kp * state.error,
                     "valve_on": state.valve_on,
                     "enabled": state.enabled,
                     "window_blocked": state.window_open_avg

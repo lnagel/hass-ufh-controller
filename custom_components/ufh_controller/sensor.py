@@ -50,6 +50,14 @@ ZONE_SENSORS: tuple[UFHZoneSensorEntityDescription, ...] = (
         value_fn=lambda data: data.get("error"),
     ),
     UFHZoneSensorEntityDescription(
+        key="pid_proportional",
+        translation_key="pid_proportional",
+        native_unit_of_measurement="%",
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        value_fn=lambda data: data.get("p_term"),
+    ),
+    UFHZoneSensorEntityDescription(
         key="pid_integral",
         translation_key="pid_integral",
         native_unit_of_measurement="°C·s",
