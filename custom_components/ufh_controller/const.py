@@ -38,6 +38,7 @@ DEFAULT_TIMING = {
     "valve_open_time": 210,  # 3.5 minutes
     "closing_warning_duration": 240,  # 4 minutes
     "window_block_threshold": 0.05,  # 5% (ratio, not percentage)
+    "controller_loop_interval": 60,  # PID update interval
 }
 
 # Default PID controller parameters
@@ -56,6 +57,3 @@ DEFAULT_SETPOINT = {
     "step": 0.5,
     "default": 21.0,
 }
-
-# Controller loop interval in seconds
-CONTROLLER_LOOP_INTERVAL = 60

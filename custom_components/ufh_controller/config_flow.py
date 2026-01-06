@@ -101,6 +101,17 @@ def get_timing_schema(timing: dict[str, Any] | None = None) -> vol.Schema:
                     mode=selector.NumberSelectorMode.BOX,
                 )
             ),
+            vol.Required(
+                "controller_loop_interval",
+                default=timing.get(
+                    "controller_loop_interval",
+                    DEFAULT_TIMING["controller_loop_interval"],
+                ),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=10, max=300, step=5, unit_of_measurement="s"
+                )
+            ),
         }
     )
 
@@ -331,6 +342,7 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
                 "valve_open_time": int(user_input["valve_open_time"]),
                 "closing_warning_duration": int(user_input["closing_warning_duration"]),
                 "window_block_threshold": user_input["window_block_threshold"],
+                "controller_loop_interval": int(user_input["controller_loop_interval"]),
             }
 
             # Update the controller subentry with new timing

@@ -9,7 +9,6 @@ from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import (
-    CONTROLLER_LOOP_INTERVAL,
     DOMAIN,
     LOGGER,
     SUBENTRY_TYPE_CONTROLLER,
@@ -34,6 +33,32 @@ from .core.zone import _VALVE_OPEN_THRESHOLD, CircuitType
 STORAGE_VERSION = 1
 STORAGE_KEY = "ufh_controller"
 
+
+def calculate_aligned_interval(now: datetime, interval: int) -> timedelta:
+    """
+    Calculate time until next wall-clock-aligned update slot.
+
+    For deterministic timing, updates are aligned to wall clock times
+    based on seconds since midnight. E.g., with 60s interval, updates
+    fire at :00, :01, :02, etc.
+
+    Args:
+        now: Current datetime.
+        interval: Loop interval in seconds.
+
+    Returns:
+        Timedelta until the next aligned slot (minimum 1 second).
+
+    """
+    midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    seconds_since_midnight = (now - midnight).total_seconds()
+    slot_index = int(seconds_since_midnight // interval)
+    next_slot = (slot_index + 1) * interval
+    seconds_until_next = next_slot - seconds_since_midnight
+    # Ensure minimum 1 second delay to avoid tight loops
+    return timedelta(seconds=max(1.0, seconds_until_next))
+
+
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
@@ -51,11 +76,15 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         entry: UFHControllerConfigEntry,
     ) -> None:
         """Initialize the coordinator."""
+        # Build controller first to get timing config
+        self._controller = self._build_controller(entry)
+        self._loop_interval = self._controller.config.timing.controller_loop_interval
+
         super().__init__(
             hass,
             LOGGER,
             name=DOMAIN,
-            update_interval=timedelta(seconds=CONTROLLER_LOOP_INTERVAL),
+            update_interval=timedelta(seconds=self._loop_interval),
         )
         self.config_entry = entry
         self._last_update: datetime | None = None
@@ -67,9 +96,6 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             f"{STORAGE_KEY}.{entry.entry_id}",
         )
         self._state_restored: bool = False
-
-        # Build controller from config entry
-        self._controller = self._build_controller(entry)
 
     def _build_controller(self, entry: UFHControllerConfigEntry) -> HeatingController:
         """Build HeatingController from config entry."""
@@ -92,6 +118,7 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             valve_open_time=timing_opts.get("valve_open_time", 210),
             closing_warning_duration=timing_opts.get("closing_warning_duration", 240),
             window_block_threshold=timing_opts.get("window_block_threshold", 0.05),
+            controller_loop_interval=timing_opts.get("controller_loop_interval", 60),
         )
 
         # Build zones from subentries
@@ -220,10 +247,13 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             await self.async_load_stored_state()
 
         now = datetime.now(UTC)
-        dt = CONTROLLER_LOOP_INTERVAL
+        dt = self._loop_interval
         if self._last_update is not None:
             dt = (now - self._last_update).total_seconds()
         self._last_update = now
+
+        # Align next update to wall clock
+        self.update_interval = calculate_aligned_interval(now, self._loop_interval)
 
         # Skip if no zones configured
         if not self._controller.zone_ids:
