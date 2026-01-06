@@ -13,9 +13,14 @@ class UFHControllerEntity(CoordinatorEntity[UFHControllerDataUpdateCoordinator])
 
     _attr_has_entity_name = True
 
-    def __init__(self, coordinator: UFHControllerDataUpdateCoordinator) -> None:
+    def __init__(
+        self,
+        coordinator: UFHControllerDataUpdateCoordinator,
+        subentry_id: str,
+    ) -> None:
         """Initialize the entity."""
         super().__init__(coordinator)
+        self._attr_config_subentry_id = subentry_id
         self._attr_device_info = get_controller_device_info(coordinator)
 
 
@@ -29,11 +34,15 @@ class UFHControllerZoneEntity(CoordinatorEntity[UFHControllerDataUpdateCoordinat
         coordinator: UFHControllerDataUpdateCoordinator,
         zone_id: str,
         zone_name: str,
+        subentry_id: str,
     ) -> None:
         """Initialize the entity."""
         super().__init__(coordinator)
         self._zone_id = zone_id
-        self._attr_device_info = get_zone_device_info(coordinator, zone_id, zone_name)
+        self._attr_config_subentry_id = subentry_id
+        self._attr_device_info = get_zone_device_info(
+            coordinator, zone_id, zone_name, subentry_id
+        )
 
     @property
     def zone_id(self) -> str:

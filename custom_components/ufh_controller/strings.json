@@ -142,15 +142,7 @@
     },
     "select": {
       "mode": {
-        "name": "Mode",
-        "state": {
-          "auto": "Automatic",
-          "flush": "Flush",
-          "cycle": "Cycle",
-          "all_on": "All On",
-          "all_off": "All Off",
-          "disabled": "Disabled"
-        }
+        "name": "Mode"
       }
     },
     "switch": {

@@ -1,6 +1,7 @@
 """Common fixtures for UFH Controller tests."""
 
 from collections.abc import Generator
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -20,14 +21,32 @@ from custom_components.ufh_controller.const import (
     DEFAULT_SETPOINT,
     DEFAULT_TIMING,
     DOMAIN,
+    SUBENTRY_TYPE_ZONE,
 )
 
 MOCK_CONTROLLER_ID = "test_controller"
 
+MOCK_ZONE_DATA: dict[str, Any] = {
+    "id": "zone1",
+    "name": "Test Zone 1",
+    "circuit_type": "regular",
+    "temp_sensor": "sensor.zone1_temp",
+    "valve_switch": "switch.zone1_valve",
+    "setpoint": DEFAULT_SETPOINT,
+    "pid": DEFAULT_PID,
+    "window_sensors": [],
+    "presets": {
+        "comfort": {"setpoint": 22.0},
+        "eco": {"setpoint": 19.0},
+        "away": {"setpoint": 16.0},
+        "boost": {"setpoint": 25.0, "pid_enabled": False},
+    },
+}
+
 
 @pytest.fixture
 def mock_config_entry() -> MockConfigEntry:
-    """Return a mock config entry."""
+    """Return a mock config entry with a zone subentry."""
     return MockConfigEntry(
         domain=DOMAIN,
         title="Test Controller",
@@ -37,27 +56,18 @@ def mock_config_entry() -> MockConfigEntry:
         },
         options={
             "timing": DEFAULT_TIMING,
-            "zones": [
-                {
-                    "id": "zone1",
-                    "name": "Test Zone 1",
-                    "circuit_type": "regular",
-                    "temp_sensor": "sensor.zone1_temp",
-                    "valve_switch": "switch.zone1_valve",
-                    "setpoint": DEFAULT_SETPOINT,
-                    "pid": DEFAULT_PID,
-                    "window_sensors": [],
-                    "presets": {
-                        "comfort": {"setpoint": 22.0},
-                        "eco": {"setpoint": 19.0},
-                        "away": {"setpoint": 16.0},
-                        "boost": {"setpoint": 25.0, "pid_enabled": False},
-                    },
-                },
-            ],
         },
         entry_id="test_entry_id",
         unique_id=MOCK_CONTROLLER_ID,
+        subentries_data=[
+            {
+                "data": MOCK_ZONE_DATA,
+                "subentry_id": "subentry_zone1",
+                "subentry_type": SUBENTRY_TYPE_ZONE,
+                "title": "Test Zone 1",
+                "unique_id": "zone1",
+            }
+        ],
     )
 
 
@@ -73,7 +83,6 @@ def mock_config_entry_no_zones() -> MockConfigEntry:
         },
         options={
             "timing": DEFAULT_TIMING,
-            "zones": [],
         },
         entry_id="test_entry_id_no_zones",
         unique_id=f"{MOCK_CONTROLLER_ID}_no_zones",

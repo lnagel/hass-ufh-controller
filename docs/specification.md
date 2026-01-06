@@ -102,6 +102,11 @@ A custom Home Assistant integration providing:
 
 ### 3.1 ConfigEntry Structure
 
+The integration uses Home Assistant's **Config Subentries** feature (HA 2025.7+) to manage zones and controller settings. This enables:
+- Native device deletion through the HA UI
+- Zone configuration via the device "Configure" button
+- Proper device-to-subentry linking in the UI
+
 ```python
 ConfigEntry.data = {
     "name": "Heating Controller",           # User-defined controller name
@@ -112,22 +117,43 @@ ConfigEntry.data = {
     "summer_mode_entity": "select.boiler_summer_mode",            # Optional
 }
 
-ConfigEntry.options = {
-    "timing": {
-        "observation_period": 7200,    # seconds (2 hours)
-        "duty_cycle_window": 3600,     # seconds (1 hour)
-        "min_run_time": 540,           # seconds (9 minutes)
-        "valve_open_time": 210,        # seconds (3.5 minutes)
-        "window_block_threshold": 0.05 # 5% average triggers block
-    },
-    "zones": [
-        {
+# Options kept minimal (timing stored in controller subentry)
+ConfigEntry.options = {}
+
+# Subentries store zones and controller settings
+ConfigEntry.subentries = {
+    # Controller subentry (auto-created, stores timing settings)
+    "controller_subentry_id": ConfigSubentry(
+        subentry_type="controller",
+        unique_id="controller",
+        title="Heating Controller",
+        data={
+            "timing": {
+                "observation_period": 7200,    # seconds (2 hours)
+                "duty_cycle_window": 3600,     # seconds (1 hour)
+                "min_run_time": 540,           # seconds (9 minutes)
+                "valve_open_time": 210,        # seconds (3.5 minutes)
+                "closing_warning_duration": 240, # seconds (4 minutes)
+                "window_block_threshold": 0.05 # 5% average triggers block
+            }
+        }
+    ),
+
+    # Zone subentries (one per heating zone)
+    "zone_subentry_id_1": ConfigSubentry(
+        subentry_type="zone",
+        unique_id="living_room",
+        title="Living Room",
+        data={
             "id": "living_room",
             "name": "Living Room",
-            "area_id": "living_room",  # Optional, links to HA Area
             "circuit_type": "regular",  # or "flush"
             "temp_sensor": "sensor.living_room_temperature",
             "valve_switch": "switch.living_room_valve",
+            "window_sensors": [
+                "binary_sensor.living_room_window",
+                "binary_sensor.terrace_door"
+            ],
             "setpoint": {
                 "min": 18.0,
                 "max": 25.0,
@@ -141,19 +167,15 @@ ConfigEntry.options = {
                 "integral_min": 0.0,
                 "integral_max": 100.0
             },
-            "window_sensors": [
-                "binary_sensor.living_room_window",
-                "binary_sensor.terrace_door"
-            ],
             "presets": {
                 "comfort": {"setpoint": 22.0},
                 "eco": {"setpoint": 19.0},
                 "away": {"setpoint": 16.0},
                 "boost": {"setpoint": 25.0, "pid_enabled": false}
             }
-        },
-        # ... more zones
-    ]
+        }
+    ),
+    # ... more zone subentries
 }
 ```
 
@@ -198,60 +220,105 @@ class ControllerState:
 
 ## 4. Config Flow Design
 
+The integration uses a **subentry-based architecture** for zone management, providing native Home Assistant UI patterns:
+- Zones appear as separate devices linked to their subentries
+- Zone devices can be deleted directly from the HA device page
+- Zone settings are accessed via the device's "Configure" button
+
 ### 4.1 Initial Setup (ConfigFlow)
 
 **Step 1: Controller Setup**
+
+Creates the main ConfigEntry. Zones are added separately after setup.
 
 To control the boiler, configure either a Heat Request Switch or Summer Mode Select entity. If neither is configured, the boiler must remain operational continuously.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | name | string | Yes | Controller display name |
-| controller_id | string | Yes | Unique ID (auto-generated from name, editable) |
+| controller_id | string | Auto | Unique ID (auto-generated from name) |
 | heat_request_entity | entity (switch) | No | Switch to signal heat demand to boiler |
 | dhw_active_entity | entity (binary_sensor) | No | Sensor indicating DHW tank is heating |
 | circulation_entity | entity (binary_sensor) | No | Sensor indicating circulation pump is running |
 | summer_mode_entity | entity (select) | No | Select to enable/disable boiler UFH circuit |
 
-**Step 2: Add First Zone** (optional, can skip)
+On entry setup, a **controller subentry** is automatically created to:
+- Store timing parameters
+- Link controller-level entities (mode select, heat request switch, etc.) to a device
+- Enable the "Configure" button on the controller device
+
+### 4.2 Zone Subentry Flow
+
+Zones are managed as **config subentries**. Users interact with zones through:
+
+**Adding a Zone:**
+- Navigate to: Settings → Devices & Services → UFH Controller → "+ Add Heating Zone"
+- Or: Device page → Controller device → "Add Heating Zone" button
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | name | string | Yes | Zone display name |
-| id | string | Yes | Zone ID (auto-generated from name, editable) |
-| area | area selector | No | Home Assistant Area for this zone |
-| circuit_type | select | Yes | "regular" or "flush" |
 | temp_sensor | entity (sensor) | Yes | Temperature sensor for this zone |
 | valve_switch | entity (switch) | Yes | Valve control switch |
-| setpoint_min | float | Yes | Minimum allowed setpoint |
-| setpoint_max | float | Yes | Maximum allowed setpoint |
-| setpoint_step | float | Yes | Setpoint increment |
-| setpoint_default | float | Yes | Initial setpoint |
-| kp | float | Yes | PID proportional gain |
-| ki | float | Yes | PID integral gain |
-| kd | float | Yes | PID derivative gain (typically 0) |
-| window_sensors | multi-select | No | Window/door sensors that block this zone |
+| circuit_type | select | No | "regular" (default) or "flush" |
+| window_sensors | multi-entity | No | Window/door sensors that block this zone |
+| setpoint_min | float | No | Minimum allowed setpoint (default: 16°C) |
+| setpoint_max | float | No | Maximum allowed setpoint (default: 28°C) |
+| setpoint_default | float | No | Initial setpoint (default: 21°C) |
+| kp | float | No | PID proportional gain (default: 50.0) |
+| ki | float | No | PID integral gain (default: 0.05) |
+| kd | float | No | PID derivative gain (default: 0.0) |
 
-User can add more zones or finish setup.
+**Reconfiguring a Zone:**
+- Navigate to: Settings → Devices & Services → Devices → [Zone Device] → "Configure" (cogwheel)
+- All fields from zone creation are editable except the zone ID
 
-### 4.2 Options Flow (Post-Setup Configuration)
+**Deleting a Zone:**
+- Navigate to: Settings → Devices & Services → Devices → [Zone Device] → Delete
+- The subentry and all associated entities are removed
 
-Accessed via: Settings → Devices & Services → Heating Controller → Configure
+### 4.3 Options Flow (Timing Settings)
 
-**Available Operations:**
+Accessed via: Settings → Devices & Services → UFH Controller → Configure
 
-1. **Manage Zones**
-   - View list of configured zones
-   - Add new zone
-   - Edit existing zone (including presets)
-   - Delete zone
+The options flow provides access to **timing parameters** that apply to the entire controller:
 
-2. **Timing Parameters**
-   - Observation period
-   - Duty cycle window
-   - Minimum run time
-   - Valve open detection time
-   - Window block threshold
+| Field | Type | Description |
+|-------|------|-------------|
+| observation_period | number (s) | Time window for quota-based scheduling (default: 7200s / 2h) |
+| duty_cycle_window | number (s) | Rolling window for duty cycle calculation (default: 3600s / 1h) |
+| min_run_time | number (s) | Minimum valve on duration (default: 540s / 9min) |
+| valve_open_time | number (s) | Time to detect valve fully open (default: 210s / 3.5min) |
+| closing_warning_duration | number (s) | Warning before valve closes (default: 240s / 4min) |
+| window_block_threshold | number (0-1) | Window open ratio to trigger blocking (default: 0.05 / 5%) |
+
+These settings are stored in the **controller subentry** data.
+
+### 4.4 Architecture Summary
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        ConfigEntry                              │
+│  data: {name, controller_id, heat_request_entity, ...}         │
+├─────────────────────────────────────────────────────────────────┤
+│                        Subentries                               │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  Controller Subentry (auto-created)                       │  │
+│  │  - type: "controller"                                     │  │
+│  │  - data: {timing: {...}}                                  │  │
+│  │  - Entities: mode select, heat request switch,            │  │
+│  │              flush enabled switch, requesting zones sensor│  │
+│  └──────────────────────────────────────────────────────────┘  │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  Zone Subentry (user-created via "+ Add Heating Zone")   │  │
+│  │  - type: "zone"                                           │  │
+│  │  - data: {id, name, temp_sensor, valve_switch, pid, ...} │  │
+│  │  - Entities: climate, duty_cycle sensor, pid sensors,     │  │
+│  │              blocked binary_sensor, heat_request sensor  │  │
+│  └──────────────────────────────────────────────────────────┘  │
+│  ... (more zone subentries)                                    │
+└─────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
@@ -729,16 +796,28 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 @pytest.fixture
 def mock_config_entry() -> MockConfigEntry:
+    """Create a mock config entry with subentries."""
     return MockConfigEntry(
         domain=DOMAIN,
         data={
             "name": "Test Controller",
             "controller_id": "test",
         },
-        options={
-            "timing": DEFAULT_TIMING,
-            "zones": [
-                {
+        options={},  # Options kept minimal, timing in controller subentry
+        subentries_data=[
+            # Controller subentry (auto-created)
+            {
+                "subentry_type": "controller",
+                "unique_id": "controller",
+                "title": "Test Controller",
+                "data": {"timing": DEFAULT_TIMING},
+            },
+            # Zone subentry
+            {
+                "subentry_type": "zone",
+                "unique_id": "zone1",
+                "title": "Test Zone",
+                "data": {
                     "id": "zone1",
                     "name": "Test Zone",
                     "circuit_type": "regular",
@@ -751,11 +830,11 @@ def mock_config_entry() -> MockConfigEntry:
                     "presets": {
                         "comfort": {"setpoint": 22.0},
                         "eco": {"setpoint": 19.0},
-                        "boost": {"setpoint": 25.0, "pid_enabled": false},
+                        "boost": {"setpoint": 25.0, "pid_enabled": False},
                     },
-                }
-            ],
-        },
+                },
+            },
+        ],
     )
 ```
 

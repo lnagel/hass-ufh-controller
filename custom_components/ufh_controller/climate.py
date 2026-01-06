@@ -11,12 +11,12 @@ from homeassistant.components.climate import (
     HVACMode,
 )
 
-from .const import DEFAULT_SETPOINT
+from .const import DEFAULT_SETPOINT, SUBENTRY_TYPE_ZONE
 from .entity import UFHControllerZoneEntity
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
-    from homeassistant.helpers.entity_platform import AddEntitiesCallback
+    from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
     from .coordinator import UFHControllerDataUpdateCoordinator
     from .data import UFHControllerConfigEntry
@@ -25,23 +25,27 @@ if TYPE_CHECKING:
 async def async_setup_entry(
     _hass: HomeAssistant,
     entry: UFHControllerConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up the climate platform."""
     coordinator = entry.runtime_data.coordinator
 
-    # Create a climate entity for each zone
-    entities = [
-        UFHZoneClimate(
-            coordinator=coordinator,
-            zone_id=zone_config["id"],
-            zone_name=zone_config["name"],
-            zone_config=zone_config,
+    # Create a climate entity for each zone subentry
+    for subentry in entry.subentries.values():
+        if subentry.subentry_type != SUBENTRY_TYPE_ZONE:
+            continue
+        async_add_entities(
+            [
+                UFHZoneClimate(
+                    coordinator=coordinator,
+                    zone_id=subentry.data["id"],
+                    zone_name=subentry.data["name"],
+                    zone_config=dict(subentry.data),
+                    subentry_id=subentry.subentry_id,
+                )
+            ],
+            config_subentry_id=subentry.subentry_id,
         )
-        for zone_config in entry.options.get("zones", [])
-    ]
-
-    async_add_entities(entities)
 
 
 class UFHZoneClimate(UFHControllerZoneEntity, ClimateEntity):
@@ -57,9 +61,10 @@ class UFHZoneClimate(UFHControllerZoneEntity, ClimateEntity):
         zone_id: str,
         zone_name: str,
         zone_config: dict[str, Any],
+        subentry_id: str,
     ) -> None:
         """Initialize the climate entity."""
-        super().__init__(coordinator, zone_id, zone_name)
+        super().__init__(coordinator, zone_id, zone_name, subentry_id)
 
         controller_id = coordinator.config_entry.data.get("controller_id", "")
         self._attr_unique_id = f"{controller_id}_{zone_id}_climate"

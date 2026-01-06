@@ -7,7 +7,13 @@ from typing import TYPE_CHECKING, Any
 
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
-from .const import CONTROLLER_LOOP_INTERVAL, DOMAIN, LOGGER
+from .const import (
+    CONTROLLER_LOOP_INTERVAL,
+    DOMAIN,
+    LOGGER,
+    SUBENTRY_TYPE_CONTROLLER,
+    SUBENTRY_TYPE_ZONE,
+)
 from .core import (
     ControllerConfig,
     HeatingController,
@@ -54,9 +60,17 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def _build_controller(self, entry: UFHControllerConfigEntry) -> HeatingController:
         """Build HeatingController from config entry."""
         data = entry.data
-        options = entry.options
 
-        timing_opts = options.get("timing", {})
+        # Get timing from controller subentry, fall back to options for migration
+        timing_opts: dict[str, Any] = {}
+        for subentry in entry.subentries.values():
+            if subentry.subentry_type == SUBENTRY_TYPE_CONTROLLER:
+                timing_opts = subentry.data.get("timing", {})
+                break
+        if not timing_opts:
+            # Fallback to options for backwards compatibility
+            timing_opts = entry.options.get("timing", {})
+
         timing = TimingParams(
             observation_period=timing_opts.get("observation_period", 7200),
             duty_cycle_window=timing_opts.get("duty_cycle_window", 3600),
@@ -66,8 +80,12 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             window_block_threshold=timing_opts.get("window_block_threshold", 0.05),
         )
 
+        # Build zones from subentries
         zones: list[ZoneConfig] = []
-        for zone_data in options.get("zones", []):
+        for subentry in entry.subentries.values():
+            if subentry.subentry_type != SUBENTRY_TYPE_ZONE:
+                continue
+            zone_data = subentry.data
             pid_opts = zone_data.get("pid", {})
             setpoint_opts = zone_data.get("setpoint", {})
 

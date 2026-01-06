@@ -7,18 +7,24 @@ https://github.com/lnagel/hass-ufh-controller
 
 from __future__ import annotations
 
+from types import MappingProxyType
 from typing import TYPE_CHECKING
 
+from homeassistant.config_entries import ConfigSubentry
 from homeassistant.const import Platform
+from homeassistant.exceptions import HomeAssistantError
 
-from .const import DOMAIN, LOGGER
+from .const import DEFAULT_TIMING, DOMAIN, LOGGER, SUBENTRY_TYPE_CONTROLLER
 from .coordinator import UFHControllerDataUpdateCoordinator
 from .data import UFHControllerData
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
+    from homeassistant.helpers import device_registry as dr
 
     from .data import UFHControllerConfigEntry
+
+CONTROLLER_SUBENTRY_UNIQUE_ID = "controller"
 
 PLATFORMS: list[Platform] = [
     Platform.CLIMATE,
@@ -36,6 +42,9 @@ async def async_setup_entry(
     """Set up UFH Controller from a config entry."""
     LOGGER.debug("Setting up UFH Controller entry: %s", entry.entry_id)
 
+    # Ensure controller subentry exists (auto-create if missing)
+    await _async_ensure_controller_subentry(hass, entry)
+
     coordinator = UFHControllerDataUpdateCoordinator(hass=hass, entry=entry)
     await coordinator.async_config_entry_first_refresh()
 
@@ -45,6 +54,32 @@ async def async_setup_entry(
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
 
     return True
+
+
+async def _async_ensure_controller_subentry(
+    hass: HomeAssistant,
+    entry: UFHControllerConfigEntry,
+) -> None:
+    """Ensure the controller subentry exists, creating it if needed."""
+    # Check if controller subentry already exists
+    for subentry in entry.subentries.values():
+        if subentry.subentry_type == SUBENTRY_TYPE_CONTROLLER:
+            LOGGER.debug("Controller subentry already exists: %s", subentry.subentry_id)
+            return
+
+    # Create controller subentry with timing data
+    # Try to migrate timing from options if available, otherwise use defaults
+    timing = entry.options.get("timing", DEFAULT_TIMING)
+    controller_name = entry.data.get("name", "UFH Controller")
+    controller_subentry = ConfigSubentry(
+        data=MappingProxyType({"timing": timing}),
+        subentry_type=SUBENTRY_TYPE_CONTROLLER,
+        title=controller_name,
+        unique_id=CONTROLLER_SUBENTRY_UNIQUE_ID,
+    )
+
+    hass.config_entries.async_add_subentry(entry, controller_subentry)
+    LOGGER.debug("Created controller subentry for: %s", controller_name)
 
 
 async def async_unload_entry(
@@ -62,6 +97,43 @@ async def async_reload_entry(
 ) -> None:
     """Reload config entry."""
     await hass.config_entries.async_reload(entry.entry_id)
+
+
+async def async_remove_config_entry_device(
+    _hass: HomeAssistant,
+    entry: UFHControllerConfigEntry,
+    device_entry: dr.DeviceEntry,
+) -> bool:
+    """Handle device removal request."""
+    LOGGER.debug(
+        "async_remove_config_entry_device called for device: %s, identifiers: %s",
+        device_entry.id,
+        device_entry.identifiers,
+    )
+
+    # Find the device identifier for our domain
+    device_id = None
+    for identifier in device_entry.identifiers:
+        if identifier[0] == DOMAIN:
+            device_id = identifier[1]
+            break
+
+    if device_id is None:
+        LOGGER.debug("No identifier found for domain %s", DOMAIN)
+        return False
+
+    # The controller device has identifier = entry_id
+    # Zone devices have identifier = entry_id + "_" + zone_id
+    if device_id == entry.entry_id:
+        # Cannot delete the main controller device
+        LOGGER.debug("Cannot delete main controller device")
+        msg = "Cannot delete the controller. To remove it, delete the integration."
+        raise HomeAssistantError(msg)
+
+    # Zone devices are managed through subentries - deletion is handled by HA
+    # when the subentry is deleted. Allow orphan device cleanup.
+    LOGGER.debug("Allowing device removal for: %s", device_id)
+    return True
 
 
 __all__ = [

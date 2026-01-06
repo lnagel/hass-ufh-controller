@@ -6,6 +6,8 @@ from logging import Logger, getLogger
 LOGGER: Logger = getLogger(__package__)
 
 DOMAIN = "ufh_controller"
+SUBENTRY_TYPE_CONTROLLER = "controller"
+SUBENTRY_TYPE_ZONE = "zone"
 
 # Platforms to set up
 PLATFORMS: list[str] = [

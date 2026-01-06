@@ -6,6 +6,11 @@ from typing import Any
 
 import voluptuous as vol
 from homeassistant import config_entries
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigSubentryFlow,
+    SubentryFlowResult,
+)
 from homeassistant.core import callback
 from homeassistant.helpers import selector
 from slugify import slugify
@@ -16,6 +21,8 @@ from .const import (
     DEFAULT_TIMING,
     DOMAIN,
     LOGGER,
+    SUBENTRY_TYPE_CONTROLLER,
+    SUBENTRY_TYPE_ZONE,
 )
 
 CONF_NAME = "name"
@@ -24,6 +31,200 @@ CONF_HEAT_REQUEST_ENTITY = "heat_request_entity"
 CONF_DHW_ACTIVE_ENTITY = "dhw_active_entity"
 CONF_CIRCULATION_ENTITY = "circulation_entity"
 CONF_SUMMER_MODE_ENTITY = "summer_mode_entity"
+
+
+def get_timing_schema(timing: dict[str, Any] | None = None) -> vol.Schema:
+    """Get the schema for timing configuration."""
+    timing = timing or DEFAULT_TIMING
+    return vol.Schema(
+        {
+            vol.Required(
+                "observation_period",
+                default=timing.get(
+                    "observation_period", DEFAULT_TIMING["observation_period"]
+                ),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=1800, max=14400, step=600, unit_of_measurement="s"
+                )
+            ),
+            vol.Required(
+                "duty_cycle_window",
+                default=timing.get(
+                    "duty_cycle_window", DEFAULT_TIMING["duty_cycle_window"]
+                ),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=600, max=7200, step=300, unit_of_measurement="s"
+                )
+            ),
+            vol.Required(
+                "min_run_time",
+                default=timing.get("min_run_time", DEFAULT_TIMING["min_run_time"]),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=60, max=1800, step=60, unit_of_measurement="s"
+                )
+            ),
+            vol.Required(
+                "valve_open_time",
+                default=timing.get(
+                    "valve_open_time", DEFAULT_TIMING["valve_open_time"]
+                ),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=60, max=600, step=30, unit_of_measurement="s"
+                )
+            ),
+            vol.Required(
+                "closing_warning_duration",
+                default=timing.get(
+                    "closing_warning_duration",
+                    DEFAULT_TIMING["closing_warning_duration"],
+                ),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=60, max=600, step=30, unit_of_measurement="s"
+                )
+            ),
+            vol.Required(
+                "window_block_threshold",
+                default=timing.get(
+                    "window_block_threshold",
+                    DEFAULT_TIMING["window_block_threshold"],
+                ),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=0,
+                    max=1,
+                    step=0.01,
+                    mode=selector.NumberSelectorMode.BOX,
+                )
+            ),
+        }
+    )
+
+
+def get_zone_schema(
+    defaults: dict[str, Any] | None = None,
+) -> vol.Schema:
+    """Get the schema for zone configuration."""
+    defaults = defaults or {}
+    setpoint = defaults.get("setpoint", DEFAULT_SETPOINT)
+    pid = defaults.get("pid", DEFAULT_PID)
+
+    return vol.Schema(
+        {
+            vol.Required(
+                "name", default=defaults.get("name", "")
+            ): selector.TextSelector(),
+            vol.Required(
+                "temp_sensor", default=defaults.get("temp_sensor", "")
+            ): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
+            vol.Required(
+                "valve_switch", default=defaults.get("valve_switch", "")
+            ): selector.EntitySelector(selector.EntitySelectorConfig(domain="switch")),
+            vol.Optional(
+                "circuit_type", default=defaults.get("circuit_type", "regular")
+            ): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=[
+                        selector.SelectOptionDict(value="regular", label="Regular"),
+                        selector.SelectOptionDict(value="flush", label="Flush"),
+                    ]
+                )
+            ),
+            vol.Optional(
+                "window_sensors", default=defaults.get("window_sensors", [])
+            ): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="binary_sensor", multiple=True)
+            ),
+            vol.Optional(
+                "setpoint_min",
+                default=setpoint.get("min", DEFAULT_SETPOINT["min"]),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=5,
+                    max=30,
+                    step=0.1,
+                    unit_of_measurement="°C",
+                    mode=selector.NumberSelectorMode.SLIDER,
+                )
+            ),
+            vol.Optional(
+                "setpoint_max",
+                default=setpoint.get("max", DEFAULT_SETPOINT["max"]),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=5,
+                    max=35,
+                    step=0.1,
+                    unit_of_measurement="°C",
+                    mode=selector.NumberSelectorMode.SLIDER,
+                )
+            ),
+            vol.Optional(
+                "setpoint_default",
+                default=setpoint.get("default", DEFAULT_SETPOINT["default"]),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=5,
+                    max=35,
+                    step=0.1,
+                    unit_of_measurement="°C",
+                    mode=selector.NumberSelectorMode.SLIDER,
+                )
+            ),
+            vol.Optional(
+                "kp", default=pid.get("kp", DEFAULT_PID["kp"])
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    mode=selector.NumberSelectorMode.BOX,
+                )
+            ),
+            vol.Optional(
+                "ki", default=pid.get("ki", DEFAULT_PID["ki"])
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    mode=selector.NumberSelectorMode.BOX,
+                )
+            ),
+            vol.Optional(
+                "kd", default=pid.get("kd", DEFAULT_PID["kd"])
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    mode=selector.NumberSelectorMode.BOX,
+                )
+            ),
+        }
+    )
+
+
+def build_zone_data(user_input: dict[str, Any]) -> dict[str, Any]:
+    """Build zone data from user input."""
+    zone_id = user_input.get("zone_id") or slugify(user_input["name"])
+    return {
+        "id": zone_id,
+        "name": user_input["name"],
+        "circuit_type": user_input.get("circuit_type", "regular"),
+        "temp_sensor": user_input["temp_sensor"],
+        "valve_switch": user_input["valve_switch"],
+        "window_sensors": user_input.get("window_sensors", []),
+        "setpoint": {
+            "min": user_input.get("setpoint_min", DEFAULT_SETPOINT["min"]),
+            "max": user_input.get("setpoint_max", DEFAULT_SETPOINT["max"]),
+            "step": user_input.get("setpoint_step", DEFAULT_SETPOINT["step"]),
+            "default": user_input.get("setpoint_default", DEFAULT_SETPOINT["default"]),
+        },
+        "pid": {
+            "kp": user_input.get("kp", DEFAULT_PID["kp"]),
+            "ki": user_input.get("ki", DEFAULT_PID["ki"]),
+            "kd": user_input.get("kd", DEFAULT_PID["kd"]),
+            "integral_min": DEFAULT_PID["integral_min"],
+            "integral_max": DEFAULT_PID["integral_max"],
+        },
+        "presets": {},
+    }
 
 
 class UFHControllerFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
@@ -62,7 +263,6 @@ class UFHControllerFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 },
                 options={
                     "timing": DEFAULT_TIMING.copy(),
-                    "zones": [],
                 },
             )
 
@@ -98,361 +298,30 @@ class UFHControllerFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         """Get the options flow for this handler."""
         return UFHControllerOptionsFlowHandler()
 
+    @classmethod
+    @callback
+    def async_get_supported_subentry_types(
+        cls,
+        config_entry: ConfigEntry,  # noqa: ARG003
+    ) -> dict[str, type[ConfigSubentryFlow]]:
+        """Return subentry types supported by this integration."""
+        return {SUBENTRY_TYPE_ZONE: ZoneSubentryFlowHandler}
+
 
 class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
-    """Handle options flow for UFH Controller."""
-
-    def __init__(self) -> None:
-        """Initialize options flow."""
-        self._zone_to_edit: str | None = None
+    """Handle options flow for UFH Controller (timing settings)."""
 
     async def async_step_init(
-        self,
-        _user_input: dict[str, Any] | None = None,
-    ) -> config_entries.ConfigFlowResult:
-        """Manage options."""
-        return self.async_show_menu(
-            step_id="init",
-            menu_options=["add_zone", "manage_zones", "timing"],
-        )
-
-    async def async_step_add_zone(
-        self,
-        user_input: dict[str, Any] | None = None,
-    ) -> config_entries.ConfigFlowResult:
-        """Add a new zone."""
-        errors: dict[str, str] = {}
-
-        if user_input is not None:
-            zone_id = user_input.get("zone_id") or slugify(user_input["name"])
-
-            # Check for duplicate zone_id
-            zones = list(self.config_entry.options.get("zones", []))
-            if any(z["id"] == zone_id for z in zones):
-                errors["zone_id"] = "zone_id_exists"
-            else:
-                new_zone = {
-                    "id": zone_id,
-                    "name": user_input["name"],
-                    "circuit_type": user_input.get("circuit_type", "regular"),
-                    "temp_sensor": user_input["temp_sensor"],
-                    "valve_switch": user_input["valve_switch"],
-                    "window_sensors": user_input.get("window_sensors", []),
-                    "setpoint": {
-                        "min": user_input.get("setpoint_min", DEFAULT_SETPOINT["min"]),
-                        "max": user_input.get("setpoint_max", DEFAULT_SETPOINT["max"]),
-                        "step": user_input.get(
-                            "setpoint_step", DEFAULT_SETPOINT["step"]
-                        ),
-                        "default": user_input.get(
-                            "setpoint_default", DEFAULT_SETPOINT["default"]
-                        ),
-                    },
-                    "pid": {
-                        "kp": user_input.get("kp", DEFAULT_PID["kp"]),
-                        "ki": user_input.get("ki", DEFAULT_PID["ki"]),
-                        "kd": user_input.get("kd", DEFAULT_PID["kd"]),
-                        "integral_min": DEFAULT_PID["integral_min"],
-                        "integral_max": DEFAULT_PID["integral_max"],
-                    },
-                    "presets": {},
-                }
-                zones.append(new_zone)
-
-                return self.async_create_entry(
-                    title="",
-                    data={
-                        **self.config_entry.options,
-                        "zones": zones,
-                    },
-                )
-
-        return self.async_show_form(
-            step_id="add_zone",
-            data_schema=vol.Schema(
-                {
-                    vol.Required("name"): selector.TextSelector(),
-                    vol.Required("temp_sensor"): selector.EntitySelector(
-                        selector.EntitySelectorConfig(domain="sensor")
-                    ),
-                    vol.Required("valve_switch"): selector.EntitySelector(
-                        selector.EntitySelectorConfig(domain="switch")
-                    ),
-                    vol.Optional(
-                        "circuit_type", default="regular"
-                    ): selector.SelectSelector(
-                        selector.SelectSelectorConfig(
-                            options=[
-                                selector.SelectOptionDict(
-                                    value="regular", label="Regular"
-                                ),
-                                selector.SelectOptionDict(value="flush", label="Flush"),
-                            ]
-                        )
-                    ),
-                    vol.Optional("window_sensors"): selector.EntitySelector(
-                        selector.EntitySelectorConfig(
-                            domain="binary_sensor", multiple=True
-                        )
-                    ),
-                    vol.Optional(
-                        "setpoint_min", default=DEFAULT_SETPOINT["min"]
-                    ): selector.NumberSelector(
-                        selector.NumberSelectorConfig(
-                            min=5,
-                            max=30,
-                            step=0.1,
-                            unit_of_measurement="°C",
-                            mode=selector.NumberSelectorMode.SLIDER,
-                        )
-                    ),
-                    vol.Optional(
-                        "setpoint_max", default=DEFAULT_SETPOINT["max"]
-                    ): selector.NumberSelector(
-                        selector.NumberSelectorConfig(
-                            min=5,
-                            max=35,
-                            step=0.1,
-                            unit_of_measurement="°C",
-                            mode=selector.NumberSelectorMode.SLIDER,
-                        )
-                    ),
-                    vol.Optional(
-                        "setpoint_default", default=DEFAULT_SETPOINT["default"]
-                    ): selector.NumberSelector(
-                        selector.NumberSelectorConfig(
-                            min=5,
-                            max=35,
-                            step=0.1,
-                            unit_of_measurement="°C",
-                            mode=selector.NumberSelectorMode.SLIDER,
-                        )
-                    ),
-                    vol.Optional(
-                        "kp", default=DEFAULT_PID["kp"]
-                    ): selector.NumberSelector(
-                        selector.NumberSelectorConfig(
-                            mode=selector.NumberSelectorMode.BOX,
-                        )
-                    ),
-                    vol.Optional(
-                        "ki", default=DEFAULT_PID["ki"]
-                    ): selector.NumberSelector(
-                        selector.NumberSelectorConfig(
-                            mode=selector.NumberSelectorMode.BOX,
-                        )
-                    ),
-                    vol.Optional(
-                        "kd", default=DEFAULT_PID["kd"]
-                    ): selector.NumberSelector(
-                        selector.NumberSelectorConfig(
-                            mode=selector.NumberSelectorMode.BOX,
-                        )
-                    ),
-                }
-            ),
-            errors=errors,
-        )
-
-    async def async_step_manage_zones(
-        self,
-        user_input: dict[str, Any] | None = None,
-    ) -> config_entries.ConfigFlowResult:
-        """Manage existing zones."""
-        zones = self.config_entry.options.get("zones", [])
-
-        if not zones:
-            return self.async_abort(reason="no_zones")
-
-        if user_input is not None:
-            selected_zone = user_input.get("zone")
-            action = user_input.get("action")
-
-            if action == "delete":
-                zones = [z for z in zones if z["id"] != selected_zone]
-                return self.async_create_entry(
-                    title="",
-                    data={
-                        **self.config_entry.options,
-                        "zones": zones,
-                    },
-                )
-            if action == "edit":
-                self._zone_to_edit = selected_zone
-                return await self.async_step_edit_zone()
-
-        zone_options = [
-            selector.SelectOptionDict(value=z["id"], label=z["name"]) for z in zones
-        ]
-
-        return self.async_show_form(
-            step_id="manage_zones",
-            data_schema=vol.Schema(
-                {
-                    vol.Required("zone"): selector.SelectSelector(
-                        selector.SelectSelectorConfig(options=zone_options)
-                    ),
-                    vol.Required("action"): selector.SelectSelector(
-                        selector.SelectSelectorConfig(
-                            options=[
-                                selector.SelectOptionDict(value="edit", label="Edit"),
-                                selector.SelectOptionDict(
-                                    value="delete", label="Delete"
-                                ),
-                            ]
-                        )
-                    ),
-                }
-            ),
-        )
-
-    async def async_step_edit_zone(
-        self,
-        user_input: dict[str, Any] | None = None,
-    ) -> config_entries.ConfigFlowResult:
-        """Edit an existing zone."""
-        zones = list(self.config_entry.options.get("zones", []))
-        zone = next((z for z in zones if z["id"] == self._zone_to_edit), None)
-
-        if zone is None:
-            return self.async_abort(reason="zone_not_found")
-
-        if user_input is not None:
-            # Update zone with new values
-            zone["name"] = user_input["name"]
-            zone["temp_sensor"] = user_input["temp_sensor"]
-            zone["valve_switch"] = user_input["valve_switch"]
-            zone["circuit_type"] = user_input.get("circuit_type", "regular")
-            zone["window_sensors"] = user_input.get("window_sensors", [])
-            zone["setpoint"] = {
-                "min": user_input.get("setpoint_min", DEFAULT_SETPOINT["min"]),
-                "max": user_input.get("setpoint_max", DEFAULT_SETPOINT["max"]),
-                "step": zone.get("setpoint", {}).get("step", DEFAULT_SETPOINT["step"]),
-                "default": user_input.get(
-                    "setpoint_default", DEFAULT_SETPOINT["default"]
-                ),
-            }
-            zone["pid"] = {
-                "kp": user_input.get("kp", DEFAULT_PID["kp"]),
-                "ki": user_input.get("ki", DEFAULT_PID["ki"]),
-                "kd": user_input.get("kd", DEFAULT_PID["kd"]),
-                "integral_min": DEFAULT_PID["integral_min"],
-                "integral_max": DEFAULT_PID["integral_max"],
-            }
-
-            return self.async_create_entry(
-                title="",
-                data={
-                    **self.config_entry.options,
-                    "zones": zones,
-                },
-            )
-
-        # Prefill with existing values
-        setpoint = zone.get("setpoint", DEFAULT_SETPOINT)
-        pid = zone.get("pid", DEFAULT_PID)
-
-        return self.async_show_form(
-            step_id="edit_zone",
-            data_schema=vol.Schema(
-                {
-                    vol.Required("name", default=zone["name"]): selector.TextSelector(),
-                    vol.Required(
-                        "temp_sensor", default=zone["temp_sensor"]
-                    ): selector.EntitySelector(
-                        selector.EntitySelectorConfig(domain="sensor")
-                    ),
-                    vol.Required(
-                        "valve_switch", default=zone["valve_switch"]
-                    ): selector.EntitySelector(
-                        selector.EntitySelectorConfig(domain="switch")
-                    ),
-                    vol.Optional(
-                        "circuit_type", default=zone.get("circuit_type", "regular")
-                    ): selector.SelectSelector(
-                        selector.SelectSelectorConfig(
-                            options=[
-                                selector.SelectOptionDict(
-                                    value="regular", label="Regular"
-                                ),
-                                selector.SelectOptionDict(value="flush", label="Flush"),
-                            ]
-                        )
-                    ),
-                    vol.Optional(
-                        "window_sensors", default=zone.get("window_sensors", [])
-                    ): selector.EntitySelector(
-                        selector.EntitySelectorConfig(
-                            domain="binary_sensor", multiple=True
-                        )
-                    ),
-                    vol.Optional(
-                        "setpoint_min",
-                        default=setpoint.get("min", DEFAULT_SETPOINT["min"]),
-                    ): selector.NumberSelector(
-                        selector.NumberSelectorConfig(
-                            min=5,
-                            max=30,
-                            step=0.1,
-                            unit_of_measurement="°C",
-                            mode=selector.NumberSelectorMode.SLIDER,
-                        )
-                    ),
-                    vol.Optional(
-                        "setpoint_max",
-                        default=setpoint.get("max", DEFAULT_SETPOINT["max"]),
-                    ): selector.NumberSelector(
-                        selector.NumberSelectorConfig(
-                            min=5,
-                            max=35,
-                            step=0.1,
-                            unit_of_measurement="°C",
-                            mode=selector.NumberSelectorMode.SLIDER,
-                        )
-                    ),
-                    vol.Optional(
-                        "setpoint_default",
-                        default=setpoint.get("default", DEFAULT_SETPOINT["default"]),
-                    ): selector.NumberSelector(
-                        selector.NumberSelectorConfig(
-                            min=5,
-                            max=35,
-                            step=0.1,
-                            unit_of_measurement="°C",
-                            mode=selector.NumberSelectorMode.SLIDER,
-                        )
-                    ),
-                    vol.Optional(
-                        "kp", default=pid.get("kp", DEFAULT_PID["kp"])
-                    ): selector.NumberSelector(
-                        selector.NumberSelectorConfig(
-                            mode=selector.NumberSelectorMode.BOX,
-                        )
-                    ),
-                    vol.Optional(
-                        "ki", default=pid.get("ki", DEFAULT_PID["ki"])
-                    ): selector.NumberSelector(
-                        selector.NumberSelectorConfig(
-                            mode=selector.NumberSelectorMode.BOX,
-                        )
-                    ),
-                    vol.Optional(
-                        "kd", default=pid.get("kd", DEFAULT_PID["kd"])
-                    ): selector.NumberSelector(
-                        selector.NumberSelectorConfig(
-                            mode=selector.NumberSelectorMode.BOX,
-                        )
-                    ),
-                }
-            ),
-        )
-
-    async def async_step_timing(
         self,
         user_input: dict[str, Any] | None = None,
     ) -> config_entries.ConfigFlowResult:
         """Configure timing parameters."""
-        timing = self.config_entry.options.get("timing", DEFAULT_TIMING)
+        # Get timing from controller subentry if it exists
+        timing = DEFAULT_TIMING.copy()
+        for subentry in self.config_entry.subentries.values():
+            if subentry.subentry_type == SUBENTRY_TYPE_CONTROLLER:
+                timing = subentry.data.get("timing", DEFAULT_TIMING)
+                break
 
         if user_input is not None:
             new_timing = {
@@ -463,83 +332,79 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
                 "closing_warning_duration": int(user_input["closing_warning_duration"]),
                 "window_block_threshold": user_input["window_block_threshold"],
             }
-            return self.async_create_entry(
-                title="",
-                data={
-                    **self.config_entry.options,
-                    "timing": new_timing,
-                },
-            )
+
+            # Update the controller subentry with new timing
+            for subentry in self.config_entry.subentries.values():
+                if subentry.subentry_type == SUBENTRY_TYPE_CONTROLLER:
+                    self.hass.config_entries.async_update_subentry(
+                        self.config_entry,
+                        subentry,
+                        data={"timing": new_timing},
+                    )
+                    break
+
+            return self.async_create_entry(title="", data={})
 
         return self.async_show_form(
-            step_id="timing",
-            data_schema=vol.Schema(
-                {
-                    vol.Required(
-                        "observation_period",
-                        default=timing.get(
-                            "observation_period", DEFAULT_TIMING["observation_period"]
-                        ),
-                    ): selector.NumberSelector(
-                        selector.NumberSelectorConfig(
-                            min=1800, max=14400, step=600, unit_of_measurement="s"
-                        )
-                    ),
-                    vol.Required(
-                        "duty_cycle_window",
-                        default=timing.get(
-                            "duty_cycle_window", DEFAULT_TIMING["duty_cycle_window"]
-                        ),
-                    ): selector.NumberSelector(
-                        selector.NumberSelectorConfig(
-                            min=600, max=7200, step=300, unit_of_measurement="s"
-                        )
-                    ),
-                    vol.Required(
-                        "min_run_time",
-                        default=timing.get(
-                            "min_run_time", DEFAULT_TIMING["min_run_time"]
-                        ),
-                    ): selector.NumberSelector(
-                        selector.NumberSelectorConfig(
-                            min=60, max=1800, step=60, unit_of_measurement="s"
-                        )
-                    ),
-                    vol.Required(
-                        "valve_open_time",
-                        default=timing.get(
-                            "valve_open_time", DEFAULT_TIMING["valve_open_time"]
-                        ),
-                    ): selector.NumberSelector(
-                        selector.NumberSelectorConfig(
-                            min=60, max=600, step=30, unit_of_measurement="s"
-                        )
-                    ),
-                    vol.Required(
-                        "closing_warning_duration",
-                        default=timing.get(
-                            "closing_warning_duration",
-                            DEFAULT_TIMING["closing_warning_duration"],
-                        ),
-                    ): selector.NumberSelector(
-                        selector.NumberSelectorConfig(
-                            min=60, max=600, step=30, unit_of_measurement="s"
-                        )
-                    ),
-                    vol.Required(
-                        "window_block_threshold",
-                        default=timing.get(
-                            "window_block_threshold",
-                            DEFAULT_TIMING["window_block_threshold"],
-                        ),
-                    ): selector.NumberSelector(
-                        selector.NumberSelectorConfig(
-                            min=0,
-                            max=1,
-                            step=0.01,
-                            mode=selector.NumberSelectorMode.BOX,
-                        )
-                    ),
-                }
-            ),
+            step_id="init",
+            data_schema=get_timing_schema(timing),
+        )
+
+
+class ZoneSubentryFlowHandler(ConfigSubentryFlow):
+    """Handle subentry flow for adding and modifying zones."""
+
+    async def async_step_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Handle adding a new zone."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            zone_id = user_input.get("zone_id") or slugify(user_input["name"])
+
+            # Check for duplicate zone_id
+            config_entry = self._get_entry()
+            for subentry in config_entry.subentries.values():
+                if subentry.data.get("id") == zone_id:
+                    errors["base"] = "zone_id_exists"
+                    break
+
+            if not errors:
+                zone_data = build_zone_data(user_input)
+                LOGGER.debug("Creating zone subentry: %s", zone_id)
+                return self.async_create_entry(
+                    title=user_input["name"],
+                    data=zone_data,
+                    unique_id=zone_id,
+                )
+
+        return self.async_show_form(
+            step_id="user",
+            data_schema=get_zone_schema(),
+            errors=errors,
+        )
+
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Handle reconfiguring an existing zone."""
+        subentry = self._get_reconfigure_subentry()
+
+        if user_input is not None:
+            zone_data = build_zone_data(user_input)
+            # Preserve the original zone_id
+            zone_data["id"] = subentry.data["id"]
+            LOGGER.debug("Updating zone subentry: %s", zone_data["id"])
+            return self.async_update_and_abort(
+                self._get_entry(),
+                subentry,
+                title=user_input["name"],
+                data=zone_data,
+            )
+
+        # Prefill with existing values
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=get_zone_schema(defaults=dict(subentry.data)),
         )

@@ -12,16 +12,25 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 
+from .const import SUBENTRY_TYPE_CONTROLLER, SUBENTRY_TYPE_ZONE
 from .entity import UFHControllerEntity, UFHControllerZoneEntity
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from homeassistant.core import HomeAssistant
-    from homeassistant.helpers.entity_platform import AddEntitiesCallback
+    from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
     from .coordinator import UFHControllerDataUpdateCoordinator
     from .data import UFHControllerConfigEntry
+
+
+def _get_controller_subentry_id(entry: UFHControllerConfigEntry) -> str | None:
+    """Get the controller subentry ID."""
+    for subentry in entry.subentries.values():
+        if subentry.subentry_type == SUBENTRY_TYPE_CONTROLLER:
+            return subentry.subentry_id
+    return None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -71,29 +80,40 @@ ZONE_SENSORS: tuple[UFHZoneSensorEntityDescription, ...] = (
 async def async_setup_entry(
     _hass: HomeAssistant,
     entry: UFHControllerConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up the sensor platform."""
     coordinator = entry.runtime_data.coordinator
+    controller_subentry_id = _get_controller_subentry_id(entry)
 
-    entities: list[SensorEntity] = [UFHRequestingZonesSensor(coordinator)]
-
-    # Add zone-level sensors for each zone
-    for zone_config in entry.options.get("zones", []):
-        zone_id = zone_config["id"]
-        zone_name = zone_config["name"]
-
-        entities.extend(
-            UFHZoneSensor(
-                coordinator=coordinator,
-                zone_id=zone_id,
-                zone_name=zone_name,
-                description=description,
-            )
-            for description in ZONE_SENSORS
+    # Add controller-level sensors
+    if controller_subentry_id is not None:
+        async_add_entities(
+            [UFHRequestingZonesSensor(coordinator, controller_subentry_id)],
+            config_subentry_id=controller_subentry_id,
         )
 
-    async_add_entities(entities)
+    # Add zone-level sensors for each zone subentry
+    for subentry in entry.subentries.values():
+        if subentry.subentry_type != SUBENTRY_TYPE_ZONE:
+            continue
+        zone_id = subentry.data["id"]
+        zone_name = subentry.data["name"]
+        subentry_id = subentry.subentry_id
+
+        async_add_entities(
+            [
+                UFHZoneSensor(
+                    coordinator=coordinator,
+                    zone_id=zone_id,
+                    zone_name=zone_name,
+                    description=description,
+                    subentry_id=subentry_id,
+                )
+                for description in ZONE_SENSORS
+            ],
+            config_subentry_id=subentry_id,
+        )
 
 
 class UFHZoneSensor(UFHControllerZoneEntity, SensorEntity):
@@ -107,9 +127,10 @@ class UFHZoneSensor(UFHControllerZoneEntity, SensorEntity):
         zone_id: str,
         zone_name: str,
         description: UFHZoneSensorEntityDescription,
+        subentry_id: str,
     ) -> None:
         """Initialize the sensor entity."""
-        super().__init__(coordinator, zone_id, zone_name)
+        super().__init__(coordinator, zone_id, zone_name, subentry_id)
         self.entity_description = description
 
         controller_id = coordinator.config_entry.data.get("controller_id", "")
@@ -132,9 +153,10 @@ class UFHRequestingZonesSensor(UFHControllerEntity, SensorEntity):
     def __init__(
         self,
         coordinator: UFHControllerDataUpdateCoordinator,
+        subentry_id: str,
     ) -> None:
         """Initialize the sensor entity."""
-        super().__init__(coordinator)
+        super().__init__(coordinator, subentry_id)
 
         controller_id = coordinator.config_entry.data.get("controller_id", "")
         self._attr_unique_id = f"{controller_id}_requesting_zones"
