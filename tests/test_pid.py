@@ -32,15 +32,15 @@ class TestPIDController:
         """Test that integral term accumulates per interval (not multiplied by dt)."""
         pid = PIDController(kp=0.0, ki=1.0, kd=0.0, integral_max=1000.0)
 
-        # First update: integral = 1 (error accumulated once per interval)
+        # First update: integral = ki * error = 1.0 * 1 = 1% (stored in % units)
         output1 = pid.update(setpoint=21.0, current=20.0, dt=60.0)
         assert pid.state.integral == 1.0
-        assert output1 == pytest.approx(1.0)  # 1.0 * 1 = 1
+        assert output1 == pytest.approx(1.0)
 
-        # Second update: integral = 1 + 1 = 2
+        # Second update: integral = 1 + 1 = 2%
         output2 = pid.update(setpoint=21.0, current=20.0, dt=60.0)
         assert pid.state.integral == 2.0
-        assert output2 == pytest.approx(2.0)  # 1.0 * 2 = 2
+        assert output2 == pytest.approx(2.0)
 
     def test_integral_anti_windup(self) -> None:
         """Test that integral is clamped to prevent windup."""
@@ -111,28 +111,27 @@ class TestPIDController:
         assert pid.state.last_error == 0.0
 
     def test_set_integral(self) -> None:
-        """Test that set_integral sets the integral value."""
+        """Test that set_integral sets the integral value in % units."""
         pid = PIDController(kp=50.0, ki=0.1, kd=0.0, integral_max=100.0)
 
+        # Integral is stored in % units, so 50.0 means 50% i_term contribution
         pid.set_integral(50.0)
         assert pid.state.integral == 50.0
 
     def test_set_integral_respects_max(self) -> None:
-        """Test that set_integral clamps so i_term stays within max."""
-        # With ki=1.0, integral bounds map directly to % bounds
-        pid = PIDController(ki=1.0, integral_max=100.0)
+        """Test that set_integral clamps to integral_max."""
+        pid = PIDController(integral_max=100.0)
 
         pid.set_integral(150.0)
-        # i_term = 1.0 * 150 = 150%, clamped to 100%, so integral = 100/1.0 = 100
+        # Clamped to integral_max=100%
         assert pid.state.integral == 100.0
 
     def test_set_integral_respects_min(self) -> None:
-        """Test that set_integral clamps so i_term stays within min."""
-        # With ki=1.0, integral bounds map directly to % bounds
-        pid = PIDController(ki=1.0, integral_min=0.0, integral_max=100.0)
+        """Test that set_integral clamps to integral_min."""
+        pid = PIDController(integral_min=0.0, integral_max=100.0)
 
         pid.set_integral(-10.0)
-        # i_term = 1.0 * -10 = -10%, clamped to 0%, so integral = 0/1.0 = 0
+        # Clamped to integral_min=0%
         assert pid.state.integral == 0.0
 
     def test_zero_dt(self) -> None:
@@ -205,10 +204,38 @@ class TestPIDController:
         # First update
         output1 = pid.update(setpoint=22.0, current=20.0, dt=60.0)
         # P = 10 * 2 = 20
-        # I = 1.0 * 2 = 2 (integral accumulates error=2 once per interval)
+        # I = ki * error = 1.0 * 2 = 2% (stored in % units)
         # D = 1 * (2 - 0) / 60 = 0.033
         expected = 20.0 + 2.0 + (1.0 * 2.0 / 60.0)
         assert output1 == pytest.approx(expected, rel=0.01)
+
+    def test_ki_change_does_not_affect_accumulated_integral(self) -> None:
+        """
+        Test that changing ki doesn't alter accumulated integral contribution.
+
+        Since integral is stored in % units (post-ki multiplication),
+        modifying ki should not change the stored integral value.
+        """
+        pid = PIDController(kp=0.0, ki=0.5, kd=0.0, integral_max=1000.0)
+
+        # Accumulate some integral: ki * error = 0.5 * 2 = 1% per update
+        pid.update(setpoint=22.0, current=20.0, dt=60.0)
+        pid.update(setpoint=22.0, current=20.0, dt=60.0)
+        assert pid.state.integral == pytest.approx(2.0)  # 1% + 1% = 2%
+
+        # Store the integral before ki change
+        integral_before = pid.state.integral
+
+        # Now change ki - this should NOT affect the stored integral
+        pid.ki = 1.0
+
+        # Integral should remain unchanged
+        assert pid.state.integral == integral_before
+
+        # Next update uses new ki: adds ki * error = 1.0 * 2 = 2%
+        output = pid.update(setpoint=22.0, current=20.0, dt=60.0)
+        assert pid.state.integral == pytest.approx(4.0)  # 2% + 2% = 4%
+        assert output == pytest.approx(4.0)  # i_term = integral = 4%
 
 
 class TestPIDState:

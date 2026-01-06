@@ -10,7 +10,12 @@ from dataclasses import dataclass, field
 
 @dataclass
 class PIDState:
-    """State of the PID controller."""
+    """
+    State of the PID controller.
+
+    The integral is stored in % units (post-ki multiplication) so that
+    changing ki does not immediately affect the accumulated contribution.
+    """
 
     integral: float = 0.0
     last_error: float = 0.0
@@ -73,12 +78,12 @@ class PIDController:
         p_term = self.kp * error
 
         # Integral term with anti-windup (accumulates per interval, not per second)
-        self._state.integral += error
-        i_term = self.ki * self._state.integral
-        # Clamp integral contribution to bounds (in %)
-        i_term = max(self.integral_min, min(self.integral_max, i_term))
-        # Update stored integral to reflect the clamped value
-        self._state.integral = i_term / self.ki if self.ki != 0 else 0.0
+        # Integral is stored in % units so changing ki doesn't affect accumulated value
+        self._state.integral += self.ki * error
+        self._state.integral = max(
+            self.integral_min, min(self.integral_max, self._state.integral)
+        )
+        i_term = self._state.integral
 
         # Derivative term
         d_term = self.kd * (error - self._state.last_error) / dt
@@ -96,16 +101,10 @@ class PIDController:
         """
         Set the integral value directly (for state restoration).
 
-        The value is clamped such that ki * value stays within
-        [integral_min, integral_max].
+        The value is in % units (the i_term contribution) and is clamped
+        to [integral_min, integral_max].
         """
-        if self.ki == 0:
-            self._state.integral = value
-            return
-        # Clamp the resulting i_term to bounds, then convert back to raw integral
-        i_term = self.ki * value
-        i_term = max(self.integral_min, min(self.integral_max, i_term))
-        self._state.integral = i_term / self.ki
+        self._state.integral = max(self.integral_min, min(self.integral_max, value))
 
     def set_last_error(self, value: float) -> None:
         """Set the last error value directly (for state restoration)."""
@@ -137,7 +136,7 @@ class PIDController:
 
         error = setpoint - current
         p_term = self.kp * error
-        i_term = self.ki * self._state.integral
+        i_term = self._state.integral  # Already in % units
         d_term = (
             self.kd * (error - self._state.last_error) / dt if self.kd != 0 else 0.0
         )
