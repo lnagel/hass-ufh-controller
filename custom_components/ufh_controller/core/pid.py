@@ -88,9 +88,7 @@ class PIDController:
 
     def set_integral(self, value: float) -> None:
         """Set the integral value directly (for state restoration)."""
-        self._state.integral = max(
-            self.integral_min, min(self.integral_max, value)
-        )
+        self._state.integral = max(self.integral_min, min(self.integral_max, value))
 
     def set_last_error(self, value: float) -> None:
         """Set the last error value directly (for state restoration)."""

@@ -163,9 +163,7 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         self._state_restored = True
 
-    def _restore_zone_state(
-        self, zone_id: str, zone_state: dict[str, Any]
-    ) -> None:
+    def _restore_zone_state(self, zone_id: str, zone_state: dict[str, Any]) -> None:
         """Restore state for a single zone from storage."""
         runtime = self._controller.get_zone_runtime(zone_id)
         if runtime is None:
