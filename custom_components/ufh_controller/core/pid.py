@@ -28,8 +28,8 @@ class PIDController:
         kp: Proportional gain.
         ki: Integral gain.
         kd: Derivative gain.
-        integral_min: Minimum integral value (anti-windup).
-        integral_max: Maximum integral value (anti-windup).
+        integral_min: Minimum integral term contribution in % (anti-windup).
+        integral_max: Maximum integral term contribution in % (anti-windup).
 
     """
 
@@ -50,10 +50,15 @@ class PIDController:
         """
         Calculate duty cycle from temperature error.
 
+        The integral accumulates once per call (per controller interval),
+        not multiplied by time. This is appropriate for slow thermal processes
+        like underfloor heating where the integral should be in % units
+        matching the proportional term.
+
         Args:
             setpoint: Target temperature.
             current: Current temperature.
-            dt: Time delta in seconds since last update.
+            dt: Time delta in seconds since last update (used for derivative term).
 
         Returns:
             Duty cycle as a percentage (0.0 to 100.0).
@@ -67,12 +72,13 @@ class PIDController:
         # Proportional term
         p_term = self.kp * error
 
-        # Integral term with anti-windup
-        self._state.integral += error * dt
-        self._state.integral = max(
-            self.integral_min, min(self.integral_max, self._state.integral)
-        )
+        # Integral term with anti-windup (accumulates per interval, not per second)
+        self._state.integral += error
         i_term = self.ki * self._state.integral
+        # Clamp integral contribution to bounds (in %)
+        i_term = max(self.integral_min, min(self.integral_max, i_term))
+        # Update stored integral to reflect the clamped value
+        self._state.integral = i_term / self.ki if self.ki != 0 else 0.0
 
         # Derivative term
         d_term = self.kd * (error - self._state.last_error) / dt
@@ -87,8 +93,19 @@ class PIDController:
         self._state = PIDState()
 
     def set_integral(self, value: float) -> None:
-        """Set the integral value directly (for state restoration)."""
-        self._state.integral = max(self.integral_min, min(self.integral_max, value))
+        """
+        Set the integral value directly (for state restoration).
+
+        The value is clamped such that ki * value stays within
+        [integral_min, integral_max].
+        """
+        if self.ki == 0:
+            self._state.integral = value
+            return
+        # Clamp the resulting i_term to bounds, then convert back to raw integral
+        i_term = self.ki * value
+        i_term = max(self.integral_min, min(self.integral_max, i_term))
+        self._state.integral = i_term / self.ki
 
     def set_last_error(self, value: float) -> None:
         """Set the last error value directly (for state restoration)."""

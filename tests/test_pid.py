@@ -29,43 +29,41 @@ class TestPIDController:
         assert output == 0.0  # 50 * -2 = -100, clamped to 0
 
     def test_integral_accumulation(self) -> None:
-        """Test that integral term accumulates over time."""
-        pid = PIDController(kp=0.0, ki=0.1, kd=0.0, integral_max=1000.0)
+        """Test that integral term accumulates per interval (not multiplied by dt)."""
+        pid = PIDController(kp=0.0, ki=1.0, kd=0.0, integral_max=1000.0)
 
-        # First update: integral = 1 * 60 = 60
+        # First update: integral = 1 (error accumulated once per interval)
         output1 = pid.update(setpoint=21.0, current=20.0, dt=60.0)
-        assert pid.state.integral == 60.0
-        assert output1 == pytest.approx(6.0)  # 0.1 * 60 = 6
+        assert pid.state.integral == 1.0
+        assert output1 == pytest.approx(1.0)  # 1.0 * 1 = 1
 
-        # Second update: integral = 60 + 60 = 120
+        # Second update: integral = 1 + 1 = 2
         output2 = pid.update(setpoint=21.0, current=20.0, dt=60.0)
-        assert pid.state.integral == 120.0
-        assert output2 == pytest.approx(12.0)  # 0.1 * 120 = 12
+        assert pid.state.integral == 2.0
+        assert output2 == pytest.approx(2.0)  # 1.0 * 2 = 2
 
     def test_integral_anti_windup(self) -> None:
         """Test that integral is clamped to prevent windup."""
-        pid = PIDController(
-            kp=0.0, ki=0.1, kd=0.0, integral_min=0.0, integral_max=100.0
-        )
+        pid = PIDController(kp=0.0, ki=1.0, kd=0.0, integral_min=0.0, integral_max=10.0)
 
-        # Large error over long time should clamp integral
+        # Large error should clamp integral at max
         output = pid.update(setpoint=30.0, current=20.0, dt=60.0)
-        assert pid.state.integral == 100.0  # Clamped at max
-        assert output == pytest.approx(10.0)  # 0.1 * 100 = 10
+        assert pid.state.integral == 10.0  # Clamped at max (error=10, but max=10)
+        assert output == pytest.approx(10.0)  # 1.0 * 10 = 10
 
         # Further updates should not increase integral beyond max
         pid.update(setpoint=30.0, current=20.0, dt=60.0)
-        assert pid.state.integral == 100.0
+        assert pid.state.integral == 10.0
 
     def test_integral_anti_windup_negative(self) -> None:
         """Test that integral is clamped at minimum too."""
         pid = PIDController(
-            kp=0.0, ki=0.1, kd=0.0, integral_min=-50.0, integral_max=100.0
+            kp=0.0, ki=1.0, kd=0.0, integral_min=-1.0, integral_max=100.0
         )
 
-        # Negative error should drive integral down: -2 * 30 = -60, clamped to -50
+        # Negative error should drive integral down: -2, clamped to -1
         pid.update(setpoint=18.0, current=20.0, dt=30.0)
-        assert pid.state.integral == -50.0
+        assert pid.state.integral == -1.0
 
     def test_output_clamped_at_zero(self) -> None:
         """Test that output is clamped at 0%."""
@@ -120,17 +118,21 @@ class TestPIDController:
         assert pid.state.integral == 50.0
 
     def test_set_integral_respects_max(self) -> None:
-        """Test that set_integral clamps to maximum."""
-        pid = PIDController(integral_max=100.0)
+        """Test that set_integral clamps so i_term stays within max."""
+        # With ki=1.0, integral bounds map directly to % bounds
+        pid = PIDController(ki=1.0, integral_max=100.0)
 
         pid.set_integral(150.0)
+        # i_term = 1.0 * 150 = 150%, clamped to 100%, so integral = 100/1.0 = 100
         assert pid.state.integral == 100.0
 
     def test_set_integral_respects_min(self) -> None:
-        """Test that set_integral clamps to minimum."""
-        pid = PIDController(integral_min=0.0, integral_max=100.0)
+        """Test that set_integral clamps so i_term stays within min."""
+        # With ki=1.0, integral bounds map directly to % bounds
+        pid = PIDController(ki=1.0, integral_min=0.0, integral_max=100.0)
 
         pid.set_integral(-10.0)
+        # i_term = 1.0 * -10 = -10%, clamped to 0%, so integral = 0/1.0 = 0
         assert pid.state.integral == 0.0
 
     def test_zero_dt(self) -> None:
@@ -149,18 +151,20 @@ class TestPIDController:
 
     def test_get_terms(self) -> None:
         """Test get_terms returns correct breakdown."""
-        pid = PIDController(kp=50.0, ki=0.1, kd=0.0, integral_max=1000.0)
+        pid = PIDController(kp=50.0, ki=1.0, kd=0.0, integral_max=1000.0)
 
-        # First update to set some state
+        # First update to set some state (integral = 1 after one update with error=1)
         pid.update(setpoint=21.0, current=20.0, dt=60.0)
 
         terms = pid.get_terms(setpoint=21.0, current=20.0, dt=60.0)
 
         assert terms["error"] == 1.0
         assert terms["p_term"] == 50.0
-        assert terms["i_term"] == pytest.approx(6.0)  # 0.1 * 60
+        assert terms["i_term"] == pytest.approx(
+            1.0
+        )  # 1.0 * 1 (integral=1 after first update)
         assert terms["d_term"] == 0.0
-        assert terms["output"] == pytest.approx(56.0)
+        assert terms["output"] == pytest.approx(51.0)
 
     def test_get_terms_zero_dt(self) -> None:
         """Test get_terms with zero dt returns zeros."""
@@ -195,15 +199,15 @@ class TestPIDController:
     def test_combined_pid(self) -> None:
         """Test combined P, I, and D terms."""
         pid = PIDController(
-            kp=10.0, ki=0.1, kd=1.0, integral_min=0.0, integral_max=1000.0
+            kp=10.0, ki=1.0, kd=1.0, integral_min=0.0, integral_max=1000.0
         )
 
         # First update
         output1 = pid.update(setpoint=22.0, current=20.0, dt=60.0)
         # P = 10 * 2 = 20
-        # I = 0.1 * 120 = 12 (2 * 60 = 120)
+        # I = 1.0 * 2 = 2 (integral accumulates error=2 once per interval)
         # D = 1 * (2 - 0) / 60 = 0.033
-        expected = 20.0 + 12.0 + (1.0 * 2.0 / 60.0)
+        expected = 20.0 + 2.0 + (1.0 * 2.0 / 60.0)
         assert output1 == pytest.approx(expected, rel=0.01)
 
 
