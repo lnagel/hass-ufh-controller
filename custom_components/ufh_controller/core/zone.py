@@ -64,6 +64,7 @@ class ZoneState:
     current_temp: float | None = None
     setpoint: float = 21.0
     error: float = 0.0
+    p_term: float = 0.0
     integral: float = 0.0
     d_term: float = 0.0
     duty_cycle: float = 0.0

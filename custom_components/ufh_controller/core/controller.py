@@ -205,23 +205,20 @@ class HeatingController:
             # No temperature reading - maintain last duty cycle
             return runtime.state.duty_cycle
 
-        # Save last_error before PID update (needed to calculate d_term)
-        prev_last_error = runtime.pid.state.last_error
-
-        duty_cycle = runtime.pid.update(
+        pid_output = runtime.pid.update(
             setpoint=runtime.state.setpoint,
             current=current_temp,
             dt=dt,
         )
 
-        # Update zone state with PID terms
-        error = runtime.state.setpoint - current_temp
-        runtime.state.duty_cycle = duty_cycle
-        runtime.state.error = error
-        runtime.state.integral = runtime.pid.state.integral
-        runtime.state.d_term = runtime.config.kd * (error - prev_last_error) / dt
+        # Update zone state with PID output
+        runtime.state.error = pid_output.error
+        runtime.state.p_term = pid_output.p_term
+        runtime.state.integral = pid_output.i_term
+        runtime.state.d_term = pid_output.d_term
+        runtime.state.duty_cycle = pid_output.output
 
-        return duty_cycle
+        return pid_output.output
 
     def update_zone_historical(  # noqa: PLR0913
         self,
