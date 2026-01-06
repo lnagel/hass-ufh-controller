@@ -205,14 +205,21 @@ class HeatingController:
             # No temperature reading - maintain last duty cycle
             return runtime.state.duty_cycle
 
+        # Save last_error before PID update (needed to calculate d_term)
+        prev_last_error = runtime.pid.state.last_error
+
         duty_cycle = runtime.pid.update(
             setpoint=runtime.state.setpoint,
             current=current_temp,
             dt=dt,
         )
+
+        # Update zone state with PID terms
+        error = runtime.state.setpoint - current_temp
         runtime.state.duty_cycle = duty_cycle
-        runtime.state.error = runtime.state.setpoint - current_temp
+        runtime.state.error = error
         runtime.state.integral = runtime.pid.state.integral
+        runtime.state.d_term = runtime.config.kd * (error - prev_last_error) / dt
 
         return duty_cycle
 

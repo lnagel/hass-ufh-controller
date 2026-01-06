@@ -197,6 +197,8 @@ def get_zone_schema(
                 "ki", default=pid.get("ki", DEFAULT_PID["ki"])
             ): selector.NumberSelector(
                 selector.NumberSelectorConfig(
+                    min=0,
+                    step="any",
                     mode=selector.NumberSelectorMode.BOX,
                 )
             ),

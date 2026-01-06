@@ -39,7 +39,7 @@ class PIDController:
     """
 
     kp: float = 50.0
-    ki: float = 0.05
+    ki: float = 0.001
     kd: float = 0.0
     integral_min: float = 0.0
     integral_max: float = 100.0
@@ -55,15 +55,10 @@ class PIDController:
         """
         Calculate duty cycle from temperature error.
 
-        The integral accumulates once per call (per controller interval),
-        not multiplied by time. This is appropriate for slow thermal processes
-        like underfloor heating where the integral should be in % units
-        matching the proportional term.
-
         Args:
             setpoint: Target temperature.
             current: Current temperature.
-            dt: Time delta in seconds since last update (used for derivative term).
+            dt: Time delta in seconds since last update.
 
         Returns:
             Duty cycle as a percentage (0.0 to 100.0).
@@ -77,9 +72,9 @@ class PIDController:
         # Proportional term
         p_term = self.kp * error
 
-        # Integral term with anti-windup (accumulates per interval, not per second)
+        # Integral term with anti-windup
         # Integral is stored in % units so changing ki doesn't affect accumulated value
-        self._state.integral += self.ki * error
+        self._state.integral += self.ki * error * dt
         self._state.integral = max(
             self.integral_min, min(self.integral_max, self._state.integral)
         )

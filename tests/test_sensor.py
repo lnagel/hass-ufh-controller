@@ -68,6 +68,20 @@ async def test_pid_integral_sensor_created(
     assert state is not None
 
 
+async def test_pid_derivative_sensor_created(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    sensor_entity_prefix: str,
+) -> None:
+    """Test PID derivative sensor is created on setup."""
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get(f"{sensor_entity_prefix}_pid_derivative")
+    assert state is not None
+
+
 async def test_requesting_zones_sensor_created(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
@@ -90,11 +104,9 @@ async def test_sensor_count_with_zone(
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
 
-    # 4 zone sensors (duty_cycle, pid_error, pid_proportional, pid_integral)
-    # + 1 controller sensor (requesting_zones)
-    # = 5 total sensors
+    # 5 zone sensors + 1 controller sensor (requesting_zones) = 6 total
     states = hass.states.async_entity_ids(SENSOR_DOMAIN)
-    assert len(states) == 5
+    assert len(states) == 6
 
 
 async def test_no_zone_sensors_without_zones(

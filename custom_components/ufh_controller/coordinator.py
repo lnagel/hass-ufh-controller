@@ -432,6 +432,7 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "error": state.error,
                     "integral": state.integral,
                     "p_term": runtime.config.kp * state.error,
+                    "d_term": state.d_term,
                     "valve_on": state.valve_on,
                     "enabled": state.enabled,
                     "window_blocked": state.window_open_avg
