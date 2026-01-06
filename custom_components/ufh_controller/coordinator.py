@@ -9,7 +9,6 @@ from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import (
-    CONTROLLER_LOOP_INTERVAL,
     DOMAIN,
     LOGGER,
     SUBENTRY_TYPE_CONTROLLER,
@@ -34,6 +33,7 @@ from .core.zone import _VALVE_OPEN_THRESHOLD, CircuitType
 STORAGE_VERSION = 1
 STORAGE_KEY = "ufh_controller"
 
+
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
@@ -51,11 +51,15 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         entry: UFHControllerConfigEntry,
     ) -> None:
         """Initialize the coordinator."""
+        # Build controller first to get timing config
+        self._controller = self._build_controller(entry)
+        self._loop_interval = self._controller.config.timing.controller_loop_interval
+
         super().__init__(
             hass,
             LOGGER,
             name=DOMAIN,
-            update_interval=timedelta(seconds=CONTROLLER_LOOP_INTERVAL),
+            update_interval=timedelta(seconds=self._loop_interval),
         )
         self.config_entry = entry
         self._last_update: datetime | None = None
@@ -67,9 +71,6 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             f"{STORAGE_KEY}.{entry.entry_id}",
         )
         self._state_restored: bool = False
-
-        # Build controller from config entry
-        self._controller = self._build_controller(entry)
 
     def _build_controller(self, entry: UFHControllerConfigEntry) -> HeatingController:
         """Build HeatingController from config entry."""
@@ -92,6 +93,7 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             valve_open_time=timing_opts.get("valve_open_time", 210),
             closing_warning_duration=timing_opts.get("closing_warning_duration", 240),
             window_block_threshold=timing_opts.get("window_block_threshold", 0.05),
+            controller_loop_interval=timing_opts.get("controller_loop_interval", 60),
         )
 
         # Build zones from subentries
@@ -220,7 +222,7 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             await self.async_load_stored_state()
 
         now = datetime.now(UTC)
-        dt = CONTROLLER_LOOP_INTERVAL
+        dt = self._loop_interval
         if self._last_update is not None:
             dt = (now - self._last_update).total_seconds()
         self._last_update = now

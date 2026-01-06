@@ -45,6 +45,7 @@ class TimingParams:
     valve_open_time: int = 210
     closing_warning_duration: int = 240
     window_block_threshold: float = 0.05
+    controller_loop_interval: int = 60
 
 
 @dataclass

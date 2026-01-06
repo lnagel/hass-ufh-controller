@@ -28,7 +28,8 @@
           "min_run_time": "Minimum run time",
           "valve_open_time": "Valve open time",
           "closing_warning_duration": "Closing warning duration",
-          "window_block_threshold": "Window block threshold"
+          "window_block_threshold": "Window block threshold",
+          "controller_loop_interval": "Controller loop interval"
         }
       }
     }
@@ -50,7 +51,8 @@
             "min_run_time": "Minimum run time",
             "valve_open_time": "Valve open time",
             "closing_warning_duration": "Closing warning duration",
-            "window_block_threshold": "Window block threshold"
+            "window_block_threshold": "Window block threshold",
+            "controller_loop_interval": "Controller loop interval"
           }
         }
       },
