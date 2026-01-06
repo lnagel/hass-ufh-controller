@@ -93,6 +93,7 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         config = ControllerConfig(
             controller_id=data["controller_id"],
             name=data["name"],
+            heat_request_entity=data.get("heat_request_entity"),
             dhw_active_entity=data.get("dhw_active_entity"),
             circulation_entity=data.get("circulation_entity"),
             summer_mode_entity=data.get("summer_mode_entity"),
@@ -138,8 +139,9 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Execute valve actions
         await self._execute_valve_actions(actions)
 
-        # Calculate heat request (output via UFHHeatRequestSwitch entity)
+        # Calculate and execute heat request
         heat_request = self._controller.calculate_heat_request()
+        await self._execute_heat_request(heat_request=heat_request)
 
         # Update summer mode if configured
         await self._update_summer_mode(heat_request=heat_request)
@@ -240,6 +242,13 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             elif action == ZoneAction.TURN_OFF:
                 await self._call_switch_service(valve_entity, turn_on=False)
             # STAY_ON and STAY_OFF don't require action
+
+    async def _execute_heat_request(self, *, heat_request: bool) -> None:
+        """Execute heat request by calling switch service if configured."""
+        entity_id = self._controller.config.heat_request_entity
+        if entity_id is None:
+            return
+        await self._call_switch_service(entity_id, turn_on=heat_request)
 
     async def _update_summer_mode(self, *, heat_request: bool) -> None:
         """Update boiler summer mode if configured."""

@@ -3,15 +3,17 @@
         "step": {
             "user": {
                 "title": "Set up UFH Controller",
-                "description": "Configure a new underfloor heating controller.",
+                "description": "Configure a new underfloor heating controller. To control the boiler, configure either a Heat Request Switch or Summer Mode Select entity. If neither is configured, the boiler must remain operational continuously.",
                 "data": {
                     "name": "Controller Name",
+                    "heat_request_entity": "Heat Request Switch",
                     "dhw_active_entity": "DHW Active Sensor",
                     "circulation_entity": "Circulation Sensor",
                     "summer_mode_entity": "Summer Mode Select"
                 },
                 "data_description": {
                     "name": "A friendly name for this heating controller",
+                    "heat_request_entity": "Switch entity that signals heat demand to your boiler (optional)",
                     "dhw_active_entity": "Binary sensor indicating domestic hot water is heating (optional)",
                     "circulation_entity": "Binary sensor indicating circulation pump is running (optional)",
                     "summer_mode_entity": "Select entity to control boiler summer/winter mode (optional)"
