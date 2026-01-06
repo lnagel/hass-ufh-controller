@@ -10,7 +10,12 @@ from dataclasses import dataclass, field
 
 @dataclass
 class PIDState:
-    """State of the PID controller."""
+    """
+    State of the PID controller.
+
+    The integral is stored in % units (post-ki multiplication) so that
+    changing ki does not immediately affect the accumulated contribution.
+    """
 
     integral: float = 0.0
     last_error: float = 0.0
@@ -28,8 +33,8 @@ class PIDController:
         kp: Proportional gain.
         ki: Integral gain.
         kd: Derivative gain.
-        integral_min: Minimum integral value (anti-windup).
-        integral_max: Maximum integral value (anti-windup).
+        integral_min: Minimum integral term contribution in % (anti-windup).
+        integral_max: Maximum integral term contribution in % (anti-windup).
 
     """
 
@@ -50,10 +55,15 @@ class PIDController:
         """
         Calculate duty cycle from temperature error.
 
+        The integral accumulates once per call (per controller interval),
+        not multiplied by time. This is appropriate for slow thermal processes
+        like underfloor heating where the integral should be in % units
+        matching the proportional term.
+
         Args:
             setpoint: Target temperature.
             current: Current temperature.
-            dt: Time delta in seconds since last update.
+            dt: Time delta in seconds since last update (used for derivative term).
 
         Returns:
             Duty cycle as a percentage (0.0 to 100.0).
@@ -67,12 +77,13 @@ class PIDController:
         # Proportional term
         p_term = self.kp * error
 
-        # Integral term with anti-windup
-        self._state.integral += error * dt
+        # Integral term with anti-windup (accumulates per interval, not per second)
+        # Integral is stored in % units so changing ki doesn't affect accumulated value
+        self._state.integral += self.ki * error
         self._state.integral = max(
             self.integral_min, min(self.integral_max, self._state.integral)
         )
-        i_term = self.ki * self._state.integral
+        i_term = self._state.integral
 
         # Derivative term
         d_term = self.kd * (error - self._state.last_error) / dt
@@ -87,7 +98,12 @@ class PIDController:
         self._state = PIDState()
 
     def set_integral(self, value: float) -> None:
-        """Set the integral value directly (for state restoration)."""
+        """
+        Set the integral value directly (for state restoration).
+
+        The value is in % units (the i_term contribution) and is clamped
+        to [integral_min, integral_max].
+        """
         self._state.integral = max(self.integral_min, min(self.integral_max, value))
 
     def set_last_error(self, value: float) -> None:
@@ -120,7 +136,7 @@ class PIDController:
 
         error = setpoint - current
         p_term = self.kp * error
-        i_term = self.ki * self._state.integral
+        i_term = self._state.integral  # Already in % units
         d_term = (
             self.kd * (error - self._state.last_error) / dt if self.kd != 0 else 0.0
         )
