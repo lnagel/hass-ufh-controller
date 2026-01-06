@@ -106,7 +106,7 @@ A custom Home Assistant integration providing:
 ConfigEntry.data = {
     "name": "Heating Controller",           # User-defined controller name
     "controller_id": "heating",             # Unique ID for entity naming
-    "heat_request_entity": "switch.boiler_heat_request",
+    "heat_request_entity": "switch.boiler_heat_request",          # Optional
     "dhw_active_entity": "binary_sensor.boiler_tapwater_active",  # Optional
     "circulation_entity": "binary_sensor.boiler_circulation",     # Optional
     "summer_mode_entity": "select.boiler_summer_mode",            # Optional
@@ -202,11 +202,13 @@ class ControllerState:
 
 **Step 1: Controller Setup**
 
+To control the boiler, configure either a Heat Request Switch or Summer Mode Select entity. If neither is configured, the boiler must remain operational continuously.
+
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | name | string | Yes | Controller display name |
 | controller_id | string | Yes | Unique ID (auto-generated from name, editable) |
-| heat_request_entity | entity (switch) | Yes | Switch to signal heat demand to boiler |
+| heat_request_entity | entity (switch) | No | Switch to signal heat demand to boiler |
 | dhw_active_entity | entity (binary_sensor) | No | Sensor indicating DHW tank is heating |
 | circulation_entity | entity (binary_sensor) | No | Sensor indicating circulation pump is running |
 | summer_mode_entity | entity (select) | No | Select to enable/disable boiler UFH circuit |
@@ -732,7 +734,6 @@ def mock_config_entry() -> MockConfigEntry:
         data={
             "name": "Test Controller",
             "controller_id": "test",
-            "heat_request_entity": "switch.test_heat_request",
         },
         options={
             "timing": DEFAULT_TIMING,
