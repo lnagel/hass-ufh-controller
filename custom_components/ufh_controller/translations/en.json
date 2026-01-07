@@ -130,6 +130,9 @@
       "pid_integral": {
         "name": "PID Integral"
       },
+      "pid_derivative": {
+        "name": "PID Derivative"
+      },
       "requesting_zones": {
         "name": "Requesting Zones"
       }

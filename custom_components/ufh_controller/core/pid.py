@@ -21,6 +21,17 @@ class PIDState:
     last_error: float = 0.0
 
 
+@dataclass(frozen=True)
+class PIDOutput:
+    """Output from a PID controller update."""
+
+    error: float
+    p_term: float
+    i_term: float
+    d_term: float
+    duty_cycle: float
+
+
 @dataclass
 class PIDController:
     """
@@ -39,7 +50,7 @@ class PIDController:
     """
 
     kp: float = 50.0
-    ki: float = 0.05
+    ki: float = 0.001
     kd: float = 0.0
     integral_min: float = 0.0
     integral_max: float = 100.0
@@ -51,35 +62,32 @@ class PIDController:
         """Return the current PID state."""
         return self._state
 
-    def update(self, setpoint: float, current: float, dt: float) -> float:
+    def update(self, setpoint: float, current: float, dt: float) -> PIDOutput:
         """
         Calculate duty cycle from temperature error.
-
-        The integral accumulates once per call (per controller interval),
-        not multiplied by time. This is appropriate for slow thermal processes
-        like underfloor heating where the integral should be in % units
-        matching the proportional term.
 
         Args:
             setpoint: Target temperature.
             current: Current temperature.
-            dt: Time delta in seconds since last update (used for derivative term).
+            dt: Time delta in seconds since last update.
 
         Returns:
-            Duty cycle as a percentage (0.0 to 100.0).
+            PIDOutput with all terms and clamped output (0.0 to 100.0).
 
         """
         if dt <= 0:
-            return 0.0
+            return PIDOutput(
+                error=0.0, p_term=0.0, i_term=0.0, d_term=0.0, duty_cycle=0.0
+            )
 
         error = setpoint - current
 
         # Proportional term
         p_term = self.kp * error
 
-        # Integral term with anti-windup (accumulates per interval, not per second)
+        # Integral term with anti-windup
         # Integral is stored in % units so changing ki doesn't affect accumulated value
-        self._state.integral += self.ki * error
+        self._state.integral += self.ki * error * dt
         self._state.integral = max(
             self.integral_min, min(self.integral_max, self._state.integral)
         )
@@ -90,8 +98,15 @@ class PIDController:
         self._state.last_error = error
 
         # Output clamped to 0-100%
-        output = p_term + i_term + d_term
-        return max(0.0, min(100.0, output))
+        output = max(0.0, min(100.0, p_term + i_term + d_term))
+
+        return PIDOutput(
+            error=error,
+            p_term=p_term,
+            i_term=i_term,
+            d_term=d_term,
+            duty_cycle=output,
+        )
 
     def reset(self) -> None:
         """Reset the PID controller state."""
@@ -109,45 +124,3 @@ class PIDController:
     def set_last_error(self, value: float) -> None:
         """Set the last error value directly (for state restoration)."""
         self._state.last_error = value
-
-    def get_terms(self, setpoint: float, current: float, dt: float) -> dict[str, float]:
-        """
-        Calculate and return individual PID terms without updating state.
-
-        This is useful for diagnostic purposes.
-
-        Args:
-            setpoint: Target temperature.
-            current: Current temperature.
-            dt: Time delta in seconds since last update.
-
-        Returns:
-            Dictionary with 'error', 'p_term', 'i_term', 'd_term', and 'output'.
-
-        """
-        if dt <= 0:
-            return {
-                "error": 0.0,
-                "p_term": 0.0,
-                "i_term": 0.0,
-                "d_term": 0.0,
-                "output": 0.0,
-            }
-
-        error = setpoint - current
-        p_term = self.kp * error
-        i_term = self._state.integral  # Already in % units
-        d_term = (
-            self.kd * (error - self._state.last_error) / dt if self.kd != 0 else 0.0
-        )
-
-        output = p_term + i_term + d_term
-        output = max(0.0, min(100.0, output))
-
-        return {
-            "error": error,
-            "p_term": p_term,
-            "i_term": i_term,
-            "d_term": d_term,
-            "output": output,
-        }

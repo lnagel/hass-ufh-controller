@@ -180,7 +180,7 @@ class HeatingController:
     def update_zone_pid(
         self,
         zone_id: str,
-        current_temp: float | None,
+        current: float | None,
         dt: float,
     ) -> float:
         """
@@ -188,7 +188,7 @@ class HeatingController:
 
         Args:
             zone_id: Zone identifier.
-            current_temp: Current temperature reading, or None if unavailable.
+            current: Current temperature reading, or None if unavailable.
             dt: Time delta since last update in seconds.
 
         Returns:
@@ -199,22 +199,26 @@ class HeatingController:
         if runtime is None:
             return 0.0
 
-        runtime.state.current_temp = current_temp
+        runtime.state.current = current
 
-        if current_temp is None:
+        if current is None:
             # No temperature reading - maintain last duty cycle
             return runtime.state.duty_cycle
 
-        duty_cycle = runtime.pid.update(
+        pid_output = runtime.pid.update(
             setpoint=runtime.state.setpoint,
-            current=current_temp,
+            current=current,
             dt=dt,
         )
-        runtime.state.duty_cycle = duty_cycle
-        runtime.state.error = runtime.state.setpoint - current_temp
-        runtime.state.integral = runtime.pid.state.integral
 
-        return duty_cycle
+        # Update zone state with PID output
+        runtime.state.error = pid_output.error
+        runtime.state.p_term = pid_output.p_term
+        runtime.state.i_term = pid_output.i_term
+        runtime.state.d_term = pid_output.d_term
+        runtime.state.duty_cycle = pid_output.duty_cycle
+
+        return pid_output.duty_cycle
 
     def update_zone_historical(  # noqa: PLR0913
         self,

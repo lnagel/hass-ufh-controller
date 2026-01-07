@@ -69,10 +69,18 @@ ZONE_SENSORS: tuple[UFHZoneSensorEntityDescription, ...] = (
     UFHZoneSensorEntityDescription(
         key="pid_integral",
         translation_key="pid_integral",
-        native_unit_of_measurement="°C·s",
+        native_unit_of_measurement="%",
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=1,
-        value_fn=lambda data: data.get("integral"),
+        value_fn=lambda data: data.get("i_term"),
+    ),
+    UFHZoneSensorEntityDescription(
+        key="pid_derivative",
+        translation_key="pid_derivative",
+        native_unit_of_measurement="%",
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
+        value_fn=lambda data: data.get("d_term"),
     ),
 )
 

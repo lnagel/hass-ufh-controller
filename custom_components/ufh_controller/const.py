@@ -44,7 +44,7 @@ DEFAULT_TIMING = {
 # Default PID controller parameters
 DEFAULT_PID = {
     "kp": 50.0,
-    "ki": 0.05,
+    "ki": 0.001,
     "kd": 0.0,
     "integral_min": 0.0,
     "integral_max": 100.0,
