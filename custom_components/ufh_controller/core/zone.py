@@ -11,8 +11,11 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 
-# Threshold for considering valve fully open (85%)
-_VALVE_OPEN_THRESHOLD = 0.85
+from custom_components.ufh_controller.const import (
+    DEFAULT_SETPOINT,
+    DEFAULT_TIMING,
+    DEFAULT_VALVE_OPEN_THRESHOLD,
+)
 
 
 class CircuitType(StrEnum):
@@ -39,13 +42,13 @@ class TimingParams:
     All durations are in seconds.
     """
 
-    observation_period: int = 7200
-    duty_cycle_window: int = 3600
-    min_run_time: int = 540
-    valve_open_time: int = 210
-    closing_warning_duration: int = 240
-    window_block_threshold: float = 0.05
-    controller_loop_interval: int = 60
+    observation_period: int = DEFAULT_TIMING["observation_period"]
+    duty_cycle_window: int = DEFAULT_TIMING["duty_cycle_window"]
+    min_run_time: int = DEFAULT_TIMING["min_run_time"]
+    valve_open_time: int = DEFAULT_TIMING["valve_open_time"]
+    closing_warning_duration: int = DEFAULT_TIMING["closing_warning_duration"]
+    window_block_threshold: float = DEFAULT_TIMING["window_block_threshold"]
+    controller_loop_interval: int = DEFAULT_TIMING["controller_loop_interval"]
 
 
 @dataclass
@@ -62,7 +65,7 @@ class ZoneState:
 
     # PID state
     current: float | None = None
-    setpoint: float = 21.0
+    setpoint: float = DEFAULT_SETPOINT["default"]
     error: float = 0.0
     p_term: float = 0.0
     i_term: float = 0.0
@@ -215,7 +218,7 @@ def should_request_heat(
         return False
 
     # Wait for valve to fully open
-    if zone.open_state_avg < _VALVE_OPEN_THRESHOLD:
+    if zone.open_state_avg < DEFAULT_VALVE_OPEN_THRESHOLD:
         return False
 
     # Don't request if zone is about to close
