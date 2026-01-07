@@ -9,6 +9,10 @@ from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import (
+    DEFAULT_PID,
+    DEFAULT_SETPOINT,
+    DEFAULT_TIMING,
+    DEFAULT_VALVE_OPEN_THRESHOLD,
     DOMAIN,
     LOGGER,
     SUBENTRY_TYPE_CONTROLLER,
@@ -27,7 +31,7 @@ from .core import (
     get_valve_open_window,
     get_window_open_average,
 )
-from .core.zone import _VALVE_OPEN_THRESHOLD, CircuitType
+from .core.zone import CircuitType
 
 # Storage constants
 STORAGE_VERSION = 1
@@ -87,13 +91,27 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             timing_opts = entry.options.get("timing", {})
 
         timing = TimingParams(
-            observation_period=timing_opts.get("observation_period", 7200),
-            duty_cycle_window=timing_opts.get("duty_cycle_window", 3600),
-            min_run_time=timing_opts.get("min_run_time", 540),
-            valve_open_time=timing_opts.get("valve_open_time", 210),
-            closing_warning_duration=timing_opts.get("closing_warning_duration", 240),
-            window_block_threshold=timing_opts.get("window_block_threshold", 0.05),
-            controller_loop_interval=timing_opts.get("controller_loop_interval", 60),
+            observation_period=timing_opts.get(
+                "observation_period", DEFAULT_TIMING["observation_period"]
+            ),
+            duty_cycle_window=timing_opts.get(
+                "duty_cycle_window", DEFAULT_TIMING["duty_cycle_window"]
+            ),
+            min_run_time=timing_opts.get(
+                "min_run_time", DEFAULT_TIMING["min_run_time"]
+            ),
+            valve_open_time=timing_opts.get(
+                "valve_open_time", DEFAULT_TIMING["valve_open_time"]
+            ),
+            closing_warning_duration=timing_opts.get(
+                "closing_warning_duration", DEFAULT_TIMING["closing_warning_duration"]
+            ),
+            window_block_threshold=timing_opts.get(
+                "window_block_threshold", DEFAULT_TIMING["window_block_threshold"]
+            ),
+            controller_loop_interval=timing_opts.get(
+                "controller_loop_interval", DEFAULT_TIMING["controller_loop_interval"]
+            ),
         )
 
         # Build zones from subentries
@@ -113,14 +131,20 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     valve_switch=zone_data["valve_switch"],
                     circuit_type=CircuitType(zone_data.get("circuit_type", "regular")),
                     window_sensors=zone_data.get("window_sensors", []),
-                    setpoint_min=setpoint_opts.get("min", 16.0),
-                    setpoint_max=setpoint_opts.get("max", 28.0),
-                    setpoint_default=setpoint_opts.get("default", 21.0),
-                    kp=pid_opts.get("kp", 50.0),
-                    ki=pid_opts.get("ki", 0.05),
-                    kd=pid_opts.get("kd", 0.0),
-                    integral_min=pid_opts.get("integral_min", 0.0),
-                    integral_max=pid_opts.get("integral_max", 100.0),
+                    setpoint_min=setpoint_opts.get("min", DEFAULT_SETPOINT["min"]),
+                    setpoint_max=setpoint_opts.get("max", DEFAULT_SETPOINT["max"]),
+                    setpoint_default=setpoint_opts.get(
+                        "default", DEFAULT_SETPOINT["default"]
+                    ),
+                    kp=pid_opts.get("kp", DEFAULT_PID["kp"]),
+                    ki=pid_opts.get("ki", DEFAULT_PID["ki"]),
+                    kd=pid_opts.get("kd", DEFAULT_PID["kd"]),
+                    integral_min=pid_opts.get(
+                        "integral_min", DEFAULT_PID["integral_min"]
+                    ),
+                    integral_max=pid_opts.get(
+                        "integral_max", DEFAULT_PID["integral_max"]
+                    ),
                 )
             )
 
@@ -438,7 +462,7 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "window_blocked": state.window_open_avg
                     > self._controller.config.timing.window_block_threshold,
                     "is_requesting_heat": state.valve_on
-                    and state.open_state_avg >= _VALVE_OPEN_THRESHOLD,
+                    and state.open_state_avg >= DEFAULT_VALVE_OPEN_THRESHOLD,
                 }
 
         return result

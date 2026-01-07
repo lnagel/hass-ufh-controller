@@ -10,14 +10,18 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
+from custom_components.ufh_controller.const import (
+    DEFAULT_TIMING,
+    DEFAULT_WINDOW_CENTER_MINUTE,
+)
+
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
-# Threshold for centering the duty cycle window
-_WINDOW_CENTER_MINUTE = 30
 
-
-def get_observation_start(now: datetime, observation_period: int = 7200) -> datetime:
+def get_observation_start(
+    now: datetime, observation_period: int = DEFAULT_TIMING["observation_period"]
+) -> datetime:
     """
     Get the start time of the current observation period.
 
@@ -42,7 +46,7 @@ def get_observation_start(now: datetime, observation_period: int = 7200) -> date
 
 
 def get_duty_cycle_window(
-    now: datetime, window_seconds: int = 3600
+    now: datetime, window_seconds: int = DEFAULT_TIMING["duty_cycle_window"]
 ) -> tuple[datetime, datetime]:
     """
     Get the time window for duty cycle calculation.
@@ -60,7 +64,7 @@ def get_duty_cycle_window(
     """
     window = timedelta(seconds=window_seconds)
 
-    if now.minute < _WINDOW_CENTER_MINUTE:
+    if now.minute < DEFAULT_WINDOW_CENTER_MINUTE:
         start = now - window
         end = now
     else:
@@ -72,7 +76,7 @@ def get_duty_cycle_window(
 
 
 def get_valve_open_window(
-    now: datetime, valve_open_time: int = 210
+    now: datetime, valve_open_time: int = DEFAULT_TIMING["valve_open_time"]
 ) -> tuple[datetime, datetime]:
     """
     Get the time window for valve open detection.

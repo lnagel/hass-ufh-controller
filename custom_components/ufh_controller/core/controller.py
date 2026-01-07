@@ -10,6 +10,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
+from custom_components.ufh_controller.const import (
+    DEFAULT_CYCLE_MODE_HOURS,
+    DEFAULT_PID,
+    DEFAULT_SETPOINT,
+)
+
 from .pid import PIDController
 from .zone import (
     CircuitType,
@@ -22,9 +28,6 @@ from .zone import (
     evaluate_zone,
 )
 
-# Cycle mode duration in hours per zone (including rest hour)
-_CYCLE_MODE_HOURS = 8
-
 
 @dataclass
 class ZoneConfig:
@@ -36,14 +39,14 @@ class ZoneConfig:
     valve_switch: str
     circuit_type: CircuitType = CircuitType.REGULAR
     window_sensors: list[str] = field(default_factory=list)
-    setpoint_min: float = 16.0
-    setpoint_max: float = 28.0
-    setpoint_default: float = 21.0
-    kp: float = 50.0
-    ki: float = 0.05
-    kd: float = 0.0
-    integral_min: float = 0.0
-    integral_max: float = 100.0
+    setpoint_min: float = DEFAULT_SETPOINT["min"]
+    setpoint_max: float = DEFAULT_SETPOINT["max"]
+    setpoint_default: float = DEFAULT_SETPOINT["default"]
+    kp: float = DEFAULT_PID["kp"]
+    ki: float = DEFAULT_PID["ki"]
+    kd: float = DEFAULT_PID["kd"]
+    integral_min: float = DEFAULT_PID["integral_min"]
+    integral_max: float = DEFAULT_PID["integral_max"]
 
 
 @dataclass
@@ -319,7 +322,7 @@ class HeatingController:
         """Evaluate zone action for cycle mode."""
         # Get current hour of day
         now = datetime.now(UTC)
-        cycle_hour = now.hour % _CYCLE_MODE_HOURS
+        cycle_hour = now.hour % DEFAULT_CYCLE_MODE_HOURS
         valve_on = runtime.state.valve_on
 
         if cycle_hour == 0:

@@ -23,6 +23,17 @@ from .const import (
     LOGGER,
     SUBENTRY_TYPE_CONTROLLER,
     SUBENTRY_TYPE_ZONE,
+    UI_SETPOINT_DEFAULT,
+    UI_SETPOINT_MAX,
+    UI_SETPOINT_MIN,
+    UI_TIMING_CLOSING_WARNING,
+    UI_TIMING_CONTROLLER_LOOP_INTERVAL,
+    UI_TIMING_DUTY_CYCLE_WINDOW,
+    UI_TIMING_MIN_RUN_TIME,
+    UI_TIMING_OBSERVATION_PERIOD,
+    UI_TIMING_VALVE_OPEN_TIME,
+    UI_TIMING_WINDOW_BLOCK_THRESHOLD,
+    TimingDefaults,
 )
 
 CONF_NAME = "name"
@@ -33,7 +44,7 @@ CONF_CIRCULATION_ENTITY = "circulation_entity"
 CONF_SUMMER_MODE_ENTITY = "summer_mode_entity"
 
 
-def get_timing_schema(timing: dict[str, Any] | None = None) -> vol.Schema:
+def get_timing_schema(timing: TimingDefaults | None = None) -> vol.Schema:
     """Get the schema for timing configuration."""
     timing = timing or DEFAULT_TIMING
     return vol.Schema(
@@ -45,7 +56,10 @@ def get_timing_schema(timing: dict[str, Any] | None = None) -> vol.Schema:
                 ),
             ): selector.NumberSelector(
                 selector.NumberSelectorConfig(
-                    min=1800, max=14400, step=600, unit_of_measurement="s"
+                    min=UI_TIMING_OBSERVATION_PERIOD["min"],
+                    max=UI_TIMING_OBSERVATION_PERIOD["max"],
+                    step=UI_TIMING_OBSERVATION_PERIOD["step"],
+                    unit_of_measurement="s",
                 )
             ),
             vol.Required(
@@ -55,7 +69,10 @@ def get_timing_schema(timing: dict[str, Any] | None = None) -> vol.Schema:
                 ),
             ): selector.NumberSelector(
                 selector.NumberSelectorConfig(
-                    min=600, max=7200, step=300, unit_of_measurement="s"
+                    min=UI_TIMING_DUTY_CYCLE_WINDOW["min"],
+                    max=UI_TIMING_DUTY_CYCLE_WINDOW["max"],
+                    step=UI_TIMING_DUTY_CYCLE_WINDOW["step"],
+                    unit_of_measurement="s",
                 )
             ),
             vol.Required(
@@ -63,7 +80,10 @@ def get_timing_schema(timing: dict[str, Any] | None = None) -> vol.Schema:
                 default=timing.get("min_run_time", DEFAULT_TIMING["min_run_time"]),
             ): selector.NumberSelector(
                 selector.NumberSelectorConfig(
-                    min=60, max=1800, step=60, unit_of_measurement="s"
+                    min=UI_TIMING_MIN_RUN_TIME["min"],
+                    max=UI_TIMING_MIN_RUN_TIME["max"],
+                    step=UI_TIMING_MIN_RUN_TIME["step"],
+                    unit_of_measurement="s",
                 )
             ),
             vol.Required(
@@ -73,7 +93,10 @@ def get_timing_schema(timing: dict[str, Any] | None = None) -> vol.Schema:
                 ),
             ): selector.NumberSelector(
                 selector.NumberSelectorConfig(
-                    min=60, max=600, step=30, unit_of_measurement="s"
+                    min=UI_TIMING_VALVE_OPEN_TIME["min"],
+                    max=UI_TIMING_VALVE_OPEN_TIME["max"],
+                    step=UI_TIMING_VALVE_OPEN_TIME["step"],
+                    unit_of_measurement="s",
                 )
             ),
             vol.Required(
@@ -84,7 +107,10 @@ def get_timing_schema(timing: dict[str, Any] | None = None) -> vol.Schema:
                 ),
             ): selector.NumberSelector(
                 selector.NumberSelectorConfig(
-                    min=60, max=600, step=30, unit_of_measurement="s"
+                    min=UI_TIMING_CLOSING_WARNING["min"],
+                    max=UI_TIMING_CLOSING_WARNING["max"],
+                    step=UI_TIMING_CLOSING_WARNING["step"],
+                    unit_of_measurement="s",
                 )
             ),
             vol.Required(
@@ -95,9 +121,9 @@ def get_timing_schema(timing: dict[str, Any] | None = None) -> vol.Schema:
                 ),
             ): selector.NumberSelector(
                 selector.NumberSelectorConfig(
-                    min=0,
-                    max=1,
-                    step=0.01,
+                    min=UI_TIMING_WINDOW_BLOCK_THRESHOLD["min"],
+                    max=UI_TIMING_WINDOW_BLOCK_THRESHOLD["max"],
+                    step=UI_TIMING_WINDOW_BLOCK_THRESHOLD["step"],
                     mode=selector.NumberSelectorMode.BOX,
                 )
             ),
@@ -109,7 +135,10 @@ def get_timing_schema(timing: dict[str, Any] | None = None) -> vol.Schema:
                 ),
             ): selector.NumberSelector(
                 selector.NumberSelectorConfig(
-                    min=10, max=300, step=5, unit_of_measurement="s"
+                    min=UI_TIMING_CONTROLLER_LOOP_INTERVAL["min"],
+                    max=UI_TIMING_CONTROLLER_LOOP_INTERVAL["max"],
+                    step=UI_TIMING_CONTROLLER_LOOP_INTERVAL["step"],
+                    unit_of_measurement="s",
                 )
             ),
         }
@@ -155,9 +184,9 @@ def get_zone_schema(
                 default=setpoint.get("min", DEFAULT_SETPOINT["min"]),
             ): selector.NumberSelector(
                 selector.NumberSelectorConfig(
-                    min=5,
-                    max=30,
-                    step=0.1,
+                    min=UI_SETPOINT_MIN["min"],
+                    max=UI_SETPOINT_MIN["max"],
+                    step=UI_SETPOINT_MIN["step"],
                     unit_of_measurement="°C",
                     mode=selector.NumberSelectorMode.SLIDER,
                 )
@@ -167,9 +196,9 @@ def get_zone_schema(
                 default=setpoint.get("max", DEFAULT_SETPOINT["max"]),
             ): selector.NumberSelector(
                 selector.NumberSelectorConfig(
-                    min=5,
-                    max=35,
-                    step=0.1,
+                    min=UI_SETPOINT_MAX["min"],
+                    max=UI_SETPOINT_MAX["max"],
+                    step=UI_SETPOINT_MAX["step"],
                     unit_of_measurement="°C",
                     mode=selector.NumberSelectorMode.SLIDER,
                 )
@@ -179,9 +208,9 @@ def get_zone_schema(
                 default=setpoint.get("default", DEFAULT_SETPOINT["default"]),
             ): selector.NumberSelector(
                 selector.NumberSelectorConfig(
-                    min=5,
-                    max=35,
-                    step=0.1,
+                    min=UI_SETPOINT_DEFAULT["min"],
+                    max=UI_SETPOINT_DEFAULT["max"],
+                    step=UI_SETPOINT_DEFAULT["step"],
                     unit_of_measurement="°C",
                     mode=selector.NumberSelectorMode.SLIDER,
                 )
@@ -330,10 +359,12 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
     ) -> config_entries.ConfigFlowResult:
         """Configure timing parameters."""
         # Get timing from controller subentry if it exists
-        timing = DEFAULT_TIMING.copy()
+        timing: TimingDefaults = DEFAULT_TIMING.copy()
         for subentry in self.config_entry.subentries.values():
             if subentry.subentry_type == SUBENTRY_TYPE_CONTROLLER:
-                timing = subentry.data.get("timing", DEFAULT_TIMING)
+                stored = subentry.data.get("timing")
+                if stored is not None:
+                    timing = stored  # type: ignore[assignment]
                 break
 
         if user_input is not None:

@@ -20,6 +20,7 @@ from custom_components.ufh_controller.const import (
     DOMAIN,
     SUBENTRY_TYPE_CONTROLLER,
     SUBENTRY_TYPE_ZONE,
+    TimingDefaults,
 )
 
 # =============================================================================
@@ -487,13 +488,14 @@ def test_get_timing_schema_with_defaults() -> None:
 
 def test_get_timing_schema_with_custom() -> None:
     """Test that timing schema uses provided timing values."""
-    custom_timing = {
+    custom_timing: TimingDefaults = {
         "observation_period": 9000,
         "duty_cycle_window": 4500,
         "min_run_time": 600,
         "valve_open_time": 300,
         "closing_warning_duration": 300,
         "window_block_threshold": 0.15,
+        "controller_loop_interval": 60,
     }
     schema = get_timing_schema(custom_timing)
 

@@ -5,6 +5,10 @@ from unittest.mock import patch
 
 import pytest
 
+from custom_components.ufh_controller.const import (
+    DEFAULT_PID,
+    DEFAULT_SETPOINT,
+)
 from custom_components.ufh_controller.core.controller import (
     ControllerConfig,
     HeatingController,
@@ -556,11 +560,11 @@ class TestZoneConfig:
             valve_switch="switch.test_valve",
         )
         assert config.circuit_type == CircuitType.REGULAR
-        assert config.setpoint_min == 16.0
-        assert config.setpoint_max == 28.0
-        assert config.setpoint_default == 21.0
-        assert config.kp == 50.0
-        assert config.ki == 0.05
+        assert config.setpoint_min == DEFAULT_SETPOINT["min"]
+        assert config.setpoint_max == DEFAULT_SETPOINT["max"]
+        assert config.setpoint_default == DEFAULT_SETPOINT["default"]
+        assert config.kp == DEFAULT_PID["kp"]
+        assert config.ki == DEFAULT_PID["ki"]
 
     def test_flush_circuit(self) -> None:
         """Test flush circuit configuration."""
