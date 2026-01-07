@@ -29,7 +29,7 @@ class PIDOutput:
     p_term: float
     i_term: float
     d_term: float
-    output: float
+    duty_cycle: float
 
 
 @dataclass
@@ -76,7 +76,9 @@ class PIDController:
 
         """
         if dt <= 0:
-            return PIDOutput(error=0.0, p_term=0.0, i_term=0.0, d_term=0.0, output=0.0)
+            return PIDOutput(
+                error=0.0, p_term=0.0, i_term=0.0, d_term=0.0, duty_cycle=0.0
+            )
 
         error = setpoint - current
 
@@ -103,7 +105,7 @@ class PIDController:
             p_term=p_term,
             i_term=i_term,
             d_term=d_term,
-            output=output,
+            duty_cycle=output,
         )
 
     def reset(self) -> None:

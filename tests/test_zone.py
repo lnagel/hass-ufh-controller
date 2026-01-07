@@ -455,7 +455,7 @@ class TestZoneState:
         zone = ZoneState(zone_id="test")
         assert zone.zone_id == "test"
         assert zone.circuit_type == CircuitType.REGULAR
-        assert zone.current_temp is None
+        assert zone.current is None
         assert zone.setpoint == 21.0
         assert zone.duty_cycle == 0.0
         assert zone.valve_on is False

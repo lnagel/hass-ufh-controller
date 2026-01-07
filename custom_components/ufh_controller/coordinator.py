@@ -172,13 +172,13 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return
 
         # Restore PID integral
-        if runtime.state.integral == 0.0:
+        if runtime.state.i_term == 0.0:
             integral = zone_state.get("integral", 0.0)
             last_error = zone_state.get("last_error", 0.0)
             if integral != 0.0:
                 runtime.pid.set_integral(integral)
                 runtime.pid.set_last_error(last_error)
-                runtime.state.integral = integral
+                runtime.state.i_term = integral
 
         # Restore setpoint
         if "setpoint" in zone_state:
@@ -284,10 +284,10 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # Read current temperature
         temp_state = self.hass.states.get(runtime.config.temp_sensor)
-        current_temp: float | None = None
+        current: float | None = None
         if temp_state is not None:
             try:
-                current_temp = float(temp_state.state)
+                current = float(temp_state.state)
             except (ValueError, TypeError):
                 LOGGER.warning(
                     "Invalid temperature state for %s: %s",
@@ -296,7 +296,7 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 )
 
         # Update PID controller
-        self._controller.update_zone_pid(zone_id, current_temp, dt)
+        self._controller.update_zone_pid(zone_id, current, dt)
 
         # Query historical data from Recorder
         timing = self._controller.config.timing
@@ -426,12 +426,12 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if runtime is not None:
                 state = runtime.state
                 result["zones"][zone_id] = {
-                    "current_temp": state.current_temp,
+                    "current": state.current,
                     "setpoint": state.setpoint,
                     "duty_cycle": state.duty_cycle,
                     "error": state.error,
                     "p_term": state.p_term,
-                    "integral": state.integral,
+                    "i_term": state.i_term,
                     "d_term": state.d_term,
                     "valve_on": state.valve_on,
                     "enabled": state.enabled,

@@ -192,7 +192,7 @@ class TestUpdateZonePID:
         assert duty_cycle > 0.0
         state = controller.get_zone_state("living_room")
         assert state is not None
-        assert state.current_temp == 20.0
+        assert state.current == 20.0
         assert state.duty_cycle == duty_cycle
 
     def test_update_with_none_temperature(self, basic_config: ControllerConfig) -> None:

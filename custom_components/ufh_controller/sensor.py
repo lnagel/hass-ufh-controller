@@ -72,7 +72,7 @@ ZONE_SENSORS: tuple[UFHZoneSensorEntityDescription, ...] = (
         native_unit_of_measurement="%",
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=1,
-        value_fn=lambda data: data.get("integral"),
+        value_fn=lambda data: data.get("i_term"),
     ),
     UFHZoneSensorEntityDescription(
         key="pid_derivative",

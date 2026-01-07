@@ -123,7 +123,7 @@ class UFHZoneClimate(UFHControllerZoneEntity, ClimateEntity):
     def current_temperature(self) -> float | None:
         """Return the current temperature."""
         zone_data = self.coordinator.data.get("zones", {}).get(self._zone_id, {})
-        return zone_data.get("current_temp")
+        return zone_data.get("current")
 
     @property
     def target_temperature(self) -> float | None:
@@ -172,7 +172,7 @@ class UFHZoneClimate(UFHControllerZoneEntity, ClimateEntity):
         return {
             "duty_cycle": zone_data.get("duty_cycle"),
             "pid_error": zone_data.get("error"),
-            "integral": zone_data.get("integral"),
+            "i_term": zone_data.get("i_term"),
             "window_blocked": zone_data.get("window_blocked", False),
             "is_requesting_heat": zone_data.get("is_requesting_heat", False),
         }
