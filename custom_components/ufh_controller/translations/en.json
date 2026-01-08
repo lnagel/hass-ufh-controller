@@ -159,9 +159,6 @@
       }
     },
     "switch": {
-      "heat_request": {
-        "name": "Heat Request"
-      },
       "flush_enabled": {
         "name": "Flush Enabled"
       }

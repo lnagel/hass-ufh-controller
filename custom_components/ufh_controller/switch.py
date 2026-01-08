@@ -39,42 +39,10 @@ async def async_setup_entry(
 
     async_add_entities(
         [
-            UFHHeatRequestSwitch(coordinator, controller_subentry_id),
             UFHFlushEnabledSwitch(coordinator, controller_subentry_id),
         ],
         config_subentry_id=controller_subentry_id,
     )
-
-
-class UFHHeatRequestSwitch(UFHControllerEntity, SwitchEntity):
-    """Switch entity showing aggregated heat request status (read-only)."""
-
-    _attr_translation_key = "heat_request"
-    _attr_device_class = SwitchDeviceClass.SWITCH
-
-    def __init__(
-        self,
-        coordinator: UFHControllerDataUpdateCoordinator,
-        subentry_id: str,
-    ) -> None:
-        """Initialize the switch entity."""
-        super().__init__(coordinator, subentry_id)
-
-        controller_id = coordinator.config_entry.data.get("controller_id", "")
-        self._attr_unique_id = f"{controller_id}_heat_request"
-
-    @property
-    def is_on(self) -> bool:
-        """Return the heat request status."""
-        return self.coordinator.data.get("heat_request", False)
-
-    async def async_turn_on(self, **kwargs: Any) -> None:
-        """Turn on is not supported (read-only switch)."""
-        # Heat request is calculated, not directly controllable
-
-    async def async_turn_off(self, **kwargs: Any) -> None:
-        """Turn off is not supported (read-only switch)."""
-        # Heat request is calculated, not directly controllable
 
 
 class UFHFlushEnabledSwitch(UFHControllerEntity, SwitchEntity):

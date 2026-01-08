@@ -306,8 +306,8 @@ These settings are stored in the **controller subentry** data.
 │  │  Controller Subentry (auto-created)                       │  │
 │  │  - type: "controller"                                     │  │
 │  │  - data: {timing: {...}}                                  │  │
-│  │  - Entities: mode select, heat request switch,            │  │
-│  │              flush enabled switch, requesting zones sensor│  │
+│  │  - Entities: mode select, flush enabled switch,           │  │
+│  │              requesting zones sensor                      │  │
 │  └──────────────────────────────────────────────────────────┘  │
 │  ┌──────────────────────────────────────────────────────────┐  │
 │  │  Zone Subentry (user-created via "+ Add Heating Zone")   │  │
@@ -331,7 +331,6 @@ All controller entities belong to a device named after the controller (user-defi
 | Platform | Entity ID Pattern                          | Name                       | Description |
 |----------|--------------------------------------------|----------------------------|-------------|
 | select | `select.{controller_id}_mode`              | "{name} Mode"              | Control mode selector |
-| switch | `switch.{controller_id}_heat_request`      | "{name} Heat Request"      | Aggregated boiler signal (read-only reflects state) |
 | switch | `switch.{controller_id}_flush_enabled`     | "{name} Flush Enabled"     | DHW latent heat capture toggle |
 | sensor | `sensor.{controller_id}_requesting_zones`  | "{name} Requesting Zones"  | Count of zones currently requesting heat |
 
