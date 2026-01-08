@@ -198,8 +198,8 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if runtime is None:
             return
 
-        # Restore PID integral
-        if runtime.state.i_term == 0.0:
+        # Restore PID integral (only if not yet calculated - i_term is None or 0.0)
+        if runtime.state.i_term is None or runtime.state.i_term == 0.0:
             integral = zone_state.get("integral", 0.0)
             last_error = zone_state.get("last_error", 0.0)
             if integral != 0.0:
@@ -372,7 +372,7 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Update zone with historical data
         self._controller.update_zone_historical(
             zone_id,
-            duty_cycle_avg=runtime.state.duty_cycle,  # Current duty cycle
+            duty_cycle_avg=runtime.state.duty_cycle or 0.0,  # Current duty cycle
             period_state_avg=period_state_avg,
             open_state_avg=open_state_avg,
             window_open_avg=window_open_avg,

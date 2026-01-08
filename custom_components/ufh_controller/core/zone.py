@@ -66,11 +66,11 @@ class ZoneState:
     # PID state
     current: float | None = None
     setpoint: float = DEFAULT_SETPOINT["default"]
-    error: float = 0.0
-    p_term: float = 0.0
-    i_term: float = 0.0
-    d_term: float = 0.0
-    duty_cycle: float = 0.0
+    error: float | None = None
+    p_term: float | None = None
+    i_term: float | None = None
+    d_term: float | None = None
+    duty_cycle: float | None = None
 
     # Valve state
     valve_on: bool = False
@@ -115,20 +115,23 @@ class ControllerState:
 
 
 def calculate_requested_duration(
-    duty_cycle: float,
+    duty_cycle: float | None,
     observation_period: int,
 ) -> float:
     """
     Calculate how many seconds a valve should run based on duty cycle.
 
     Args:
-        duty_cycle: PID output as percentage (0-100).
+        duty_cycle: PID output as percentage (0-100), or None if not yet calculated.
         observation_period: Total observation period in seconds.
 
     Returns:
         Number of seconds the valve should run in this period.
+        Returns 0.0 if duty_cycle is None (not yet calculated).
 
     """
+    if duty_cycle is None:
+        return 0.0
     return (duty_cycle / 100.0) * observation_period
 
 

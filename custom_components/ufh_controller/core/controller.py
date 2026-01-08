@@ -185,7 +185,7 @@ class HeatingController:
         zone_id: str,
         current: float | None,
         dt: float,
-    ) -> float:
+    ) -> float | None:
         """
         Update the PID controller for a zone.
 
@@ -203,7 +203,8 @@ class HeatingController:
             dt: Time delta since last update in seconds.
 
         Returns:
-            The new duty cycle (0-100), or 0 if zone not found or temp unavailable.
+            The new duty cycle (0-100), None if not yet calculated, or 0 if zone
+            not found.
 
         """
         runtime = self._zones.get(zone_id)

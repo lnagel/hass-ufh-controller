@@ -193,6 +193,7 @@ class TestUpdateZonePID:
         duty_cycle = controller.update_zone_pid("living_room", 20.0, 60.0)
 
         # With 2 degree error and Kp=50, expect significant duty cycle
+        assert duty_cycle is not None
         assert duty_cycle > 0.0
         state = controller.get_zone_state("living_room")
         assert state is not None
@@ -380,6 +381,7 @@ class TestPIDIntegrationPause:
         runtime = controller.get_zone_runtime("living_room")
         assert runtime is not None
         initial_duty_cycle = runtime.state.duty_cycle
+        assert initial_duty_cycle is not None
         assert initial_duty_cycle > 0  # Should have some duty cycle from error
 
         # Switch to mode that pauses PID
