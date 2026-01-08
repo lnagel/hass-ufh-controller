@@ -231,6 +231,7 @@ class HeatingController:
         period_state_avg: float,
         open_state_avg: float,
         window_open_avg: float,
+        elapsed_time: float | None = None,
         observation_period: int | None = None,
     ) -> None:
         """
@@ -242,6 +243,8 @@ class HeatingController:
             period_state_avg: Average valve state since observation start.
             open_state_avg: Average valve state for open detection.
             window_open_avg: Average window open state.
+            elapsed_time: Actual elapsed time since observation start in seconds.
+                If None, defaults to observation_period (full period).
             observation_period: Optional override for period duration.
 
         """
@@ -256,7 +259,10 @@ class HeatingController:
 
         # Calculate used and requested durations
         period = observation_period or self.config.timing.observation_period
-        runtime.state.used_duration = period_state_avg * period
+        # used_duration is based on actual elapsed time, not full period
+        actual_elapsed = elapsed_time if elapsed_time is not None else period
+        runtime.state.used_duration = period_state_avg * actual_elapsed
+        # requested_duration uses full observation period
         runtime.state.requested_duration = calculate_requested_duration(
             runtime.state.duty_cycle,
             period,

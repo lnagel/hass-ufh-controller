@@ -354,6 +354,9 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             duty_end,
         )
 
+        # Calculate elapsed time since observation start
+        elapsed_time = (now - period_start).total_seconds()
+
         # Update zone with historical data
         self._controller.update_zone_historical(
             zone_id,
@@ -361,6 +364,7 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             period_state_avg=period_state_avg,
             open_state_avg=open_state_avg,
             window_open_avg=window_open_avg,
+            elapsed_time=elapsed_time,
         )
 
     async def _execute_valve_actions(

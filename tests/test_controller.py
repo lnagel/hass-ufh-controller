@@ -258,6 +258,73 @@ class TestUpdateZoneHistorical:
             window_open_avg=0.0,
         )
 
+    def test_used_duration_with_elapsed_time(
+        self, basic_config: ControllerConfig
+    ) -> None:
+        """
+        Test used_duration calculation uses elapsed time, not full period.
+
+        When partway through an observation period, used_duration should be
+        calculated from the actual elapsed time, not the full observation period.
+        """
+        controller = HeatingController(basic_config)
+
+        # Set duty cycle to 90%
+        controller.update_zone_pid("living_room", 19.0, 60.0)  # 2 degree error
+
+        # Simulate being 30 minutes (1800s) into a 2-hour observation period
+        # Valve was on 50% of the elapsed time (15 minutes = 900 seconds)
+        controller.update_zone_historical(
+            "living_room",
+            duty_cycle_avg=90.0,
+            period_state_avg=0.5,  # On 50% of elapsed time
+            open_state_avg=0.9,
+            window_open_avg=0.0,
+            elapsed_time=1800.0,  # 30 minutes elapsed
+        )
+
+        state = controller.get_zone_state("living_room")
+        assert state is not None
+        # used_duration should be 0.5 * 1800 = 900 seconds (NOT 0.5 * 7200 = 3600)
+        assert state.used_duration == 900.0
+        # requested_duration still uses full period: duty_cycle * 7200
+        # With 2 degree error and Kp=50, duty_cycle ≈ 100% (clamped)
+        assert state.requested_duration > 0
+
+    def test_high_duty_cycle_low_elapsed_time_turns_on(
+        self, basic_config: ControllerConfig
+    ) -> None:
+        """
+        Test that high duty cycle zone turns on even early in observation period.
+
+        This is a regression test for the bug where used_duration was incorrectly
+        calculated using full period instead of elapsed time, causing zones to
+        think they had used more quota than they actually had.
+        """
+        controller = HeatingController(basic_config)
+
+        # Set up zone with high duty cycle (90%)
+        controller.update_zone_pid("living_room", 19.0, 60.0)
+
+        # Early in observation period (30 min), valve was on most of the time (80%)
+        # Bug: used_duration = 0.8 * 7200 = 5760 (would exceed quota for 80% duty)
+        # Fix: used_duration = 0.8 * 1800 = 1440 (still has plenty of quota)
+        controller.update_zone_historical(
+            "living_room",
+            duty_cycle_avg=90.0,
+            period_state_avg=0.8,
+            open_state_avg=0.0,
+            window_open_avg=0.0,
+            elapsed_time=1800.0,
+        )
+
+        actions = controller.evaluate_zones()
+
+        # Zone should turn on because it still has quota remaining:
+        # With 100% duty cycle: requested_duration is 7200s, used_duration is 1440s,
+        # so remaining quota (5760s) exceeds min_run_time (540s)
+        assert actions["living_room"] == ZoneAction.TURN_ON
+
 
 class TestEvaluateZonesAutoMode:
     """Test evaluate_zones in auto mode."""
