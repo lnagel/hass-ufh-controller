@@ -150,6 +150,16 @@ class UFHZoneSensor(UFHControllerZoneEntity, SensorEntity):
         zone_data = self.coordinator.data.get("zones", {}).get(self._zone_id, {})
         return self.entity_description.value_fn(zone_data)
 
+    @property
+    def available(self) -> bool:
+        """
+        Return True if entity is available.
+
+        Sensors are marked unavailable when they have no valid value.
+        This prevents 'unknown' states from being recorded to history.
+        """
+        return super().available and self.native_value is not None
+
 
 class UFHRequestingZonesSensor(UFHControllerEntity, SensorEntity):
     """Sensor showing count of zones requesting heat."""

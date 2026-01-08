@@ -1,12 +1,16 @@
 """
-Tests for zone initial state - values should be None until calculated.
+Tests for zone initial state - sensors should be unavailable until calculated.
 
-This module tests that zone PID values are None (not 0.0) when first initialized,
-to prevent incorrect values from being recorded in HA history during restarts.
+This module tests that:
+1. Zone PID values are None (not 0.0) when first initialized
+2. Sensors are marked unavailable (not just unknown) before first PID calculation
+
+Using unavailable state prevents Home Assistant from recording null values to
+history during restarts, which was causing incorrect history data.
 """
 
 import pytest
-from homeassistant.const import STATE_UNKNOWN
+from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -104,85 +108,90 @@ class TestControllerZoneInitialization:
 
 
 class TestSensorInitialValues:
-    """Test that sensors show unknown state before PID calculation."""
+    """
+    Test that sensors are unavailable before PID calculation.
 
-    async def test_duty_cycle_sensor_unknown_before_calculation(
+    Using STATE_UNAVAILABLE (instead of STATE_UNKNOWN) prevents Home Assistant
+    from recording null values to history during restarts.
+    """
+
+    async def test_duty_cycle_sensor_unavailable_before_calculation(
         self,
         hass: HomeAssistant,
         mock_config_entry: MockConfigEntry,
     ) -> None:
-        """Test duty cycle sensor shows unknown before first PID calculation."""
+        """Test duty cycle sensor is unavailable before first PID calculation."""
         mock_config_entry.add_to_hass(hass)
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
         await hass.async_block_till_done()
 
         state = hass.states.get("sensor.test_zone_1_duty_cycle")
         assert state is not None
-        # State should be unknown (None native_value), not "0.0"
-        assert state.state == STATE_UNKNOWN, (
-            f"Sensor should be unknown before PID calculation, got {state.state}"
+        # Sensor should be unavailable (not unknown) to prevent history recording
+        assert state.state == STATE_UNAVAILABLE, (
+            f"Sensor should be unavailable before PID calculation, got {state.state}"
         )
 
-    async def test_pid_error_sensor_unknown_before_calculation(
+    async def test_pid_error_sensor_unavailable_before_calculation(
         self,
         hass: HomeAssistant,
         mock_config_entry: MockConfigEntry,
     ) -> None:
-        """Test PID error sensor shows unknown before first PID calculation."""
+        """Test PID error sensor is unavailable before first PID calculation."""
         mock_config_entry.add_to_hass(hass)
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
         await hass.async_block_till_done()
 
         state = hass.states.get("sensor.test_zone_1_pid_error")
         assert state is not None
-        assert state.state == STATE_UNKNOWN, (
-            f"Sensor should be unknown before PID calculation, got {state.state}"
+        assert state.state == STATE_UNAVAILABLE, (
+            f"Sensor should be unavailable before PID calculation, got {state.state}"
         )
 
-    async def test_pid_proportional_sensor_unknown_before_calculation(
+    async def test_pid_proportional_sensor_unavailable_before_calculation(
         self,
         hass: HomeAssistant,
         mock_config_entry: MockConfigEntry,
     ) -> None:
-        """Test PID proportional sensor shows unknown before first PID calculation."""
+        """Test PID proportional sensor is unavailable before first PID calculation."""
         mock_config_entry.add_to_hass(hass)
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
         await hass.async_block_till_done()
 
         state = hass.states.get("sensor.test_zone_1_pid_proportional")
         assert state is not None
-        assert state.state == STATE_UNKNOWN, (
-            f"Sensor should be unknown before PID calculation, got {state.state}"
+        assert state.state == STATE_UNAVAILABLE, (
+            f"Sensor should be unavailable before PID calculation, got {state.state}"
         )
 
-    async def test_pid_integral_sensor_unknown_before_calculation(
+    async def test_pid_integral_sensor_unavailable_before_calculation(
         self,
         hass: HomeAssistant,
         mock_config_entry: MockConfigEntry,
     ) -> None:
-        """Test PID integral sensor shows unknown before first PID calculation."""
+        """Test PID integral sensor is unavailable before first PID calculation."""
         mock_config_entry.add_to_hass(hass)
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
         await hass.async_block_till_done()
 
         state = hass.states.get("sensor.test_zone_1_pid_integral")
         assert state is not None
-        assert state.state == STATE_UNKNOWN, (
-            f"Sensor should be unknown before PID calculation, got {state.state}"
+        assert state.state == STATE_UNAVAILABLE, (
+            f"Sensor should be unavailable before PID calculation, got {state.state}"
         )
 
-    async def test_pid_derivative_sensor_unknown_before_calculation(
+    async def test_pid_derivative_sensor_unavailable_before_calculation(
         self,
         hass: HomeAssistant,
         mock_config_entry: MockConfigEntry,
     ) -> None:
-        """Test PID derivative sensor shows unknown before first PID calculation."""
+        """Test PID derivative sensor is unavailable before first PID calculation."""
         mock_config_entry.add_to_hass(hass)
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
         await hass.async_block_till_done()
 
         state = hass.states.get("sensor.test_zone_1_pid_derivative")
         assert state is not None
-        assert state.state == STATE_UNKNOWN, (
-            f"Sensor should be unknown before PID calculation, got {state.state}"
+        assert state.state == STATE_UNAVAILABLE, (
+            f"Sensor should be unavailable before PID calculation, got {state.state}"
         )
