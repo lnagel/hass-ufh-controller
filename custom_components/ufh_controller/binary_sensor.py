@@ -36,13 +36,13 @@ ZONE_BINARY_SENSORS: tuple[UFHZoneBinarySensorEntityDescription, ...] = (
         key="blocked",
         translation_key="blocked",
         device_class=BinarySensorDeviceClass.PROBLEM,
-        value_fn=lambda data: data.get("window_blocked", False),
+        value_fn=lambda data: data.get("blocked", False),
     ),
     UFHZoneBinarySensorEntityDescription(
         key="heat_request",
         translation_key="heat_request",
         device_class=BinarySensorDeviceClass.HEAT,
-        value_fn=lambda data: data.get("is_requesting_heat", False),
+        value_fn=lambda data: data.get("heat_request", False),
     ),
 )
 

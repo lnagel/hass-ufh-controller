@@ -186,6 +186,6 @@ class UFHZoneClimate(UFHControllerZoneEntity, ClimateEntity):
             "duty_cycle": zone_data.get("duty_cycle"),
             "pid_error": zone_data.get("error"),
             "i_term": zone_data.get("i_term"),
-            "window_blocked": zone_data.get("window_blocked", False),
-            "is_requesting_heat": zone_data.get("is_requesting_heat", False),
+            "blocked": zone_data.get("blocked", False),
+            "heat_request": zone_data.get("heat_request", False),
         }

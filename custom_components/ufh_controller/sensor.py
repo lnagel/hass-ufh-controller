@@ -183,6 +183,4 @@ class UFHRequestingZonesSensor(UFHControllerEntity, SensorEntity):
     def native_value(self) -> int:
         """Return the count of zones requesting heat."""
         zones = self.coordinator.data.get("zones", {})
-        return sum(
-            1 for zone in zones.values() if zone.get("is_requesting_heat", False)
-        )
+        return sum(1 for zone in zones.values() if zone.get("heat_request", False))

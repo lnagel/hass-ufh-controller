@@ -464,6 +464,15 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             runtime = self._controller.get_zone_runtime(zone_id)
             if runtime is not None:
                 state = runtime.state
+                blocked = (
+                    state.window_open_avg
+                    > self._controller.config.timing.window_block_threshold
+                )
+                heat_request = (
+                    state.valve_on
+                    and state.open_state_avg >= DEFAULT_VALVE_OPEN_THRESHOLD
+                )
+
                 result["zones"][zone_id] = {
                     "current": state.current,
                     "setpoint": state.setpoint,
@@ -474,10 +483,8 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "d_term": state.d_term,
                     "valve_on": state.valve_on,
                     "enabled": state.enabled,
-                    "window_blocked": state.window_open_avg
-                    > self._controller.config.timing.window_block_threshold,
-                    "is_requesting_heat": state.valve_on
-                    and state.open_state_avg >= DEFAULT_VALVE_OPEN_THRESHOLD,
+                    "blocked": blocked,
+                    "heat_request": heat_request,
                     "preset_mode": self._zone_presets.get(zone_id),
                 }
 

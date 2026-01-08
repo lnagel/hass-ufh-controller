@@ -88,18 +88,6 @@ class ZoneState:
     # Zone enabled state
     enabled: bool = True
 
-    @property
-    def is_window_blocked(self) -> bool:
-        """Check if zone is blocked by window/door sensor."""
-        # This is computed by evaluate_zone based on threshold
-        return False
-
-    @property
-    def is_requesting_heat(self) -> bool:
-        """Check if zone is contributing to heat request."""
-        # This is computed by should_request_heat
-        return False
-
 
 @dataclass
 class ControllerState:

@@ -282,8 +282,8 @@ async def test_climate_extra_attributes(
     assert "duty_cycle" in attrs
     assert "pid_error" in attrs
     assert "i_term" in attrs
-    assert "window_blocked" in attrs
-    assert "is_requesting_heat" in attrs
+    assert "blocked" in attrs
+    assert "heat_request" in attrs
 
 
 async def test_climate_hvac_action_idle(

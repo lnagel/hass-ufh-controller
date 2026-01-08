@@ -204,8 +204,6 @@ class ZoneState:
     # Derived
     used_duration: float       # Seconds valve was on this period
     requested_duration: float  # Seconds valve should be on this period
-    is_window_blocked: bool
-    is_requesting_heat: bool
 
 @dataclass
 class ControllerState:
