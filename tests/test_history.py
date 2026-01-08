@@ -7,7 +7,6 @@ import pytest
 from homeassistant.core import HomeAssistant, State
 
 from custom_components.ufh_controller.core.history import (
-    get_duty_cycle_window,
     get_numeric_average,
     get_observation_start,
     get_state_average,
@@ -63,42 +62,6 @@ class TestGetObservationStart:
         now = datetime(2024, 1, 15, 15, 30, 0, tzinfo=UTC)
         result = get_observation_start(now, observation_period=0)
         assert result == datetime(2024, 1, 15, 14, 0, 0, tzinfo=UTC)
-
-
-class TestGetDutyCycleWindow:
-    """Test cases for get_duty_cycle_window."""
-
-    def test_before_30_minutes(self) -> None:
-        """Test window when minute < 30 (lookback)."""
-        now = datetime(2024, 1, 15, 14, 15, 0, tzinfo=UTC)
-        start, end = get_duty_cycle_window(now)
-
-        assert end == now
-        assert start == now - timedelta(hours=1)
-
-    def test_at_30_minutes(self) -> None:
-        """Test window when minute == 30 (centered)."""
-        now = datetime(2024, 1, 15, 14, 30, 0, tzinfo=UTC)
-        start, end = get_duty_cycle_window(now)
-
-        assert start == now - timedelta(minutes=30)
-        assert end == now + timedelta(minutes=30)
-
-    def test_after_30_minutes(self) -> None:
-        """Test window when minute > 30 (centered)."""
-        now = datetime(2024, 1, 15, 14, 45, 0, tzinfo=UTC)
-        start, end = get_duty_cycle_window(now)
-
-        assert start == now - timedelta(minutes=30)
-        assert end == now + timedelta(minutes=30)
-
-    def test_custom_window_30_minutes(self) -> None:
-        """Test with 30-minute window."""
-        now = datetime(2024, 1, 15, 14, 15, 0, tzinfo=UTC)
-        start, end = get_duty_cycle_window(now, window_seconds=1800)
-
-        assert end == now
-        assert start == now - timedelta(minutes=30)
 
 
 class TestGetValveOpenWindow:

@@ -30,11 +30,10 @@ from .const import (
     UI_SETPOINT_MIN,
     UI_TIMING_CLOSING_WARNING,
     UI_TIMING_CONTROLLER_LOOP_INTERVAL,
-    UI_TIMING_DUTY_CYCLE_WINDOW,
     UI_TIMING_MIN_RUN_TIME,
     UI_TIMING_OBSERVATION_PERIOD,
     UI_TIMING_VALVE_OPEN_TIME,
-    UI_TIMING_WINDOW_BLOCK_THRESHOLD,
+    UI_TIMING_WINDOW_BLOCK_TIME,
     TimingDefaults,
 )
 
@@ -61,19 +60,6 @@ def get_timing_schema(timing: TimingDefaults | None = None) -> vol.Schema:
                     min=UI_TIMING_OBSERVATION_PERIOD["min"],
                     max=UI_TIMING_OBSERVATION_PERIOD["max"],
                     step=UI_TIMING_OBSERVATION_PERIOD["step"],
-                    unit_of_measurement="s",
-                )
-            ),
-            vol.Required(
-                "duty_cycle_window",
-                default=timing.get(
-                    "duty_cycle_window", DEFAULT_TIMING["duty_cycle_window"]
-                ),
-            ): selector.NumberSelector(
-                selector.NumberSelectorConfig(
-                    min=UI_TIMING_DUTY_CYCLE_WINDOW["min"],
-                    max=UI_TIMING_DUTY_CYCLE_WINDOW["max"],
-                    step=UI_TIMING_DUTY_CYCLE_WINDOW["step"],
                     unit_of_measurement="s",
                 )
             ),
@@ -116,17 +102,17 @@ def get_timing_schema(timing: TimingDefaults | None = None) -> vol.Schema:
                 )
             ),
             vol.Required(
-                "window_block_threshold",
+                "window_block_time",
                 default=timing.get(
-                    "window_block_threshold",
-                    DEFAULT_TIMING["window_block_threshold"],
+                    "window_block_time",
+                    DEFAULT_TIMING["window_block_time"],
                 ),
             ): selector.NumberSelector(
                 selector.NumberSelectorConfig(
-                    min=UI_TIMING_WINDOW_BLOCK_THRESHOLD["min"],
-                    max=UI_TIMING_WINDOW_BLOCK_THRESHOLD["max"],
-                    step=UI_TIMING_WINDOW_BLOCK_THRESHOLD["step"],
-                    mode=selector.NumberSelectorMode.BOX,
+                    min=UI_TIMING_WINDOW_BLOCK_TIME["min"],
+                    max=UI_TIMING_WINDOW_BLOCK_TIME["max"],
+                    step=UI_TIMING_WINDOW_BLOCK_TIME["step"],
+                    unit_of_measurement="s",
                 )
             ),
             vol.Required(
@@ -651,11 +637,10 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
         if user_input is not None:
             new_timing = {
                 "observation_period": int(user_input["observation_period"]),
-                "duty_cycle_window": int(user_input["duty_cycle_window"]),
                 "min_run_time": int(user_input["min_run_time"]),
                 "valve_open_time": int(user_input["valve_open_time"]),
                 "closing_warning_duration": int(user_input["closing_warning_duration"]),
-                "window_block_threshold": user_input["window_block_threshold"],
+                "window_block_time": int(user_input["window_block_time"]),
                 "controller_loop_interval": int(user_input["controller_loop_interval"]),
             }
 

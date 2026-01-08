@@ -25,7 +25,6 @@ from .core import (
     TimingParams,
     ZoneAction,
     ZoneConfig,
-    get_duty_cycle_window,
     get_observation_start,
     get_state_average,
     get_valve_open_window,
@@ -97,9 +96,6 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             observation_period=timing_opts.get(
                 "observation_period", DEFAULT_TIMING["observation_period"]
             ),
-            duty_cycle_window=timing_opts.get(
-                "duty_cycle_window", DEFAULT_TIMING["duty_cycle_window"]
-            ),
             min_run_time=timing_opts.get(
                 "min_run_time", DEFAULT_TIMING["min_run_time"]
             ),
@@ -109,8 +105,8 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             closing_warning_duration=timing_opts.get(
                 "closing_warning_duration", DEFAULT_TIMING["closing_warning_duration"]
             ),
-            window_block_threshold=timing_opts.get(
-                "window_block_threshold", DEFAULT_TIMING["window_block_threshold"]
+            window_block_time=timing_opts.get(
+                "window_block_time", DEFAULT_TIMING["window_block_time"]
             ),
             controller_loop_interval=timing_opts.get(
                 "controller_loop_interval", DEFAULT_TIMING["controller_loop_interval"]
@@ -307,6 +303,14 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         state = self.hass.states.get(dhw_entity)
         self._controller.state.dhw_active = state is not None and state.state == "on"
 
+    def _is_any_window_open(self, window_sensors: list[str]) -> bool:
+        """Check if any window sensor is currently in 'on' state."""
+        for sensor_id in window_sensors:
+            state = self.hass.states.get(sensor_id)
+            if state is not None and state.state == "on":
+                return True
+        return False
+
     async def _update_zone(
         self,
         zone_id: str,
@@ -357,14 +361,16 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             on_value="on",
         )
 
-        # Window sensors average
-        duty_start, duty_end = get_duty_cycle_window(now, timing.duty_cycle_window)
+        # Window sensors average (historical)
         window_open_avg = await get_window_open_average(
             self.hass,
             runtime.config.window_sensors,
-            duty_start,
-            duty_end,
+            period_start,
+            now,
         )
+
+        # Check if any window is currently open
+        window_currently_open = self._is_any_window_open(runtime.config.window_sensors)
 
         # Calculate elapsed time since observation start
         elapsed_time = (now - period_start).total_seconds()
@@ -375,6 +381,7 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             period_state_avg=period_state_avg,
             open_state_avg=open_state_avg,
             window_open_avg=window_open_avg,
+            window_currently_open=window_currently_open,
             elapsed_time=elapsed_time,
         )
 
@@ -465,8 +472,9 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if runtime is not None:
                 state = runtime.state
                 blocked = (
-                    state.window_open_avg
-                    > self._controller.config.timing.window_block_threshold
+                    state.window_currently_open
+                    or state.window_open_seconds
+                    > self._controller.config.timing.window_block_time
                 )
                 heat_request = (
                     state.valve_on

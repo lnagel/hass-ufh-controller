@@ -43,11 +43,10 @@ class TimingParams:
     """
 
     observation_period: int = DEFAULT_TIMING["observation_period"]
-    duty_cycle_window: int = DEFAULT_TIMING["duty_cycle_window"]
     min_run_time: int = DEFAULT_TIMING["min_run_time"]
     valve_open_time: int = DEFAULT_TIMING["valve_open_time"]
     closing_warning_duration: int = DEFAULT_TIMING["closing_warning_duration"]
-    window_block_threshold: float = DEFAULT_TIMING["window_block_threshold"]
+    window_block_time: int = DEFAULT_TIMING["window_block_time"]
     controller_loop_interval: int = DEFAULT_TIMING["controller_loop_interval"]
 
 
@@ -79,7 +78,8 @@ class ZoneState:
     # Historical averages from Recorder queries
     period_state_avg: float = 0.0
     open_state_avg: float = 0.0
-    window_open_avg: float = 0.0
+    window_open_seconds: float = 0.0  # Total seconds window was open in period
+    window_currently_open: bool = False  # Whether any window is currently open
 
     # Derived scheduling values
     used_duration: float = 0.0
@@ -155,8 +155,12 @@ def evaluate_zone(  # noqa: PLR0911
     ):
         return ZoneAction.TURN_ON if not zone.valve_on else ZoneAction.STAY_ON
 
-    # Window blocking
-    if zone.window_open_avg > timing.window_block_threshold:
+    # Window blocking - immediate if any window is currently open
+    if zone.window_currently_open:
+        return ZoneAction.TURN_OFF if zone.valve_on else ZoneAction.STAY_OFF
+
+    # Window blocking - duration exceeded threshold
+    if zone.window_open_seconds > timing.window_block_time:
         return ZoneAction.TURN_OFF if zone.valve_on else ZoneAction.STAY_OFF
 
     # Quota-based scheduling

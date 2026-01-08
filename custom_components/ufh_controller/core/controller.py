@@ -245,7 +245,7 @@ class HeatingController:
         PID is paused when:
         - Controller mode is not 'auto' (other modes don't use PID control)
         - Zone is disabled
-        - Window is open (above threshold)
+        - Window is currently open or was open too long
 
         Args:
             runtime: Zone runtime data.
@@ -262,17 +262,21 @@ class HeatingController:
         if not runtime.state.enabled:
             return True
 
-        # Window open blocks heating - don't accumulate integral
-        threshold = self.config.timing.window_block_threshold
-        return runtime.state.window_open_avg > threshold
+        # Window currently open blocks heating - don't accumulate integral
+        if runtime.state.window_currently_open:
+            return True
 
-    def update_zone_historical(
+        # Window was open too long during observation period
+        return runtime.state.window_open_seconds > self.config.timing.window_block_time
+
+    def update_zone_historical(  # noqa: PLR0913
         self,
         zone_id: str,
         *,
         period_state_avg: float,
         open_state_avg: float,
         window_open_avg: float,
+        window_currently_open: bool,
         elapsed_time: float,
     ) -> None:
         """
@@ -282,7 +286,8 @@ class HeatingController:
             zone_id: Zone identifier.
             period_state_avg: Average valve state since observation start.
             open_state_avg: Average valve state for open detection.
-            window_open_avg: Average window open state.
+            window_open_avg: Average window open state (ratio 0-1).
+            window_currently_open: Whether any window is currently open.
             elapsed_time: Actual elapsed time since observation start in seconds.
 
         """
@@ -292,7 +297,9 @@ class HeatingController:
 
         runtime.state.period_state_avg = period_state_avg
         runtime.state.open_state_avg = open_state_avg
-        runtime.state.window_open_avg = window_open_avg
+        runtime.state.window_currently_open = window_currently_open
+        # Convert window open average (ratio) to seconds
+        runtime.state.window_open_seconds = window_open_avg * elapsed_time
 
         # Calculate used and requested durations
         period = self.config.timing.observation_period

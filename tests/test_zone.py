@@ -151,35 +151,63 @@ class TestEvaluateZoneWindowBlocking:
 
     @pytest.fixture
     def timing(self) -> TimingParams:
-        """Create timing params with 5% threshold."""
-        return TimingParams(window_block_threshold=0.05)
+        """Create timing params with 600 second (10 min) window block time."""
+        return TimingParams(window_block_time=600)
 
     @pytest.fixture
     def controller(self) -> ControllerState:
         """Create default controller state."""
         return ControllerState()
 
-    def test_window_blocked_valve_off(
+    def test_window_currently_open_blocks_valve_off(
         self, timing: TimingParams, controller: ControllerState
     ) -> None:
-        """Window open stays off."""
+        """Window currently open stays off."""
         zone = ZoneState(
             zone_id="test",
             valve_on=False,
-            window_open_avg=0.10,  # Above 5% threshold
+            window_currently_open=True,
             requested_duration=1000.0,
         )
         result = evaluate_zone(zone, controller, timing)
         assert result == ZoneAction.STAY_OFF
 
-    def test_window_blocked_valve_on(
+    def test_window_currently_open_turns_off_valve(
         self, timing: TimingParams, controller: ControllerState
     ) -> None:
-        """Window open turns off valve."""
+        """Window currently open turns off valve."""
         zone = ZoneState(
             zone_id="test",
             valve_on=True,
-            window_open_avg=0.10,  # Above 5% threshold
+            window_currently_open=True,
+            requested_duration=1000.0,
+        )
+        result = evaluate_zone(zone, controller, timing)
+        assert result == ZoneAction.TURN_OFF
+
+    def test_window_open_duration_exceeded_valve_off(
+        self, timing: TimingParams, controller: ControllerState
+    ) -> None:
+        """Window open duration exceeded threshold stays off."""
+        zone = ZoneState(
+            zone_id="test",
+            valve_on=False,
+            window_currently_open=False,
+            window_open_seconds=700.0,  # Above 600 second threshold
+            requested_duration=1000.0,
+        )
+        result = evaluate_zone(zone, controller, timing)
+        assert result == ZoneAction.STAY_OFF
+
+    def test_window_open_duration_exceeded_turns_off(
+        self, timing: TimingParams, controller: ControllerState
+    ) -> None:
+        """Window open duration exceeded threshold turns off valve."""
+        zone = ZoneState(
+            zone_id="test",
+            valve_on=True,
+            window_currently_open=False,
+            window_open_seconds=700.0,  # Above 600 second threshold
             requested_duration=1000.0,
         )
         result = evaluate_zone(zone, controller, timing)
@@ -188,11 +216,12 @@ class TestEvaluateZoneWindowBlocking:
     def test_window_below_threshold(
         self, timing: TimingParams, controller: ControllerState
     ) -> None:
-        """Window average below threshold doesn't block."""
+        """Window open time below threshold doesn't block."""
         zone = ZoneState(
             zone_id="test",
             valve_on=False,
-            window_open_avg=0.03,  # Below 5% threshold
+            window_currently_open=False,
+            window_open_seconds=300.0,  # Below 600 second threshold
             requested_duration=1000.0,
             used_duration=0.0,
         )
@@ -500,11 +529,10 @@ class TestTimingParams:
         """Test default values match specification."""
         timing = TimingParams()
         assert timing.observation_period == 7200
-        assert timing.duty_cycle_window == 3600
         assert timing.min_run_time == 540
         assert timing.valve_open_time == 210
         assert timing.closing_warning_duration == 240
-        assert timing.window_block_threshold == 0.05
+        assert timing.window_block_time == 600
 
     def test_custom_values(self) -> None:
         """Test custom timing values."""
