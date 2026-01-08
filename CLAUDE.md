@@ -42,11 +42,6 @@ uv run ruff check . --fix
 uv run ty check
 ```
 
-Alternatively, use the provided script for formatting and linting:
-```bash
-./scripts/lint
-```
-
 **All checks must pass before committing.** CI will reject PRs that fail any of these.
 
 ## Project Structure
