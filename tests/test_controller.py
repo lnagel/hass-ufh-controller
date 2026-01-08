@@ -235,6 +235,7 @@ class TestUpdateZoneHistorical:
             period_state_avg=0.25,
             open_state_avg=0.9,
             window_open_avg=0.0,
+            elapsed_time=7200.0,  # Full observation period
         )
 
         state = controller.get_zone_state("living_room")
@@ -256,6 +257,7 @@ class TestUpdateZoneHistorical:
             period_state_avg=0.25,
             open_state_avg=0.9,
             window_open_avg=0.0,
+            elapsed_time=7200.0,
         )
 
     def test_used_duration_with_elapsed_time(
@@ -341,6 +343,7 @@ class TestEvaluateZonesAutoMode:
             period_state_avg=0.0,  # No usage yet
             open_state_avg=0.0,
             window_open_avg=0.0,
+            elapsed_time=7200.0,  # Full observation period
         )
 
         actions = controller.evaluate_zones()
@@ -525,6 +528,7 @@ class TestCalculateHeatRequest:
             period_state_avg=0.0,
             open_state_avg=0.9,  # Above 0.85 threshold
             window_open_avg=0.0,
+            elapsed_time=7200.0,  # Full observation period
         )
         # Manually set valve on
         runtime = controller.get_zone_runtime("living_room")
