@@ -4,4 +4,4 @@ set -e
 
 cd "$(dirname "$0")/.."
 
-uv sync --extra dev
+uv sync --all-extras
