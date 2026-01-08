@@ -138,50 +138,100 @@ async def test_user_flow_generates_controller_id(
 
 
 # =============================================================================
-# OptionsFlow Tests (Timing Settings)
+# OptionsFlow Tests (Menu and Settings)
 # =============================================================================
 
 
-async def test_options_flow_show_form(
+async def test_options_flow_show_menu(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
 ) -> None:
-    """Test that the options flow shows the form with current timing."""
+    """Test that the options flow shows the menu."""
     mock_config_entry.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
 
     result = await hass.config_entries.options.async_init(mock_config_entry.entry_id)
 
-    assert result["type"] is FlowResultType.FORM
+    assert result["type"] is FlowResultType.MENU
     assert result["step_id"] == "init"
+    assert "control_entities" in result["menu_options"]
+    assert "timing" in result["menu_options"]
 
 
-async def test_options_flow_show_form_with_defaults(
+async def test_options_flow_control_entities_form(
     hass: HomeAssistant,
-    mock_setup_entry: None,
+    mock_config_entry: MockConfigEntry,
 ) -> None:
-    """Test options flow uses defaults when no controller subentry exists."""
-    # Create entry without controller subentry
-    entry = MockConfigEntry(
-        domain=DOMAIN,
-        data={"name": "Test", "controller_id": "test"},
-        options={},
+    """Test navigating to control entities form from menu."""
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    result = await hass.config_entries.options.async_init(mock_config_entry.entry_id)
+
+    # Select control_entities from menu
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={"next_step_id": "control_entities"},
     )
-    entry.add_to_hass(hass)
-
-    # Mock setup to skip actual setup
-    with patch(
-        "custom_components.ufh_controller.async_setup_entry",
-        return_value=True,
-    ):
-        await hass.config_entries.async_setup(entry.entry_id)
-        await hass.async_block_till_done()
-
-    result = await hass.config_entries.options.async_init(entry.entry_id)
 
     assert result["type"] is FlowResultType.FORM
-    assert result["step_id"] == "init"
+    assert result["step_id"] == "control_entities"
+
+
+async def test_options_flow_update_control_entities(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Test updating control entities via options flow."""
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    result = await hass.config_entries.options.async_init(mock_config_entry.entry_id)
+
+    # Navigate to control_entities
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={"next_step_id": "control_entities"},
+    )
+
+    # Update control entities
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={
+            "heat_request_entity": "switch.heat_request",
+            "summer_mode_entity": "select.boiler_mode",
+        },
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+
+    # Verify the config entry data was updated
+    assert mock_config_entry.data["heat_request_entity"] == "switch.heat_request"
+    assert mock_config_entry.data["summer_mode_entity"] == "select.boiler_mode"
+
+
+async def test_options_flow_timing_form(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Test navigating to timing form from menu."""
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    result = await hass.config_entries.options.async_init(mock_config_entry.entry_id)
+
+    # Select timing from menu
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={"next_step_id": "timing"},
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "timing"
 
 
 async def test_options_flow_update_timing(
@@ -195,6 +245,13 @@ async def test_options_flow_update_timing(
 
     result = await hass.config_entries.options.async_init(mock_config_entry.entry_id)
 
+    # Navigate to timing
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={"next_step_id": "timing"},
+    )
+
+    # Update timing
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
         user_input={
@@ -204,6 +261,7 @@ async def test_options_flow_update_timing(
             "valve_open_time": 120,
             "closing_warning_duration": 180,
             "window_block_threshold": 0.1,
+            "controller_loop_interval": 30,
         },
     )
 
@@ -230,6 +288,7 @@ async def test_options_flow_reads_controller_subentry(
         "valve_open_time": 300,
         "closing_warning_duration": 300,
         "window_block_threshold": 0.15,
+        "controller_loop_interval": 60,
     }
 
     entry = MockConfigEntry(
@@ -256,9 +315,18 @@ async def test_options_flow_reads_controller_subentry(
 
     result = await hass.config_entries.options.async_init(entry.entry_id)
 
+    # Should show menu first
+    assert result["type"] is FlowResultType.MENU
+
+    # Navigate to timing
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={"next_step_id": "timing"},
+    )
+
     assert result["type"] is FlowResultType.FORM
-    # The form should be shown with the custom timing values
-    # (they're used as defaults in the schema)
+    assert result["step_id"] == "timing"
+    # The form should be shown with the custom timing values as defaults
 
 
 # =============================================================================

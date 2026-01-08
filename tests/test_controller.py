@@ -280,7 +280,7 @@ class TestUpdateZoneHistorical:
             period_state_avg=0.5,  # On 50% of elapsed time
             open_state_avg=0.9,
             window_open_avg=0.0,
-            elapsed_time=1800.0,  # 30 minutes elapsed
+            elapsed_time=1800.0,
         )
 
         state = controller.get_zone_state("living_room")

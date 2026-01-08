@@ -351,9 +351,84 @@ class UFHControllerFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
-    """Handle options flow for UFH Controller (timing settings)."""
+    """Handle options flow for UFH Controller."""
 
     async def async_step_init(
+        self,
+        user_input: dict[str, Any] | None = None,  # noqa: ARG002
+    ) -> config_entries.ConfigFlowResult:
+        """Show menu with configuration options."""
+        return self.async_show_menu(
+            step_id="init",
+            menu_options=["control_entities", "timing"],
+        )
+
+    async def async_step_control_entities(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> config_entries.ConfigFlowResult:
+        """Configure control entities (heat request, summer mode, etc.)."""
+        if user_input is not None:
+            # Update the config entry data with new control entities
+            new_data = {
+                **self.config_entry.data,
+                CONF_HEAT_REQUEST_ENTITY: user_input.get(CONF_HEAT_REQUEST_ENTITY),
+                CONF_DHW_ACTIVE_ENTITY: user_input.get(CONF_DHW_ACTIVE_ENTITY),
+                CONF_CIRCULATION_ENTITY: user_input.get(CONF_CIRCULATION_ENTITY),
+                CONF_SUMMER_MODE_ENTITY: user_input.get(CONF_SUMMER_MODE_ENTITY),
+            }
+            self.hass.config_entries.async_update_entry(
+                self.config_entry,
+                data=new_data,
+            )
+            return self.async_create_entry(title="", data={})
+
+        # Get current values from config entry data
+        current_data = self.config_entry.data
+
+        return self.async_show_form(
+            step_id="control_entities",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(
+                        CONF_HEAT_REQUEST_ENTITY,
+                        description={
+                            "suggested_value": current_data.get(
+                                CONF_HEAT_REQUEST_ENTITY
+                            )
+                        },
+                    ): selector.EntitySelector(
+                        selector.EntitySelectorConfig(domain="switch")
+                    ),
+                    vol.Optional(
+                        CONF_DHW_ACTIVE_ENTITY,
+                        description={
+                            "suggested_value": current_data.get(CONF_DHW_ACTIVE_ENTITY)
+                        },
+                    ): selector.EntitySelector(
+                        selector.EntitySelectorConfig(domain="binary_sensor")
+                    ),
+                    vol.Optional(
+                        CONF_CIRCULATION_ENTITY,
+                        description={
+                            "suggested_value": current_data.get(CONF_CIRCULATION_ENTITY)
+                        },
+                    ): selector.EntitySelector(
+                        selector.EntitySelectorConfig(domain="binary_sensor")
+                    ),
+                    vol.Optional(
+                        CONF_SUMMER_MODE_ENTITY,
+                        description={
+                            "suggested_value": current_data.get(CONF_SUMMER_MODE_ENTITY)
+                        },
+                    ): selector.EntitySelector(
+                        selector.EntitySelectorConfig(domain="select")
+                    ),
+                }
+            ),
+        )
+
+    async def async_step_timing(
         self,
         user_input: dict[str, Any] | None = None,
     ) -> config_entries.ConfigFlowResult:
@@ -391,7 +466,7 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
             return self.async_create_entry(title="", data={})
 
         return self.async_show_form(
-            step_id="init",
+            step_id="timing",
             data_schema=get_timing_schema(timing),
         )
 

@@ -20,8 +20,23 @@
   "options": {
     "step": {
       "init": {
-        "title": "Timing Settings",
-        "description": "Configure timing parameters for the controller.",
+        "title": "Configure",
+        "menu_options": {
+          "control_entities": "Control Entities",
+          "timing": "Timing Parameters"
+        }
+      },
+      "control_entities": {
+        "title": "Control Entities",
+        "data": {
+          "heat_request_entity": "Heat request switch",
+          "dhw_active_entity": "DHW active sensor",
+          "circulation_entity": "Circulation pump sensor",
+          "summer_mode_entity": "Summer mode select"
+        }
+      },
+      "timing": {
+        "title": "Timing Parameters",
         "data": {
           "observation_period": "Observation period",
           "duty_cycle_window": "Duty cycle window",
