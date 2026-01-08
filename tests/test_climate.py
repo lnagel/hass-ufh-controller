@@ -16,7 +16,7 @@ from homeassistant.components.climate import (
 from homeassistant.components.climate import (
     DOMAIN as CLIMATE_DOMAIN,
 )
-from homeassistant.const import ATTR_ENTITY_ID, ATTR_TEMPERATURE
+from homeassistant.const import ATTR_ENTITY_ID, ATTR_TEMPERATURE, STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -42,9 +42,29 @@ async def test_climate_entity_created(
     assert state is not None
 
 
+async def test_climate_unavailable_without_temperature(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    climate_entity_id: str,
+) -> None:
+    """
+    Test climate entity is unavailable when no temperature reading.
+
+    This prevents 'unknown' states from being recorded to history.
+    """
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get(climate_entity_id)
+    assert state is not None
+    assert state.state == STATE_UNAVAILABLE
+
+
 async def test_climate_default_state(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
+    mock_temp_sensor: None,
     climate_entity_id: str,
 ) -> None:
     """Test climate entity has correct default state."""
@@ -60,6 +80,7 @@ async def test_climate_default_state(
 async def test_climate_hvac_modes(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
+    mock_temp_sensor: None,
     climate_entity_id: str,
 ) -> None:
     """Test climate entity reports correct HVAC modes."""
@@ -78,6 +99,7 @@ async def test_climate_hvac_modes(
 async def test_climate_set_hvac_mode_off(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
+    mock_temp_sensor: None,
     climate_entity_id: str,
 ) -> None:
     """Test setting HVAC mode to OFF."""
@@ -101,6 +123,7 @@ async def test_climate_set_hvac_mode_off(
 async def test_climate_set_hvac_mode_heat(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
+    mock_temp_sensor: None,
     climate_entity_id: str,
 ) -> None:
     """Test setting HVAC mode back to HEAT."""
@@ -132,6 +155,7 @@ async def test_climate_set_hvac_mode_heat(
 async def test_climate_set_temperature(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
+    mock_temp_sensor: None,
     climate_entity_id: str,
 ) -> None:
     """Test setting target temperature."""
@@ -154,6 +178,7 @@ async def test_climate_set_temperature(
 async def test_climate_temperature_limits(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
+    mock_temp_sensor: None,
     climate_entity_id: str,
 ) -> None:
     """Test temperature limits are respected."""
@@ -171,6 +196,7 @@ async def test_climate_temperature_limits(
 async def test_climate_preset_modes(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
+    mock_temp_sensor: None,
     climate_entity_id: str,
 ) -> None:
     """Test preset modes are available."""
@@ -192,6 +218,7 @@ async def test_climate_preset_modes(
 async def test_climate_set_preset_comfort(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
+    mock_temp_sensor: None,
     climate_entity_id: str,
 ) -> None:
     """Test setting comfort preset."""
@@ -215,6 +242,7 @@ async def test_climate_set_preset_comfort(
 async def test_climate_set_preset_eco(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
+    mock_temp_sensor: None,
     climate_entity_id: str,
 ) -> None:
     """Test setting eco preset."""
@@ -238,6 +266,7 @@ async def test_climate_set_preset_eco(
 async def test_climate_extra_attributes(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
+    mock_temp_sensor: None,
     climate_entity_id: str,
 ) -> None:
     """Test extra state attributes are present."""
@@ -263,13 +292,16 @@ async def test_climate_hvac_action_idle(
     climate_entity_id: str,
 ) -> None:
     """Test HVAC action is IDLE when enabled but valve off."""
+    # Set temperature above default setpoint so no heating is requested
+    hass.states.async_set("sensor.zone1_temp", "25.0")
+
     mock_config_entry.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
 
     state = hass.states.get(climate_entity_id)
     assert state is not None
-    # Default state: enabled (HEAT mode) but valve_on=False
+    # Temperature above setpoint: enabled (HEAT mode) but valve_on=False
     assert state.state == HVACMode.HEAT
     assert state.attributes.get(ATTR_HVAC_ACTION) == HVACAction.IDLE
 
@@ -291,6 +323,7 @@ async def test_climate_no_zones(
 async def test_climate_restore_setpoint_from_store(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
+    mock_temp_sensor: None,
     climate_entity_id: str,
 ) -> None:
     """Test climate entity restores setpoint from Store API (not RestoreEntity)."""
@@ -324,6 +357,7 @@ async def test_climate_restore_setpoint_from_store(
 async def test_climate_restore_hvac_mode_off_from_store(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
+    mock_temp_sensor: None,
     climate_entity_id: str,
 ) -> None:
     """Test climate entity restores HVAC mode OFF from Store API."""
@@ -356,6 +390,7 @@ async def test_climate_restore_hvac_mode_off_from_store(
 async def test_climate_restore_preset_mode_from_store(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
+    mock_temp_sensor: None,
     climate_entity_id: str,
 ) -> None:
     """Test climate entity restores preset mode from Store API."""
@@ -390,6 +425,7 @@ async def test_climate_restore_preset_mode_from_store(
 async def test_climate_preset_cleared_when_none_stored(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
+    mock_temp_sensor: None,
     climate_entity_id: str,
 ) -> None:
     """Test preset mode is None when no preset stored (manual temperature)."""

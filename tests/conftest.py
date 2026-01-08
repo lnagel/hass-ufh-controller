@@ -125,6 +125,17 @@ def mock_setup_entry() -> Generator[None]:
         yield
 
 
+@pytest.fixture
+async def mock_temp_sensor(hass: HomeAssistant) -> None:
+    """
+    Set up mock temperature sensor state.
+
+    Use this fixture in tests that need the climate entity to be available.
+    Without a temperature reading, climate entities are marked unavailable.
+    """
+    hass.states.async_set("sensor.zone1_temp", "20.5")
+
+
 @pytest.fixture(autouse=True)
 def mock_recorder(hass: HomeAssistant) -> Generator[MagicMock]:
     """
