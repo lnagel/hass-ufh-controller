@@ -266,11 +266,10 @@ class HeatingController:
         threshold = self.config.timing.window_block_threshold
         return runtime.state.window_open_avg > threshold
 
-    def update_zone_historical(  # noqa: PLR0913
+    def update_zone_historical(
         self,
         zone_id: str,
         *,
-        duty_cycle_avg: float,
         period_state_avg: float,
         open_state_avg: float,
         window_open_avg: float,
@@ -281,7 +280,6 @@ class HeatingController:
 
         Args:
             zone_id: Zone identifier.
-            duty_cycle_avg: Average duty cycle over window.
             period_state_avg: Average valve state since observation start.
             open_state_avg: Average valve state for open detection.
             window_open_avg: Average window open state.
@@ -292,7 +290,6 @@ class HeatingController:
         if runtime is None:
             return
 
-        runtime.state.duty_cycle_avg = duty_cycle_avg
         runtime.state.period_state_avg = period_state_avg
         runtime.state.open_state_avg = open_state_avg
         runtime.state.window_open_avg = window_open_avg

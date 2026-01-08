@@ -77,7 +77,6 @@ class ZoneState:
     valve_on_since: datetime | None = None
 
     # Historical averages from Recorder queries
-    duty_cycle_avg: float = 0.0
     period_state_avg: float = 0.0
     open_state_avg: float = 0.0
     window_open_avg: float = 0.0

@@ -197,7 +197,6 @@ class ZoneState:
     valve_on_since: datetime | None
 
     # Calculated values (from Recorder queries)
-    duty_cycle_avg: float      # Average over duty_cycle_window
     period_state_avg: float    # Average since observation_start
     open_state_avg: float      # Average over valve_open_time
     window_open_avg: float     # Average over duty_cycle_window
@@ -701,10 +700,11 @@ For each zone, the coordinator queries:
 
 | Query | Entity | Window | Purpose |
 |-------|--------|--------|---------|
-| Duty cycle average | `sensor.{}_duty_cycle` | duty_cycle_window | Calculate requested_duration |
 | Valve state average | `switch.{}` (valve) | observation_start → now | Calculate used_duration |
 | Valve open average | `switch.{}` (valve) | now - 3.5min → now | Detect valve fully open |
 | Window open average | `binary_sensor.{}` (windows) | duty_cycle_window | Window blocking decision |
+
+Note: `requested_duration` is calculated from the current instantaneous PID duty cycle output, not a historical average.
 
 ### 8.3 Performance Considerations
 

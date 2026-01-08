@@ -470,7 +470,6 @@ class TestUpdateZoneHistorical:
 
         controller.update_zone_historical(
             "living_room",
-            duty_cycle_avg=50.0,
             period_state_avg=0.25,
             open_state_avg=0.9,
             window_open_avg=0.0,
@@ -479,7 +478,6 @@ class TestUpdateZoneHistorical:
 
         state = controller.get_zone_state("living_room")
         assert state is not None
-        assert state.duty_cycle_avg == 50.0
         assert state.period_state_avg == 0.25
         assert state.open_state_avg == 0.9
         assert state.window_open_avg == 0.0
@@ -492,7 +490,6 @@ class TestUpdateZoneHistorical:
         # Should not raise
         controller.update_zone_historical(
             "unknown",
-            duty_cycle_avg=50.0,
             period_state_avg=0.25,
             open_state_avg=0.9,
             window_open_avg=0.0,
@@ -517,7 +514,6 @@ class TestUpdateZoneHistorical:
         # Valve was on 50% of the elapsed time (15 minutes = 900 seconds)
         controller.update_zone_historical(
             "living_room",
-            duty_cycle_avg=90.0,
             period_state_avg=0.5,  # On 50% of elapsed time
             open_state_avg=0.9,
             window_open_avg=0.0,
@@ -552,7 +548,6 @@ class TestUpdateZoneHistorical:
         # Fix: used_duration = 0.8 * 1800 = 1440 (still has plenty of quota)
         controller.update_zone_historical(
             "living_room",
-            duty_cycle_avg=90.0,
             period_state_avg=0.8,
             open_state_avg=0.0,
             window_open_avg=0.0,
@@ -578,7 +573,6 @@ class TestEvaluateZonesAutoMode:
         controller.update_zone_pid("living_room", 20.0, 60.0)
         controller.update_zone_historical(
             "living_room",
-            duty_cycle_avg=50.0,
             period_state_avg=0.0,  # No usage yet
             open_state_avg=0.0,
             window_open_avg=0.0,
@@ -763,7 +757,6 @@ class TestCalculateHeatRequest:
         controller.update_zone_pid("living_room", 20.0, 60.0)
         controller.update_zone_historical(
             "living_room",
-            duty_cycle_avg=50.0,
             period_state_avg=0.0,
             open_state_avg=0.9,  # Above 0.85 threshold
             window_open_avg=0.0,
