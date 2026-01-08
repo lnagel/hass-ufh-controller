@@ -62,6 +62,16 @@ class SetpointDefaults(TypedDict):
     default: float
 
 
+class PresetDefaults(TypedDict):
+    """Type for DEFAULT_PRESETS dictionary."""
+
+    home: float
+    away: float
+    eco: float
+    comfort: float
+    boost: float
+
+
 # Default timing parameters (in seconds unless otherwise noted)
 DEFAULT_TIMING: TimingDefaults = {
     "observation_period": 7200,  # 2 hours
@@ -90,6 +100,15 @@ DEFAULT_SETPOINT: SetpointDefaults = {
     "default": 21.0,
 }
 
+# Default preset temperatures (in °C)
+DEFAULT_PRESETS: PresetDefaults = {
+    "home": 21.0,
+    "away": 16.0,
+    "eco": 19.0,
+    "comfort": 22.0,
+    "boost": 25.0,
+}
+
 # Cycle mode configuration
 DEFAULT_CYCLE_MODE_HOURS = 8
 
@@ -112,3 +131,6 @@ UI_TIMING_CONTROLLER_LOOP_INTERVAL = {"min": 10, "max": 300, "step": 5}
 UI_SETPOINT_MIN = {"min": 5.0, "max": 30.0, "step": 0.1}
 UI_SETPOINT_MAX = {"min": 5.0, "max": 35.0, "step": 0.1}
 UI_SETPOINT_DEFAULT = {"min": 5.0, "max": 35.0, "step": 0.1}
+
+# UI validation constraints for preset temperatures
+UI_PRESET_TEMPERATURE = {"min": 5.0, "max": 35.0, "step": 0.5}

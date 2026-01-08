@@ -36,10 +36,11 @@ MOCK_ZONE_DATA: dict[str, Any] = {
     "pid": DEFAULT_PID,
     "window_sensors": [],
     "presets": {
-        "comfort": {"setpoint": 22.0},
-        "eco": {"setpoint": 19.0},
-        "away": {"setpoint": 16.0},
-        "boost": {"setpoint": 25.0, "pid_enabled": False},
+        "home": 21.0,
+        "away": 16.0,
+        "eco": 19.0,
+        "comfort": 22.0,
+        "boost": 25.0,
     },
 }
 

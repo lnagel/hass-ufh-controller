@@ -168,10 +168,11 @@ ConfigEntry.subentries = {
                 "integral_max": 100.0
             },
             "presets": {
-                "comfort": {"setpoint": 22.0},
-                "eco": {"setpoint": 19.0},
-                "away": {"setpoint": 16.0},
-                "boost": {"setpoint": 25.0, "pid_enabled": false}
+                "home": 21.0,
+                "away": 16.0,
+                "eco": 19.0,
+                "comfort": 22.0,
+                "boost": 25.0
             }
         }
     ),
@@ -826,9 +827,11 @@ def mock_config_entry() -> MockConfigEntry:
                             "integral_min": 0, "integral_max": 100},
                     "window_sensors": [],
                     "presets": {
-                        "comfort": {"setpoint": 22.0},
-                        "eco": {"setpoint": 19.0},
-                        "boost": {"setpoint": 25.0, "pid_enabled": False},
+                        "home": 21.0,
+                        "away": 16.0,
+                        "eco": 19.0,
+                        "comfort": 22.0,
+                        "boost": 25.0,
                     },
                 },
             },

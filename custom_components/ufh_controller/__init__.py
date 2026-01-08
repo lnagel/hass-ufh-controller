@@ -8,13 +8,19 @@ https://github.com/lnagel/hass-ufh-controller
 from __future__ import annotations
 
 from types import MappingProxyType
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.config_entries import ConfigSubentry
 from homeassistant.const import Platform
 from homeassistant.exceptions import HomeAssistantError
 
-from .const import DEFAULT_TIMING, DOMAIN, LOGGER, SUBENTRY_TYPE_CONTROLLER
+from .const import (
+    DEFAULT_TIMING,
+    DOMAIN,
+    LOGGER,
+    SUBENTRY_TYPE_CONTROLLER,
+    SUBENTRY_TYPE_ZONE,
+)
 from .coordinator import UFHControllerDataUpdateCoordinator
 from .data import UFHControllerData
 
@@ -52,6 +58,20 @@ async def async_setup_entry(
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
+
+    # Listen for subentry updates and reload when zone subentries change
+    async def _async_handle_subentry_update(event: Any) -> None:
+        """Handle subentry update event."""
+        if event.data.get("entry_id") != entry.entry_id:
+            return
+        subentry_type = event.data.get("subentry_type")
+        if subentry_type == SUBENTRY_TYPE_ZONE:
+            LOGGER.debug("Zone subentry updated, scheduling reload")
+            await hass.config_entries.async_reload(entry.entry_id)
+
+    entry.async_on_unload(
+        hass.bus.async_listen("config_subentry_updated", _async_handle_subentry_update)
+    )
 
     return True
 

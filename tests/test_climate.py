@@ -182,9 +182,10 @@ async def test_climate_preset_modes(
     assert state is not None
     preset_modes = state.attributes.get("preset_modes")
     assert preset_modes is not None
-    assert "comfort" in preset_modes
-    assert "eco" in preset_modes
+    assert "home" in preset_modes
     assert "away" in preset_modes
+    assert "eco" in preset_modes
+    assert "comfort" in preset_modes
     assert "boost" in preset_modes
 
 

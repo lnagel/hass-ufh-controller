@@ -17,12 +17,14 @@ from slugify import slugify
 
 from .const import (
     DEFAULT_PID,
+    DEFAULT_PRESETS,
     DEFAULT_SETPOINT,
     DEFAULT_TIMING,
     DOMAIN,
     LOGGER,
     SUBENTRY_TYPE_CONTROLLER,
     SUBENTRY_TYPE_ZONE,
+    UI_PRESET_TEMPERATURE,
     UI_SETPOINT_DEFAULT,
     UI_SETPOINT_MAX,
     UI_SETPOINT_MIN,
@@ -242,6 +244,210 @@ def get_zone_schema(
     )
 
 
+def get_zone_entities_schema(
+    defaults: dict[str, Any] | None = None,
+) -> vol.Schema:
+    """Get the schema for zone entities configuration."""
+    defaults = defaults or {}
+
+    return vol.Schema(
+        {
+            vol.Required(
+                "name", default=defaults.get("name", "")
+            ): selector.TextSelector(),
+            vol.Required(
+                "temp_sensor", default=defaults.get("temp_sensor", "")
+            ): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
+            vol.Required(
+                "valve_switch", default=defaults.get("valve_switch", "")
+            ): selector.EntitySelector(selector.EntitySelectorConfig(domain="switch")),
+            vol.Optional(
+                "circuit_type", default=defaults.get("circuit_type", "regular")
+            ): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=[
+                        selector.SelectOptionDict(value="regular", label="Regular"),
+                        selector.SelectOptionDict(value="flush", label="Flush"),
+                    ]
+                )
+            ),
+            vol.Optional(
+                "window_sensors", default=defaults.get("window_sensors", [])
+            ): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="binary_sensor", multiple=True)
+            ),
+        }
+    )
+
+
+def get_zone_temperature_schema(
+    defaults: dict[str, Any] | None = None,
+) -> vol.Schema:
+    """Get the schema for zone temperature control configuration."""
+    defaults = defaults or {}
+    setpoint = defaults.get("setpoint", DEFAULT_SETPOINT)
+    pid = defaults.get("pid", DEFAULT_PID)
+
+    return vol.Schema(
+        {
+            vol.Optional(
+                "setpoint_min",
+                default=setpoint.get("min", DEFAULT_SETPOINT["min"]),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=UI_SETPOINT_MIN["min"],
+                    max=UI_SETPOINT_MIN["max"],
+                    step=UI_SETPOINT_MIN["step"],
+                    unit_of_measurement="°C",
+                    mode=selector.NumberSelectorMode.SLIDER,
+                )
+            ),
+            vol.Optional(
+                "setpoint_max",
+                default=setpoint.get("max", DEFAULT_SETPOINT["max"]),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=UI_SETPOINT_MAX["min"],
+                    max=UI_SETPOINT_MAX["max"],
+                    step=UI_SETPOINT_MAX["step"],
+                    unit_of_measurement="°C",
+                    mode=selector.NumberSelectorMode.SLIDER,
+                )
+            ),
+            vol.Optional(
+                "setpoint_default",
+                default=setpoint.get("default", DEFAULT_SETPOINT["default"]),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=UI_SETPOINT_DEFAULT["min"],
+                    max=UI_SETPOINT_DEFAULT["max"],
+                    step=UI_SETPOINT_DEFAULT["step"],
+                    unit_of_measurement="°C",
+                    mode=selector.NumberSelectorMode.SLIDER,
+                )
+            ),
+            vol.Optional(
+                "kp", default=pid.get("kp", DEFAULT_PID["kp"])
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    mode=selector.NumberSelectorMode.BOX,
+                )
+            ),
+            vol.Optional(
+                "ki", default=pid.get("ki", DEFAULT_PID["ki"])
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=0,
+                    step="any",
+                    mode=selector.NumberSelectorMode.BOX,
+                )
+            ),
+            vol.Optional(
+                "kd", default=pid.get("kd", DEFAULT_PID["kd"])
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    mode=selector.NumberSelectorMode.BOX,
+                )
+            ),
+        }
+    )
+
+
+def get_zone_presets_schema(
+    defaults: dict[str, Any] | None = None,
+) -> vol.Schema:
+    """Get the schema for zone presets configuration."""
+    defaults = defaults or {}
+    presets = defaults.get("presets", DEFAULT_PRESETS)
+
+    return vol.Schema(
+        {
+            vol.Optional(
+                "preset_home",
+                description={
+                    "suggested_value": presets.get("home", DEFAULT_PRESETS["home"])
+                },
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=UI_PRESET_TEMPERATURE["min"],
+                    max=UI_PRESET_TEMPERATURE["max"],
+                    step=UI_PRESET_TEMPERATURE["step"],
+                    unit_of_measurement="°C",
+                    mode=selector.NumberSelectorMode.SLIDER,
+                )
+            ),
+            vol.Optional(
+                "preset_away",
+                description={
+                    "suggested_value": presets.get("away", DEFAULT_PRESETS["away"])
+                },
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=UI_PRESET_TEMPERATURE["min"],
+                    max=UI_PRESET_TEMPERATURE["max"],
+                    step=UI_PRESET_TEMPERATURE["step"],
+                    unit_of_measurement="°C",
+                    mode=selector.NumberSelectorMode.SLIDER,
+                )
+            ),
+            vol.Optional(
+                "preset_eco",
+                description={
+                    "suggested_value": presets.get("eco", DEFAULT_PRESETS["eco"])
+                },
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=UI_PRESET_TEMPERATURE["min"],
+                    max=UI_PRESET_TEMPERATURE["max"],
+                    step=UI_PRESET_TEMPERATURE["step"],
+                    unit_of_measurement="°C",
+                    mode=selector.NumberSelectorMode.SLIDER,
+                )
+            ),
+            vol.Optional(
+                "preset_comfort",
+                description={
+                    "suggested_value": presets.get(
+                        "comfort", DEFAULT_PRESETS["comfort"]
+                    )
+                },
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=UI_PRESET_TEMPERATURE["min"],
+                    max=UI_PRESET_TEMPERATURE["max"],
+                    step=UI_PRESET_TEMPERATURE["step"],
+                    unit_of_measurement="°C",
+                    mode=selector.NumberSelectorMode.SLIDER,
+                )
+            ),
+            vol.Optional(
+                "preset_boost",
+                description={
+                    "suggested_value": presets.get("boost", DEFAULT_PRESETS["boost"])
+                },
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=UI_PRESET_TEMPERATURE["min"],
+                    max=UI_PRESET_TEMPERATURE["max"],
+                    step=UI_PRESET_TEMPERATURE["step"],
+                    unit_of_measurement="°C",
+                    mode=selector.NumberSelectorMode.SLIDER,
+                )
+            ),
+        }
+    )
+
+
+def build_presets_from_input(user_input: dict[str, Any]) -> dict[str, float]:
+    """Build presets dict from user input, filtering out empty values."""
+    presets: dict[str, float] = {}
+    for preset_name in ("home", "away", "eco", "comfort", "boost"):
+        key = f"preset_{preset_name}"
+        if key in user_input and user_input[key] is not None:
+            presets[preset_name] = user_input[key]
+    return presets
+
+
 def build_zone_data(user_input: dict[str, Any]) -> dict[str, Any]:
     """Build zone data from user input."""
     zone_id = user_input.get("zone_id") or slugify(user_input["name"])
@@ -265,7 +471,7 @@ def build_zone_data(user_input: dict[str, Any]) -> dict[str, Any]:
             "integral_min": DEFAULT_PID["integral_min"],
             "integral_max": DEFAULT_PID["integral_max"],
         },
-        "presets": {},
+        "presets": dict(DEFAULT_PRESETS),
     }
 
 
@@ -506,25 +712,112 @@ class ZoneSubentryFlowHandler(ConfigSubentryFlow):
         )
 
     async def async_step_reconfigure(
+        self,
+        user_input: dict[str, Any] | None = None,  # noqa: ARG002
+    ) -> SubentryFlowResult:
+        """Show menu with configuration options for existing zone."""
+        return self.async_show_menu(
+            step_id="reconfigure",
+            menu_options={
+                "zone_entities": "Zone Entities",
+                "temperature_control": "Temperature Control",
+                "presets": "Presets",
+            },
+        )
+
+    async def async_step_zone_entities(
         self, user_input: dict[str, Any] | None = None
     ) -> SubentryFlowResult:
-        """Handle reconfiguring an existing zone."""
+        """Configure zone entities (sensors, switches, circuit type)."""
         subentry = self._get_reconfigure_subentry()
+        current_data = dict(subentry.data)
 
         if user_input is not None:
-            zone_data = build_zone_data(user_input)
-            # Preserve the original zone_id
-            zone_data["id"] = subentry.data["id"]
-            LOGGER.debug("Updating zone subentry: %s", zone_data["id"])
+            # Update only the entities-related fields
+            new_data = {
+                **current_data,
+                "name": user_input["name"],
+                "temp_sensor": user_input["temp_sensor"],
+                "valve_switch": user_input["valve_switch"],
+                "circuit_type": user_input.get("circuit_type", "regular"),
+                "window_sensors": user_input.get("window_sensors", []),
+            }
+            LOGGER.debug("Updating zone entities: %s", new_data["id"])
             return self.async_update_and_abort(
                 self._get_entry(),
                 subentry,
                 title=user_input["name"],
-                data=zone_data,
+                data=new_data,
             )
 
-        # Prefill with existing values
         return self.async_show_form(
-            step_id="reconfigure",
-            data_schema=get_zone_schema(defaults=dict(subentry.data)),
+            step_id="zone_entities",
+            data_schema=get_zone_entities_schema(defaults=current_data),
+        )
+
+    async def async_step_temperature_control(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Configure temperature control (setpoint bounds, PID)."""
+        subentry = self._get_reconfigure_subentry()
+        current_data = dict(subentry.data)
+
+        if user_input is not None:
+            # Update only the temperature-related fields
+            new_data = {
+                **current_data,
+                "setpoint": {
+                    "min": user_input.get("setpoint_min", DEFAULT_SETPOINT["min"]),
+                    "max": user_input.get("setpoint_max", DEFAULT_SETPOINT["max"]),
+                    "step": current_data.get("setpoint", {}).get(
+                        "step", DEFAULT_SETPOINT["step"]
+                    ),
+                    "default": user_input.get(
+                        "setpoint_default", DEFAULT_SETPOINT["default"]
+                    ),
+                },
+                "pid": {
+                    "kp": user_input.get("kp", DEFAULT_PID["kp"]),
+                    "ki": user_input.get("ki", DEFAULT_PID["ki"]),
+                    "kd": user_input.get("kd", DEFAULT_PID["kd"]),
+                    "integral_min": DEFAULT_PID["integral_min"],
+                    "integral_max": DEFAULT_PID["integral_max"],
+                },
+            }
+            LOGGER.debug("Updating zone temperature control: %s", new_data["id"])
+            return self.async_update_and_abort(
+                self._get_entry(),
+                subentry,
+                data=new_data,
+            )
+
+        return self.async_show_form(
+            step_id="temperature_control",
+            data_schema=get_zone_temperature_schema(defaults=current_data),
+        )
+
+    async def async_step_presets(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Configure zone presets."""
+        subentry = self._get_reconfigure_subentry()
+        current_data = dict(subentry.data)
+
+        if user_input is not None:
+            # Build presets from input, filtering out empty values
+            presets = build_presets_from_input(user_input)
+            new_data = {
+                **current_data,
+                "presets": presets,
+            }
+            LOGGER.debug("Updating zone presets: %s", new_data["id"])
+            return self.async_update_and_abort(
+                self._get_entry(),
+                subentry,
+                data=new_data,
+            )
+
+        return self.async_show_form(
+            step_id="presets",
+            data_schema=get_zone_presets_schema(defaults=current_data),
         )

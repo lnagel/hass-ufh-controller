@@ -102,19 +102,44 @@
         },
         "reconfigure": {
           "title": "Configure Zone",
-          "description": "Modify zone settings.",
+          "menu_options": {
+            "zone_entities": "Zone Entities",
+            "temperature_control": "Temperature Control",
+            "presets": "Presets"
+          }
+        },
+        "zone_entities": {
+          "title": "Zone Entities",
+          "description": "Configure zone hardware mappings.",
           "data": {
             "name": "Zone name",
             "temp_sensor": "Temperature sensor",
             "valve_switch": "Valve switch",
             "circuit_type": "Circuit type",
-            "window_sensors": "Window sensors",
+            "window_sensors": "Window sensors"
+          }
+        },
+        "temperature_control": {
+          "title": "Temperature Control",
+          "description": "Configure setpoint bounds and PID parameters.",
+          "data": {
             "setpoint_min": "Minimum setpoint",
             "setpoint_max": "Maximum setpoint",
             "setpoint_default": "Default setpoint",
             "kp": "PID proportional gain (Kp)",
             "ki": "PID integral gain (Ki)",
             "kd": "PID derivative gain (Kd)"
+          }
+        },
+        "presets": {
+          "title": "Presets",
+          "description": "Configure quick-access temperature presets.",
+          "data": {
+            "preset_home": "Home temperature",
+            "preset_away": "Away temperature",
+            "preset_eco": "Eco temperature",
+            "preset_comfort": "Comfort temperature",
+            "preset_boost": "Boost temperature"
           }
         }
       },

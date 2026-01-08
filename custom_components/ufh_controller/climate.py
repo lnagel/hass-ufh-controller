@@ -158,9 +158,9 @@ class UFHZoneClimate(UFHControllerZoneEntity, ClimateEntity):
         if preset_mode not in self._presets:
             return
 
-        preset = self._presets[preset_mode]
-        if "setpoint" in preset:
-            self.coordinator.set_zone_setpoint(self._zone_id, preset["setpoint"])
+        # Presets are stored as simple floats (temperature values)
+        setpoint = self._presets[preset_mode]
+        self.coordinator.set_zone_setpoint(self._zone_id, setpoint)
 
         self._attr_preset_mode = preset_mode
         self.async_write_ha_state()
