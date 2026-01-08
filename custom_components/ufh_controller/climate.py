@@ -96,7 +96,12 @@ class UFHZoneClimate(UFHControllerZoneEntity, ClimateEntity):
             self._presets = {}
 
         self._attr_supported_features = features
-        self._attr_preset_mode: str | None = None
+
+    @property
+    def preset_mode(self) -> str | None:
+        """Return the current preset mode from coordinator data."""
+        zone_data = self.coordinator.data.get("zones", {}).get(self._zone_id, {})
+        return zone_data.get("preset_mode")
 
     @property
     def hvac_mode(self) -> HVACMode:
@@ -136,7 +141,7 @@ class UFHZoneClimate(UFHControllerZoneEntity, ClimateEntity):
         if (temperature := kwargs.get("temperature")) is not None:
             self.coordinator.set_zone_setpoint(self._zone_id, temperature)
             # Clear preset when manually setting temperature
-            self._attr_preset_mode = None
+            self.coordinator.set_zone_preset_mode(self._zone_id, None)
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         """Set the HVAC mode."""
@@ -161,9 +166,7 @@ class UFHZoneClimate(UFHControllerZoneEntity, ClimateEntity):
         # Presets are stored as simple floats (temperature values)
         setpoint = self._presets[preset_mode]
         self.coordinator.set_zone_setpoint(self._zone_id, setpoint)
-
-        self._attr_preset_mode = preset_mode
-        self.async_write_ha_state()
+        self.coordinator.set_zone_preset_mode(self._zone_id, preset_mode)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:

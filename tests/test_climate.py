@@ -351,3 +351,71 @@ async def test_climate_restore_hvac_mode_off_from_store(
     state = hass.states.get(climate_entity_id)
     assert state is not None
     assert state.state == HVACMode.OFF
+
+
+async def test_climate_restore_preset_mode_from_store(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    climate_entity_id: str,
+) -> None:
+    """Test climate entity restores preset mode from Store API."""
+    stored_data = {
+        "version": 1,
+        "controller_mode": "auto",
+        "zones": {
+            "zone1": {
+                "integral": 0.0,
+                "last_error": 0.0,
+                "setpoint": 22.0,  # comfort preset temperature
+                "enabled": True,
+                "preset_mode": "comfort",
+            },
+        },
+    }
+
+    with patch(
+        "homeassistant.helpers.storage.Store.async_load",
+        return_value=stored_data,
+    ):
+        mock_config_entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    state = hass.states.get(climate_entity_id)
+    assert state is not None
+    assert state.attributes.get(ATTR_PRESET_MODE) == "comfort"
+    assert state.attributes.get(ATTR_TEMPERATURE) == 22.0
+
+
+async def test_climate_preset_cleared_when_none_stored(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    climate_entity_id: str,
+) -> None:
+    """Test preset mode is None when no preset stored (manual temperature)."""
+    stored_data = {
+        "version": 1,
+        "controller_mode": "auto",
+        "zones": {
+            "zone1": {
+                "integral": 0.0,
+                "last_error": 0.0,
+                "setpoint": 23.5,  # manual temperature, not a preset
+                "enabled": True,
+                # No preset_mode key - indicates manual temperature
+            },
+        },
+    }
+
+    with patch(
+        "homeassistant.helpers.storage.Store.async_load",
+        return_value=stored_data,
+    ):
+        mock_config_entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    state = hass.states.get(climate_entity_id)
+    assert state is not None
+    assert state.attributes.get(ATTR_PRESET_MODE) is None
+    assert state.attributes.get(ATTR_TEMPERATURE) == 23.5
