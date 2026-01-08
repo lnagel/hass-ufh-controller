@@ -7,7 +7,6 @@ from .controller import (
     ZoneRuntime,
 )
 from .history import (
-    get_duty_cycle_window,
     get_numeric_average,
     get_observation_start,
     get_state_average,
@@ -43,7 +42,6 @@ __all__ = [
     "aggregate_heat_request",
     "calculate_requested_duration",
     "evaluate_zone",
-    "get_duty_cycle_window",
     "get_numeric_average",
     "get_observation_start",
     "get_state_average",

@@ -35,11 +35,10 @@ class TimingDefaults(TypedDict):
     """Type for DEFAULT_TIMING dictionary."""
 
     observation_period: int
-    duty_cycle_window: int
     min_run_time: int
     valve_open_time: int
     closing_warning_duration: int
-    window_block_threshold: float
+    window_block_time: int
     controller_loop_interval: int
 
 
@@ -75,11 +74,10 @@ class PresetDefaults(TypedDict):
 # Default timing parameters (in seconds unless otherwise noted)
 DEFAULT_TIMING: TimingDefaults = {
     "observation_period": 7200,  # 2 hours
-    "duty_cycle_window": 3600,  # 1 hour
     "min_run_time": 540,  # 9 minutes
     "valve_open_time": 210,  # 3.5 minutes
     "closing_warning_duration": 240,  # 4 minutes
-    "window_block_threshold": 0.05,  # 5% (ratio, not percentage)
+    "window_block_time": 600,  # 10 minutes - block if window open this long
     "controller_loop_interval": 60,  # PID update interval
 }
 
@@ -115,16 +113,12 @@ DEFAULT_CYCLE_MODE_HOURS = 8
 # Zone operation thresholds
 DEFAULT_VALVE_OPEN_THRESHOLD = 0.85  # 85% threshold for considering valve fully open
 
-# Window centering for duty cycle calculation
-DEFAULT_WINDOW_CENTER_MINUTE = 30
-
 # UI validation constraints for timing parameters
 UI_TIMING_OBSERVATION_PERIOD = {"min": 1800, "max": 14400, "step": 600}
-UI_TIMING_DUTY_CYCLE_WINDOW = {"min": 600, "max": 7200, "step": 300}
 UI_TIMING_MIN_RUN_TIME = {"min": 60, "max": 1800, "step": 60}
 UI_TIMING_VALVE_OPEN_TIME = {"min": 60, "max": 600, "step": 30}
 UI_TIMING_CLOSING_WARNING = {"min": 60, "max": 600, "step": 30}
-UI_TIMING_WINDOW_BLOCK_THRESHOLD = {"min": 0, "max": 1, "step": 0.01}
+UI_TIMING_WINDOW_BLOCK_TIME = {"min": 0, "max": 3600, "step": 60}
 UI_TIMING_CONTROLLER_LOOP_INTERVAL = {"min": 10, "max": 300, "step": 5}
 
 # UI validation constraints for setpoint parameters

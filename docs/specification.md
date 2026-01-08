@@ -130,11 +130,10 @@ ConfigEntry.subentries = {
         data={
             "timing": {
                 "observation_period": 7200,    # seconds (2 hours)
-                "duty_cycle_window": 3600,     # seconds (1 hour)
                 "min_run_time": 540,           # seconds (9 minutes)
                 "valve_open_time": 210,        # seconds (3.5 minutes)
                 "closing_warning_duration": 240, # seconds (4 minutes)
-                "window_block_threshold": 0.05 # 5% average triggers block
+                "window_block_time": 600       # seconds - block if window open this long
             }
         }
     ),
@@ -199,7 +198,8 @@ class ZoneState:
     # Calculated values (from Recorder queries)
     period_state_avg: float    # Average since observation_start
     open_state_avg: float      # Average over valve_open_time
-    window_open_avg: float     # Average over duty_cycle_window
+    window_open_seconds: float # Total seconds window was open this period
+    window_currently_open: bool # Whether any window is currently open
 
     # Derived
     used_duration: float       # Seconds valve was on this period
@@ -284,11 +284,10 @@ The options flow provides access to **timing parameters** that apply to the enti
 | Field | Type | Description |
 |-------|------|-------------|
 | observation_period | number (s) | Time window for quota-based scheduling (default: 7200s / 2h) |
-| duty_cycle_window | number (s) | Rolling window for duty cycle calculation (default: 3600s / 1h) |
 | min_run_time | number (s) | Minimum valve on duration (default: 540s / 9min) |
 | valve_open_time | number (s) | Time to detect valve fully open (default: 210s / 3.5min) |
 | closing_warning_duration | number (s) | Warning before valve closes (default: 240s / 4min) |
-| window_block_threshold | number (0-1) | Window open ratio to trigger blocking (default: 0.05 / 5%) |
+| window_block_time | number (s) | Window open time to trigger blocking (default: 600s / 10min) |
 
 These settings are stored in the **controller subentry** data.
 
@@ -471,8 +470,12 @@ def _should_pause_pid(self, runtime: ZoneRuntime) -> bool:
     if not runtime.state.enabled:
         return True
 
-    # Window open blocks heating - don't accumulate integral
-    if runtime.state.window_open_avg > self.config.timing.window_block_threshold:
+    # Window currently open blocks heating - don't accumulate integral
+    if runtime.state.window_currently_open:
+        return True
+
+    # Window was open too long during observation period
+    if runtime.state.window_open_seconds > self.config.timing.window_block_time:
         return True
 
     return False
@@ -485,7 +488,6 @@ This prevents the common problem of integral windup where the integral term accu
 | Window | Duration | Calculation |
 |--------|----------|-------------|
 | **Observation Period** | 2 hours (default) | Aligned to even hours (00:00, 02:00, 04:00...) |
-| **Duty Cycle Window** | 1 hour (default) | Rolling window centered on current time |
 | **Valve Open Detection** | 3.5 minutes | Fixed window for detecting valve fully open |
 
 **Observation Period Alignment:**
@@ -494,18 +496,6 @@ def get_observation_start(now: datetime) -> datetime:
     hour = now.hour
     period_hour = hour - (hour % 2)  # Round down to even hour
     return now.replace(hour=period_hour, minute=0, second=0, microsecond=0)
-```
-
-**Duty Cycle Window:**
-```python
-def get_duty_cycle_window(now: datetime) -> tuple[datetime, datetime]:
-    if now.minute < 30:
-        start = now - timedelta(hours=1)
-        end = now
-    else:
-        start = now - timedelta(minutes=30)
-        end = now + timedelta(minutes=30)
-    return (start, end)
 ```
 
 ### 6.5 Zone Decision Tree
@@ -521,8 +511,12 @@ def evaluate_zone(zone: ZoneState, controller: ControllerState,
         not any_regular_circuits_enabled(controller)):
         return ZoneAction.TURN_ON
 
-    # Window blocking
-    if zone.window_open_avg > timing.window_block_threshold:
+    # Window blocking - immediate if currently open
+    if zone.window_currently_open:
+        return ZoneAction.TURN_OFF
+
+    # Window blocking - duration exceeded threshold
+    if zone.window_open_seconds > timing.window_block_time:
         return ZoneAction.TURN_OFF
 
     # Quota-based scheduling
@@ -700,7 +694,7 @@ For each zone, the coordinator queries:
 |-------|--------|--------|---------|
 | Valve state average | `switch.{}` (valve) | observation_start → now | Calculate used_duration |
 | Valve open average | `switch.{}` (valve) | now - 3.5min → now | Detect valve fully open |
-| Window open average | `binary_sensor.{}` (windows) | duty_cycle_window | Window blocking decision |
+| Window open average | `binary_sensor.{}` (windows) | observation_start → now | Window blocking decision (converted to seconds) |
 
 Note: `requested_duration` is calculated from the current instantaneous PID duty cycle output, not a historical average.
 
@@ -986,11 +980,10 @@ repos:
 ```python
 DEFAULT_TIMING = {
     "observation_period": 7200,      # 2 hours
-    "duty_cycle_window": 3600,       # 1 hour
     "min_run_time": 540,             # 9 minutes
     "valve_open_time": 210,          # 3.5 minutes
     "closing_warning_duration": 240, # 4 minutes
-    "window_block_threshold": 0.05,  # 5%
+    "window_block_time": 600,        # 10 minutes
 }
 
 DEFAULT_PID = {

@@ -261,11 +261,10 @@ async def test_options_flow_update_timing(
         result["flow_id"],
         user_input={
             "observation_period": 3600,
-            "duty_cycle_window": 1800,
             "min_run_time": 300,
             "valve_open_time": 120,
             "closing_warning_duration": 180,
-            "window_block_threshold": 0.1,
+            "window_block_time": 300,
             "controller_loop_interval": 30,
         },
     )
@@ -277,7 +276,6 @@ async def test_options_flow_update_timing(
         if subentry.subentry_type == SUBENTRY_TYPE_CONTROLLER:
             timing = subentry.data.get("timing", {})
             assert timing.get("observation_period") == 3600
-            assert timing.get("duty_cycle_window") == 1800
             assert timing.get("min_run_time") == 300
             break
 
@@ -288,11 +286,10 @@ async def test_options_flow_reads_controller_subentry(
     """Test that options flow reads timing from controller subentry."""
     custom_timing = {
         "observation_period": 9000,
-        "duty_cycle_window": 4500,
         "min_run_time": 600,
         "valve_open_time": 300,
         "closing_warning_duration": 300,
-        "window_block_threshold": 0.15,
+        "window_block_time": 900,
         "controller_loop_interval": 60,
     }
 
@@ -838,22 +835,20 @@ def test_get_timing_schema_with_defaults() -> None:
     # Verify schema contains all expected keys
     schema_keys = {str(key) for key in schema.schema}
     assert "observation_period" in schema_keys
-    assert "duty_cycle_window" in schema_keys
     assert "min_run_time" in schema_keys
     assert "valve_open_time" in schema_keys
     assert "closing_warning_duration" in schema_keys
-    assert "window_block_threshold" in schema_keys
+    assert "window_block_time" in schema_keys
 
 
 def test_get_timing_schema_with_custom() -> None:
     """Test that timing schema uses provided timing values."""
     custom_timing: TimingDefaults = {
         "observation_period": 9000,
-        "duty_cycle_window": 4500,
         "min_run_time": 600,
         "valve_open_time": 300,
         "closing_warning_duration": 300,
-        "window_block_threshold": 0.15,
+        "window_block_time": 900,
         "controller_loop_interval": 60,
     }
     schema = get_timing_schema(custom_timing)

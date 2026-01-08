@@ -317,8 +317,10 @@ class TestPIDIntegrationPause:
         controller.update_zone_pid("living_room", 19.0, 60.0)
         assert runtime.pid.state.integral == initial_integral
 
-    def test_pid_paused_when_window_open(self, basic_config: ControllerConfig) -> None:
-        """Test PID integration is paused when window is open above threshold."""
+    def test_pid_paused_when_window_currently_open(
+        self, basic_config: ControllerConfig
+    ) -> None:
+        """Test PID integration is paused when window is currently open."""
         controller = HeatingController(basic_config)
 
         # First update with window closed
@@ -327,8 +329,28 @@ class TestPIDIntegrationPause:
         assert runtime is not None
         initial_integral = runtime.pid.state.integral
 
-        # Simulate window open above threshold (default threshold is 0.05)
-        runtime.state.window_open_avg = 0.10
+        # Simulate window currently open
+        runtime.state.window_currently_open = True
+
+        # PID update should NOT accumulate integral
+        controller.update_zone_pid("living_room", 19.0, 60.0)
+        assert runtime.pid.state.integral == initial_integral
+
+    def test_pid_paused_when_window_open_seconds_exceeded(
+        self, basic_config: ControllerConfig
+    ) -> None:
+        """Test PID integration is paused when window open time exceeds threshold."""
+        controller = HeatingController(basic_config)
+
+        # First update with window closed
+        controller.update_zone_pid("living_room", 20.0, 60.0)
+        runtime = controller.get_zone_runtime("living_room")
+        assert runtime is not None
+        initial_integral = runtime.pid.state.integral
+
+        # Simulate window was open for 700 seconds (above 600s default threshold)
+        runtime.state.window_currently_open = False
+        runtime.state.window_open_seconds = 700.0
 
         # PID update should NOT accumulate integral
         controller.update_zone_pid("living_room", 19.0, 60.0)
@@ -337,7 +359,7 @@ class TestPIDIntegrationPause:
     def test_pid_not_paused_when_window_below_threshold(
         self, basic_config: ControllerConfig
     ) -> None:
-        """Test PID integration continues when window open is below threshold."""
+        """Test PID integration continues when window open time is below threshold."""
         controller = HeatingController(basic_config)
 
         # First update
@@ -346,8 +368,9 @@ class TestPIDIntegrationPause:
         assert runtime is not None
         initial_integral = runtime.pid.state.integral
 
-        # Set window open below threshold (default threshold is 0.05)
-        runtime.state.window_open_avg = 0.03
+        # Set window open time below threshold (default threshold is 600 seconds)
+        runtime.state.window_currently_open = False
+        runtime.state.window_open_seconds = 300.0
 
         # PID update SHOULD accumulate integral
         controller.update_zone_pid("living_room", 19.0, 60.0)
@@ -473,6 +496,7 @@ class TestUpdateZoneHistorical:
             period_state_avg=0.25,
             open_state_avg=0.9,
             window_open_avg=0.0,
+            window_currently_open=False,
             elapsed_time=7200.0,  # Full observation period
         )
 
@@ -480,9 +504,30 @@ class TestUpdateZoneHistorical:
         assert state is not None
         assert state.period_state_avg == 0.25
         assert state.open_state_avg == 0.9
-        assert state.window_open_avg == 0.0
+        assert state.window_open_seconds == 0.0
+        assert state.window_currently_open is False
         # Used duration = 0.25 * 7200 = 1800
         assert state.used_duration == 1800.0
+
+    def test_update_historical_window_open_seconds(
+        self, basic_config: ControllerConfig
+    ) -> None:
+        """Test window_open_seconds is calculated from window_open_avg."""
+        controller = HeatingController(basic_config)
+
+        controller.update_zone_historical(
+            "living_room",
+            period_state_avg=0.25,
+            open_state_avg=0.9,
+            window_open_avg=0.1,  # 10% of time
+            window_currently_open=False,
+            elapsed_time=7200.0,
+        )
+
+        state = controller.get_zone_state("living_room")
+        assert state is not None
+        # window_open_seconds = 0.1 * 7200 = 720 seconds
+        assert state.window_open_seconds == 720.0
 
     def test_update_unknown_zone(self, basic_config: ControllerConfig) -> None:
         """Test updating unknown zone does nothing."""
@@ -493,6 +538,7 @@ class TestUpdateZoneHistorical:
             period_state_avg=0.25,
             open_state_avg=0.9,
             window_open_avg=0.0,
+            window_currently_open=False,
             elapsed_time=7200.0,
         )
 
@@ -517,6 +563,7 @@ class TestUpdateZoneHistorical:
             period_state_avg=0.5,  # On 50% of elapsed time
             open_state_avg=0.9,
             window_open_avg=0.0,
+            window_currently_open=False,
             elapsed_time=1800.0,
         )
 
@@ -551,6 +598,7 @@ class TestUpdateZoneHistorical:
             period_state_avg=0.8,
             open_state_avg=0.0,
             window_open_avg=0.0,
+            window_currently_open=False,
             elapsed_time=1800.0,
         )
 
@@ -576,6 +624,7 @@ class TestEvaluateZonesAutoMode:
             period_state_avg=0.0,  # No usage yet
             open_state_avg=0.0,
             window_open_avg=0.0,
+            window_currently_open=False,
             elapsed_time=7200.0,  # Full observation period
         )
 
@@ -760,6 +809,7 @@ class TestCalculateHeatRequest:
             period_state_avg=0.0,
             open_state_avg=0.9,  # Above 0.85 threshold
             window_open_avg=0.0,
+            window_currently_open=False,
             elapsed_time=7200.0,  # Full observation period
         )
         # Manually set valve on

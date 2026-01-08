@@ -10,10 +10,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
-from custom_components.ufh_controller.const import (
-    DEFAULT_TIMING,
-    DEFAULT_WINDOW_CENTER_MINUTE,
-)
+from custom_components.ufh_controller.const import DEFAULT_TIMING
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -43,36 +40,6 @@ def get_observation_start(
     hour = now.hour
     period_hour = hour - (hour % period_hours)
     return now.replace(hour=period_hour, minute=0, second=0, microsecond=0)
-
-
-def get_duty_cycle_window(
-    now: datetime, window_seconds: int = DEFAULT_TIMING["duty_cycle_window"]
-) -> tuple[datetime, datetime]:
-    """
-    Get the time window for duty cycle calculation.
-
-    The window is centered around the current time when minute >= 30,
-    otherwise it looks back from the current time.
-
-    Args:
-        now: Current datetime.
-        window_seconds: Window duration in seconds (default 3600 = 1 hour).
-
-    Returns:
-        Tuple of (start, end) datetime for the duty cycle window.
-
-    """
-    window = timedelta(seconds=window_seconds)
-
-    if now.minute < DEFAULT_WINDOW_CENTER_MINUTE:
-        start = now - window
-        end = now
-    else:
-        half_window = window / 2
-        start = now - half_window
-        end = now + half_window
-
-    return (start, end)
 
 
 def get_valve_open_window(
