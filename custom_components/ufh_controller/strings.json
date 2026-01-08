@@ -213,7 +213,7 @@
     },
     "binary_sensor": {
       "blocked": {
-        "name": "Window Blocked"
+        "name": "Blocked"
       },
       "heat_request": {
         "name": "Heat Request"
