@@ -76,6 +76,9 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         self._state_restored: bool = False
 
+        # Track preset modes per zone (not part of core controller state)
+        self._zone_presets: dict[str, str | None] = {}
+
     def _build_controller(self, entry: UFHControllerConfigEntry) -> HeatingController:
         """Build HeatingController from config entry."""
         data = entry.data
@@ -216,6 +219,10 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if stored_enabled != runtime.state.enabled:
                 self._controller.set_zone_enabled(zone_id, enabled=stored_enabled)
 
+        # Restore preset mode
+        if "preset_mode" in zone_state:
+            self._zone_presets[zone_id] = zone_state["preset_mode"]
+
     async def async_save_state(self) -> None:
         """Save current state to storage."""
         zones_data: dict[str, dict[str, Any]] = {}
@@ -223,12 +230,17 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         for zone_id in self._controller.zone_ids:
             runtime = self._controller.get_zone_runtime(zone_id)
             if runtime is not None:
-                zones_data[zone_id] = {
+                zone_data: dict[str, Any] = {
                     "integral": runtime.pid.state.integral,
                     "last_error": runtime.pid.state.last_error,
                     "setpoint": runtime.state.setpoint,
                     "enabled": runtime.state.enabled,
                 }
+                # Include preset_mode if set
+                preset_mode = self._zone_presets.get(zone_id)
+                if preset_mode is not None:
+                    zone_data["preset_mode"] = preset_mode
+                zones_data[zone_id] = zone_data
 
         data = {
             "version": STORAGE_VERSION,
@@ -467,6 +479,7 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     > self._controller.config.timing.window_block_threshold,
                     "is_requesting_heat": state.valve_on
                     and state.open_state_avg >= DEFAULT_VALVE_OPEN_THRESHOLD,
+                    "preset_mode": self._zone_presets.get(zone_id),
                 }
 
         return result
@@ -486,5 +499,11 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def set_mode(self, mode: str) -> None:
         """Set controller operation mode and trigger update."""
         self._controller.mode = mode
+        self.async_set_updated_data(self._build_state_dict())
+        self.hass.async_create_task(self.async_save_state())
+
+    def set_zone_preset_mode(self, zone_id: str, preset_mode: str | None) -> None:
+        """Set zone preset mode and trigger update."""
+        self._zone_presets[zone_id] = preset_mode
         self.async_set_updated_data(self._build_state_dict())
         self.hass.async_create_task(self.async_save_state())
