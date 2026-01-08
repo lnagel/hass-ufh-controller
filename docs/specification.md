@@ -447,7 +447,43 @@ class PIDController:
         return max(0.0, min(100.0, output))
 ```
 
-### 6.3 Time Windows
+### 6.3 PID Integration Pausing
+
+To prevent integral windup during periods when heating is blocked or irrelevant, the PID controller's `update()` method is skipped (integration paused) when any of the following conditions are true:
+
+| Condition | Reason |
+|-----------|--------|
+| Temperature unavailable | Cannot calculate meaningful error without current temperature |
+| Controller mode ≠ `auto` | PID control only applies in automatic mode |
+| Zone disabled | Disabled zones don't participate in heating |
+| Window open (above threshold) | Heating blocked, would cause integral windup |
+
+When paused:
+- The integral term is frozen at its current value
+- The duty cycle is maintained at its last calculated value
+- The error term is still updated (for UI display purposes)
+
+```python
+def _should_pause_pid(self, runtime: ZoneRuntime) -> bool:
+    """Check if PID integration should be paused."""
+    # Only auto mode uses PID-based control
+    if self._state.mode != "auto":
+        return True
+
+    # Disabled zones shouldn't accumulate integral
+    if not runtime.state.enabled:
+        return True
+
+    # Window open blocks heating - don't accumulate integral
+    if runtime.state.window_open_avg > self.config.timing.window_block_threshold:
+        return True
+
+    return False
+```
+
+This prevents the common problem of integral windup where the integral term accumulates during blocked periods and causes overshoot when heating resumes.
+
+### 6.4 Time Windows
 
 | Window | Duration | Calculation |
 |--------|----------|-------------|
@@ -475,7 +511,7 @@ def get_duty_cycle_window(now: datetime) -> tuple[datetime, datetime]:
     return (start, end)
 ```
 
-### 6.4 Zone Decision Tree
+### 6.5 Zone Decision Tree
 
 ```python
 def evaluate_zone(zone: ZoneState, controller: ControllerState,
@@ -519,7 +555,7 @@ def evaluate_zone(zone: ZoneState, controller: ControllerState,
         return ZoneAction.STAY_OFF
 ```
 
-### 6.5 Heat Request Logic
+### 6.6 Heat Request Logic
 
 ```python
 def should_request_heat(zone: ZoneState, timing: TimingParams) -> bool:
@@ -542,7 +578,7 @@ def aggregate_heat_request(zones: dict[str, ZoneState],
     return any(should_request_heat(z, timing) for z in zones.values())
 ```
 
-### 6.6 Boiler Summer Mode Management
+### 6.7 Boiler Summer Mode Management
 
 ```python
 def update_summer_mode(controller: ControllerState,
@@ -940,9 +976,9 @@ repos:
 |------|--------|------------|------------|
 | Recorder queries slow | Control loop delayed | Medium | Batch queries, cache results, set timeout |
 | HA restart loses state | Observation period resets, valves may cycle | Low | Recalculate from Recorder history on startup |
-| PID integral windup | Overshoot after blocked period | Medium | Reset/freeze integral during window block |
+| PID integral windup | Overshoot after blocked period | Medium | PID integration paused when zone blocked (see §6.3) |
 | Valve rapid cycling | Wear, inefficiency | Low | Enforce minimum run time, hysteresis |
-| Sensor unavailable | Zone can't control | Medium | Fallback behavior (hold last state or disable zone) |
+| Sensor unavailable | Zone can't control | Medium | PID paused, duty cycle maintained (see §6.3) |
 | Config migration | Breaking changes on update | Low | Version config schema, write migration code |
 
 ---

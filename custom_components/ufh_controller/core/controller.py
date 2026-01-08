@@ -189,6 +189,14 @@ class HeatingController:
         """
         Update the PID controller for a zone.
 
+        PID integration is paused (no update called) when:
+        - Temperature reading is unavailable
+        - Controller mode is not 'auto' (PID only meaningful in auto mode)
+        - Zone is disabled
+        - Window is open (above threshold)
+
+        This prevents integral windup during blocked periods.
+
         Args:
             zone_id: Zone identifier.
             current: Current temperature reading, or None if unavailable.
@@ -205,7 +213,13 @@ class HeatingController:
         runtime.state.current = current
 
         if current is None:
-            # No temperature reading - maintain last duty cycle
+            # No temperature reading - maintain last duty cycle, pause integration
+            return runtime.state.duty_cycle
+
+        # Check if PID should be paused (prevent integral windup)
+        if self._should_pause_pid(runtime):
+            # Update error for display purposes but don't run PID
+            runtime.state.error = runtime.state.setpoint - current
             return runtime.state.duty_cycle
 
         pid_output = runtime.pid.update(
@@ -222,6 +236,34 @@ class HeatingController:
         runtime.state.duty_cycle = pid_output.duty_cycle
 
         return pid_output.duty_cycle
+
+    def _should_pause_pid(self, runtime: ZoneRuntime) -> bool:
+        """
+        Check if PID integration should be paused for a zone.
+
+        PID is paused when:
+        - Controller mode is not 'auto' (other modes don't use PID control)
+        - Zone is disabled
+        - Window is open (above threshold)
+
+        Args:
+            runtime: Zone runtime data.
+
+        Returns:
+            True if PID should be paused, False otherwise.
+
+        """
+        # Only auto mode uses PID-based control
+        if self._state.mode != "auto":
+            return True
+
+        # Disabled zones shouldn't accumulate integral
+        if not runtime.state.enabled:
+            return True
+
+        # Window open blocks heating - don't accumulate integral
+        threshold = self.config.timing.window_block_threshold
+        return runtime.state.window_open_avg > threshold
 
     def update_zone_historical(  # noqa: PLR0913
         self,
