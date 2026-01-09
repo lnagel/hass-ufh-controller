@@ -1,7 +1,7 @@
 {
     "name": "lnagel/hass-ufh-controller",
     "image": "mcr.microsoft.com/devcontainers/python:3.13",
-    "postCreateCommand": "scripts/setup",
+    "postCreateCommand": "uv sync --all-extras",
     "forwardPorts": [
         8123
     ],
