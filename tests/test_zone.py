@@ -318,6 +318,110 @@ class TestEvaluateZonePeriodEndFreeze:
         assert result == ZoneAction.TURN_OFF
 
 
+class TestPeriodTransitionScenario:
+    """
+    Test behavior across observation period transitions.
+
+    These tests verify the system handles period boundaries correctly,
+    preventing rapid valve cycling while still providing fresh quota
+    allocation in new periods.
+    """
+
+    @pytest.fixture
+    def timing(self) -> TimingParams:
+        """Create timing params with 7200s period and 540s min run time."""
+        return TimingParams(observation_period=7200, min_run_time=540)
+
+    def test_high_quota_usage_near_period_end_freezes(
+        self, timing: TimingParams
+    ) -> None:
+        """
+        Zone at 90% quota near period end should freeze (valve off stays off).
+
+        Scenario: 13:59:50, zone has used 6480/7200 seconds (90% of quota).
+        Only 10 seconds remaining in period - freeze should be active.
+        """
+        zone = ZoneState(
+            zone_id="test",
+            valve_on=False,  # Valve is off
+            requested_duration=7200.0,  # 100% duty cycle
+            used_duration=6480.0,  # 90% used, 720s remaining quota
+        )
+        # 7200 - 7190 = 10 seconds remaining (simulates 13:59:50)
+        controller = ControllerState(period_elapsed=7190.0)
+        result = evaluate_zone(zone, controller, timing)
+        # Freeze active: valve off stays off, even though quota remains
+        assert result == ZoneAction.STAY_OFF
+
+    def test_high_quota_usage_near_period_end_valve_on_stays_on(
+        self, timing: TimingParams
+    ) -> None:
+        """Zone running near period end should stay on (freeze prevents cycling)."""
+        zone = ZoneState(
+            zone_id="test",
+            valve_on=True,  # Valve is running
+            requested_duration=7200.0,  # 100% duty cycle
+            used_duration=6480.0,  # 90% used
+        )
+        # Only 10 seconds remaining
+        controller = ControllerState(period_elapsed=7190.0)
+        result = evaluate_zone(zone, controller, timing)
+        # Freeze active: valve on stays on
+        assert result == ZoneAction.STAY_ON
+
+    def test_fresh_period_allows_turn_on(self, timing: TimingParams) -> None:
+        """
+        After period reset, zone with demand gets fresh quota and can turn on.
+
+        Scenario: 14:00:30 (30 seconds into new period).
+        Zone had high usage last period, but now has fresh quota.
+        """
+        zone = ZoneState(
+            zone_id="test",
+            valve_on=False,  # Valve is off after period reset
+            requested_duration=3600.0,  # 50% duty cycle = 3600s quota
+            used_duration=30.0,  # Only 30s used in new period
+        )
+        # Fresh period: only 30 seconds elapsed
+        controller = ControllerState(period_elapsed=30.0)
+        result = evaluate_zone(zone, controller, timing)
+        # Normal quota logic: has plenty of quota, can turn on
+        assert result == ZoneAction.TURN_ON
+
+    def test_multiple_zones_can_turn_on_at_period_start(
+        self, timing: TimingParams
+    ) -> None:
+        """
+        Multiple zones with demand can all turn on at start of new period.
+
+        This is expected behavior - zones are evaluated independently and
+        each gets its fresh quota allocation.
+        """
+        zone1 = ZoneState(
+            zone_id="zone1",
+            valve_on=False,
+            requested_duration=3600.0,  # 50% duty cycle
+            used_duration=60.0,  # 1 minute used
+        )
+        zone2 = ZoneState(
+            zone_id="zone2",
+            valve_on=False,
+            requested_duration=5400.0,  # 75% duty cycle
+            used_duration=60.0,  # 1 minute used
+        )
+        controller = ControllerState(
+            period_elapsed=60.0,
+            zones={"zone1": zone1, "zone2": zone2},
+        )
+
+        result1 = evaluate_zone(zone1, controller, timing)
+        result2 = evaluate_zone(zone2, controller, timing)
+
+        # Both zones can turn on - this is intentional
+        assert result1 == ZoneAction.TURN_ON
+        assert result2 == ZoneAction.TURN_ON
+
+
 class TestEvaluateZoneQuotaScheduling:
     """Test quota-based scheduling behavior."""
 
