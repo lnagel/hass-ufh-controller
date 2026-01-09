@@ -541,7 +541,8 @@ def evaluate_zone(zone: ZoneState, controller: ControllerState,
             return ZoneAction.STAY_OFF
 
         if controller.dhw_active and zone.circuit_type == "regular":
-            # Wait for DHW heating to finish
+            # DHW priority: block turning ON, but valves already ON
+            # stay on (handled above) to continue circulating water
             return ZoneAction.STAY_OFF
 
         # Turn on
@@ -1367,7 +1368,7 @@ Higher comfort temperature for maximum coziness.
 
 Maximum temperature for rapid heating or special situations.
 
-**Example:** Bathroom zone before a shower, switch to "Boost" preset → setpoint jumps to 25°C for quick warmth, then returns to normal.
+**Example:** Bathroom zone needs extra warmth, switch to "Boost" preset → setpoint jumps to 25°C for quick warmth, then returns to normal.
 
 **Note:** All presets are optional. If not configured during zone setup, preset support is disabled and users control temperature via the setpoint slider only.
 
@@ -1399,11 +1400,15 @@ A switch entity that signals the boiler to provide heat. When zones request heat
 
 A binary sensor indicating when the boiler is heating domestic hot water (DHW).
 
-**How it works:** When this sensor is "on," regular heating circuits wait (DHW priority) and flush circuits can capture latent heat if enabled.
+**How it works:** When this sensor is "on", DHW priority is activated:
 
-**Example:** `binary_sensor.boiler_tapwater_active` → When someone takes a shower, this turns on, and regular zones pause to give DHW priority.
+- **Regular circuits already ON**: Continue running (STAY_ON). This allows existing heating to continue circulating water through the floor, maintaining heat distribution even though no new heat is being added.
+- **Regular circuits currently OFF**: Cannot turn ON (STAY_OFF). New heating cycles are blocked until DHW completes.
+- **Flush circuits**: Can capture latent heat if flush mode is enabled and no regular circuits have demand.
 
-**Why it matters:** Prevents the heating system from competing with DHW heating, which typically has priority. Also enables flush circuits to capture waste heat.
+**Example:** `binary_sensor.boiler_tapwater_active` → When DHW heating starts, this turns on. Regular zones that were already heating continue to circulate water, but zones that were off wait until DHW finishes.
+
+**Why it matters:** Prevents new heating demands from competing with DHW heating, which typically has priority. Allowing existing valves to stay open enables continued water circulation through the thermal mass of the floor, providing some heat distribution even during DHW priority. Also enables flush circuits to capture waste heat.
 
 #### circulation_entity
 

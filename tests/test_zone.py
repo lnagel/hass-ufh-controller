@@ -548,6 +548,36 @@ class TestEvaluateZoneDHWBlocking:
         result = evaluate_zone(zone, controller, timing)
         assert result == ZoneAction.TURN_ON
 
+    def test_regular_stays_on_during_dhw(self, timing: TimingParams) -> None:
+        """Regular circuit already ON stays ON during DHW to circulate water."""
+        zone = ZoneState(
+            zone_id="test",
+            circuit_type=CircuitType.REGULAR,
+            valve_on=True,  # Already running
+            requested_duration=1000.0,
+            used_duration=100.0,  # Has remaining quota
+        )
+        controller = ControllerState(dhw_active=True)
+        result = evaluate_zone(zone, controller, timing)
+        # Valve should stay on to continue circulating water through the floor
+        assert result == ZoneAction.STAY_ON
+
+    def test_regular_turns_off_during_dhw_when_quota_exhausted(
+        self, timing: TimingParams
+    ) -> None:
+        """Regular circuit turns OFF during DHW when quota is exhausted."""
+        zone = ZoneState(
+            zone_id="test",
+            circuit_type=CircuitType.REGULAR,
+            valve_on=True,  # Currently running
+            requested_duration=1000.0,
+            used_duration=1000.0,  # Quota exhausted
+        )
+        controller = ControllerState(dhw_active=True)
+        result = evaluate_zone(zone, controller, timing)
+        # Valve should turn off - quota exhaustion takes precedence
+        assert result == ZoneAction.TURN_OFF
+
 
 class TestShouldRequestHeat:
     """Test cases for should_request_heat."""
