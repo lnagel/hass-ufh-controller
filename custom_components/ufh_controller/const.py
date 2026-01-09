@@ -10,15 +10,6 @@ DOMAIN = "ufh_controller"
 SUBENTRY_TYPE_CONTROLLER = "controller"
 SUBENTRY_TYPE_ZONE = "zone"
 
-# Platforms to set up
-PLATFORMS: list[str] = [
-    "climate",
-    "sensor",
-    "binary_sensor",
-    "select",
-    "switch",
-]
-
 
 class OperationMode(StrEnum):
     """Controller operation modes."""
