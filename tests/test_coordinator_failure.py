@@ -3,7 +3,7 @@
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, ServiceCall
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from sqlalchemy.exc import OperationalError
 
@@ -94,6 +94,22 @@ class TestCoordinatorFailureTracking:
         coordinator._record_failure(critical=True)
 
         assert coordinator.status == ControllerStatus.DEGRADED
+
+    async def test_non_critical_failure_sets_degraded_from_normal(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+    ) -> None:
+        """Test that non-critical failure sets degraded status from normal."""
+        mock_config_entry.add_to_hass(hass)
+        coordinator = UFHControllerDataUpdateCoordinator(hass, mock_config_entry)
+
+        assert coordinator.status == ControllerStatus.NORMAL
+
+        coordinator._record_failure(critical=False)
+
+        assert coordinator.status == ControllerStatus.DEGRADED
+        assert coordinator.consecutive_failures == 1
 
     async def test_notification_created_after_threshold(
         self,
@@ -410,3 +426,95 @@ class TestExecuteFailSafeActions:
         runtime = coordinator.controller.get_zone_runtime("zone1")
         assert runtime is not None
         assert runtime.state.valve_on is False
+
+
+class TestCriticalFailureDuringUpdate:
+    """Test critical failure handling during _async_update_data."""
+
+    async def test_critical_failure_skips_valve_actions(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+    ) -> None:
+        """Test that critical failure during update skips valve actions."""
+        mock_config_entry.add_to_hass(hass)
+        hass.states.async_set("sensor.zone1_temp", "20.5")
+        hass.states.async_set("switch.zone1_valve", "off")
+
+        coordinator = UFHControllerDataUpdateCoordinator(hass, mock_config_entry)
+
+        # Track if valve service was called
+        valve_calls: list[str] = []
+
+        async def track_switch_call(call: ServiceCall) -> None:
+            valve_calls.append(call.service)
+
+        hass.services.async_register("switch", "turn_on", track_switch_call)
+        hass.services.async_register("switch", "turn_off", track_switch_call)
+
+        # Make recorder query fail
+        mock_recorder = MagicMock()
+        mock_recorder.async_add_executor_job = AsyncMock(
+            side_effect=OperationalError("statement", {}, Exception("DB unavailable"))
+        )
+
+        with patch(
+            "homeassistant.components.recorder.get_instance",
+            return_value=mock_recorder,
+        ):
+            await coordinator.async_refresh()
+
+        # Status should be degraded
+        assert coordinator.status == ControllerStatus.DEGRADED
+
+        # No valve actions should have been taken
+        assert valve_calls == []
+
+    async def test_fail_safe_executes_actions_during_update(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+    ) -> None:
+        """Test that fail-safe mode executes fail-safe actions during update."""
+        mock_config_entry.add_to_hass(hass)
+        hass.states.async_set("sensor.zone1_temp", "20.5")
+        hass.states.async_set("switch.zone1_valve", "on")
+
+        coordinator = UFHControllerDataUpdateCoordinator(hass, mock_config_entry)
+
+        # Put coordinator into fail-safe mode
+        # Set notification_created to avoid background task trying to call
+        # persistent_notification service which isn't registered
+        coordinator._notification_created = True
+        coordinator._last_successful_update = datetime.now(UTC) - timedelta(
+            seconds=FAIL_SAFE_TIMEOUT + 60
+        )
+        coordinator._record_failure(critical=True)
+        assert coordinator.status == ControllerStatus.FAIL_SAFE
+
+        # Track valve service calls
+        valve_calls: list[str] = []
+
+        async def track_switch_call(call: ServiceCall) -> None:
+            valve_calls.append(call.service)
+
+        hass.services.async_register("switch", "turn_on", track_switch_call)
+        hass.services.async_register("switch", "turn_off", track_switch_call)
+
+        # Make recorder continue to fail
+        mock_recorder = MagicMock()
+        mock_recorder.async_add_executor_job = AsyncMock(
+            side_effect=OperationalError("statement", {}, Exception("DB unavailable"))
+        )
+
+        with patch(
+            "homeassistant.components.recorder.get_instance",
+            return_value=mock_recorder,
+        ):
+            await coordinator.async_refresh()
+
+        # Still in fail-safe
+        assert coordinator.status == ControllerStatus.FAIL_SAFE
+
+        # Fail-safe should have turned off the valve
+        assert "turn_off" in valve_calls
