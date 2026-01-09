@@ -333,3 +333,147 @@ class TestGetWindowOpenAverage:
 
         # Should return 1.0 (max of 0.0 and 1.0)
         assert result == 1.0
+
+    async def test_returns_none_when_query_fails(self, mock_hass: MagicMock) -> None:
+        """Test that get_window_open_average returns None when a query fails."""
+        start = datetime(2024, 1, 15, 14, 0, 0, tzinfo=UTC)
+        end = datetime(2024, 1, 15, 15, 0, 0, tzinfo=UTC)
+
+        with patch(
+            "homeassistant.components.recorder.get_instance"
+        ) as mock_get_instance:
+            mock_recorder = MagicMock()
+            mock_recorder.async_add_executor_job = AsyncMock(
+                side_effect=Exception("Recorder unavailable")
+            )
+            mock_get_instance.return_value = mock_recorder
+
+            result = await get_window_open_average(
+                mock_hass,
+                ["binary_sensor.window1"],
+                start,
+                end,
+            )
+
+        assert result is None
+
+
+class TestRecorderQueryFailure:
+    """Test Recorder query failure handling."""
+
+    @pytest.fixture
+    def mock_hass(self) -> MagicMock:
+        """Create a mock HomeAssistant instance."""
+        hass = MagicMock(spec=HomeAssistant)
+        hass.states = MagicMock()
+        return hass
+
+    async def test_get_state_average_returns_none_on_exception(
+        self, mock_hass: MagicMock
+    ) -> None:
+        """Test that get_state_average returns None when recorder fails."""
+        start = datetime(2024, 1, 15, 14, 0, 0, tzinfo=UTC)
+        end = datetime(2024, 1, 15, 15, 0, 0, tzinfo=UTC)
+
+        with patch(
+            "homeassistant.components.recorder.get_instance"
+        ) as mock_get_instance:
+            mock_recorder = MagicMock()
+            mock_recorder.async_add_executor_job = AsyncMock(
+                side_effect=Exception("Recorder unavailable")
+            )
+            mock_get_instance.return_value = mock_recorder
+
+            result = await get_state_average(
+                mock_hass,
+                "switch.test",
+                start,
+                end,
+            )
+
+        assert result is None
+
+    async def test_get_state_average_returns_none_on_timeout(
+        self, mock_hass: MagicMock
+    ) -> None:
+        """Test that get_state_average returns None on timeout."""
+        start = datetime(2024, 1, 15, 14, 0, 0, tzinfo=UTC)
+        end = datetime(2024, 1, 15, 15, 0, 0, tzinfo=UTC)
+
+        with patch(
+            "homeassistant.components.recorder.get_instance"
+        ) as mock_get_instance:
+            mock_recorder = MagicMock()
+            mock_recorder.async_add_executor_job = AsyncMock(
+                side_effect=TimeoutError("Query timed out")
+            )
+            mock_get_instance.return_value = mock_recorder
+
+            result = await get_state_average(
+                mock_hass,
+                "switch.test",
+                start,
+                end,
+            )
+
+        assert result is None
+
+    async def test_get_state_average_returns_none_on_db_error(
+        self, mock_hass: MagicMock
+    ) -> None:
+        """Test that get_state_average returns None on database errors."""
+        start = datetime(2024, 1, 15, 14, 0, 0, tzinfo=UTC)
+        end = datetime(2024, 1, 15, 15, 0, 0, tzinfo=UTC)
+
+        with patch(
+            "homeassistant.components.recorder.get_instance"
+        ) as mock_get_instance:
+            mock_recorder = MagicMock()
+            mock_recorder.async_add_executor_job = AsyncMock(
+                side_effect=RuntimeError("Database connection lost")
+            )
+            mock_get_instance.return_value = mock_recorder
+
+            result = await get_state_average(
+                mock_hass,
+                "switch.test",
+                start,
+                end,
+            )
+
+        assert result is None
+
+    async def test_get_state_average_succeeds_after_exception_is_caught(
+        self, mock_hass: MagicMock
+    ) -> None:
+        """Test that exception handling doesn't affect subsequent successful queries."""
+        start = datetime(2024, 1, 15, 14, 0, 0, tzinfo=UTC)
+        end = datetime(2024, 1, 15, 15, 0, 0, tzinfo=UTC)
+
+        mock_state = MagicMock()
+        mock_state.state = "on"
+        mock_hass.states.get.return_value = mock_state
+
+        call_count = 0
+
+        def side_effect(*args: object, **kwargs: object) -> dict:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise Exception("First call fails")  # noqa: TRY002
+            return {}
+
+        with patch(
+            "homeassistant.components.recorder.get_instance"
+        ) as mock_get_instance:
+            mock_recorder = MagicMock()
+            mock_recorder.async_add_executor_job = AsyncMock(side_effect=side_effect)
+            mock_get_instance.return_value = mock_recorder
+
+            # First call should return None
+            result1 = await get_state_average(mock_hass, "switch.test", start, end)
+            assert result1 is None
+
+            # Second call should succeed
+            result2 = await get_state_average(mock_hass, "switch.test", start, end)
+            assert result2 == 1.0

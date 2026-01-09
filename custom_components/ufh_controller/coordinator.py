@@ -14,9 +14,12 @@ from .const import (
     DEFAULT_TIMING,
     DEFAULT_VALVE_OPEN_THRESHOLD,
     DOMAIN,
+    FAIL_SAFE_TIMEOUT,
+    FAILURE_NOTIFICATION_THRESHOLD,
     LOGGER,
     SUBENTRY_TYPE_CONTROLLER,
     SUBENTRY_TYPE_ZONE,
+    ControllerStatus,
     OperationMode,
 )
 from .core import (
@@ -77,6 +80,13 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # Track preset modes per zone (not part of core controller state)
         self._zone_presets: dict[str, str | None] = {}
+
+        # Failure tracking state
+        self._consecutive_failures: int = 0
+        self._last_successful_update: datetime | None = None
+        self._status: ControllerStatus = ControllerStatus.NORMAL
+        self._notification_created: bool = False
+        self._fail_safe_activated: bool = False
 
     def _build_controller(self, entry: UFHControllerConfigEntry) -> HeatingController:
         """Build HeatingController from config entry."""
@@ -247,6 +257,151 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         await self._store.async_save(data)
 
+    @property
+    def status(self) -> ControllerStatus:
+        """Return the current controller operational status."""
+        return self._status
+
+    @property
+    def consecutive_failures(self) -> int:
+        """Return the number of consecutive update failures."""
+        return self._consecutive_failures
+
+    @property
+    def last_successful_update(self) -> datetime | None:
+        """Return the timestamp of the last successful update."""
+        return self._last_successful_update
+
+    def _record_success(self) -> None:
+        """Record a successful coordinator update."""
+        self._consecutive_failures = 0
+        self._last_successful_update = datetime.now(UTC)
+
+        # Clear fail-safe if previously activated
+        if self._fail_safe_activated:
+            self._fail_safe_activated = False
+            LOGGER.info("UFH Controller recovered from fail-safe mode")
+
+        # Dismiss any existing notification
+        if self._notification_created:
+            self._dismiss_failure_notification()
+
+        self._status = ControllerStatus.NORMAL
+
+    def _record_failure(self, *, critical: bool = False) -> None:
+        """Record a failed coordinator update."""
+        self._consecutive_failures += 1
+
+        # Check for notification threshold
+        if (
+            self._consecutive_failures >= FAILURE_NOTIFICATION_THRESHOLD
+            and not self._notification_created
+        ):
+            self._create_failure_notification()
+
+        # Check for fail-safe timeout
+        if self._should_activate_fail_safe():
+            self._activate_fail_safe()
+        elif critical:
+            # Critical failure - update status but don't immediately fail-safe
+            # unless timeout has elapsed
+            if self._status != ControllerStatus.FAIL_SAFE:
+                self._status = ControllerStatus.DEGRADED
+        elif self._status == ControllerStatus.NORMAL:
+            self._status = ControllerStatus.DEGRADED
+
+    def _should_activate_fail_safe(self) -> bool:
+        """Check if fail-safe mode should be activated."""
+        if self._last_successful_update is None:
+            # No successful update yet - don't activate fail-safe immediately
+            # but do start tracking from now
+            if self._consecutive_failures == 1:
+                # First failure - start the clock
+                self._last_successful_update = datetime.now(UTC)
+            return False
+
+        elapsed = (datetime.now(UTC) - self._last_successful_update).total_seconds()
+        return elapsed > FAIL_SAFE_TIMEOUT
+
+    def _activate_fail_safe(self) -> None:
+        """Activate fail-safe mode - close all valves, disable heating."""
+        if self._fail_safe_activated:
+            return
+
+        self._fail_safe_activated = True
+        self._status = ControllerStatus.FAIL_SAFE
+        LOGGER.error(
+            "UFH Controller entering fail-safe mode after %d consecutive failures "
+            "and no successful update for over 1 hour",
+            self._consecutive_failures,
+        )
+
+        # Ensure notification exists
+        if not self._notification_created:
+            self._create_failure_notification()
+
+    def _create_failure_notification(self) -> None:
+        """Create a persistent notification about controller failure."""
+        if self._notification_created:
+            return
+
+        self._notification_created = True
+        mode_text = "fail-safe" if self._fail_safe_activated else "degraded"
+        self.hass.async_create_task(
+            self.hass.services.async_call(
+                "persistent_notification",
+                "create",
+                {
+                    "message": (
+                        f"The UFH Controller has experienced "
+                        f"{self._consecutive_failures} consecutive Recorder query "
+                        f"failures. The controller is operating in {mode_text} mode. "
+                        f"Check that the Recorder component is functioning correctly."
+                    ),
+                    "title": "UFH Controller: Recorder Failure",
+                    "notification_id": f"{DOMAIN}_recorder_failure",
+                },
+            )
+        )
+
+    def _dismiss_failure_notification(self) -> None:
+        """Dismiss the failure notification."""
+        if not self._notification_created:
+            return
+
+        self._notification_created = False
+        self.hass.async_create_task(
+            self.hass.services.async_call(
+                "persistent_notification",
+                "dismiss",
+                {"notification_id": f"{DOMAIN}_recorder_failure"},
+            )
+        )
+
+    async def _execute_fail_safe_actions(self) -> None:
+        """Execute fail-safe mode actions - close all valves and disable heating."""
+        # Close all valves
+        for zone_id in self._controller.zone_ids:
+            runtime = self._controller.get_zone_runtime(zone_id)
+            if runtime:
+                await self._call_switch_service(
+                    runtime.config.valve_switch, turn_on=False
+                )
+                # Update zone state to reflect valve is off
+                runtime.state.valve_on = False
+
+        # Turn off heat request
+        await self._execute_heat_request(heat_request=False)
+
+        # Set summer mode to 'summer' (disable heating circuit)
+        summer_entity = self._controller.config.summer_mode_entity
+        if summer_entity:
+            await self.hass.services.async_call(
+                "select",
+                "select_option",
+                {"entity_id": summer_entity, "option": "summer"},
+            )
+
     async def _async_update_data(self) -> dict[str, Any]:
         """Update data via controller logic."""
         # Load stored state on first run (fallback restoration)
@@ -261,6 +416,7 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # Skip if no zones configured
         if not self._controller.zone_ids:
+            self._record_success()
             return self._build_state_dict()
 
         # Update observation start and elapsed time
@@ -275,9 +431,25 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Check DHW active state
         await self._update_dhw_state()
 
-        # Update each zone
+        # Update each zone and track critical failures
+        any_critical_failure = False
         for zone_id in self._controller.zone_ids:
-            await self._update_zone(zone_id, now, dt)
+            success = await self._update_zone(zone_id, now, dt)
+            if not success:
+                any_critical_failure = True
+
+        # Handle failure tracking
+        if any_critical_failure:
+            self._record_failure(critical=True)
+            # In fail-safe mode, execute fail-safe actions and skip normal evaluation
+            if self._status == ControllerStatus.FAIL_SAFE:
+                await self._execute_fail_safe_actions()
+                return self._build_state_dict()
+            # In degraded mode with critical failure, retain valve states (skip actions)
+            return self._build_state_dict()
+
+        # All queries succeeded - record success
+        self._record_success()
 
         # Evaluate all zones and get actions
         actions = self._controller.evaluate_zones()
@@ -319,11 +491,17 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         zone_id: str,
         now: datetime,
         dt: float,
-    ) -> None:
-        """Update a single zone with current data and historical averages."""
+    ) -> bool:
+        """
+        Update a single zone with current data and historical averages.
+
+        Returns:
+            True if all critical queries succeeded, False if a critical query failed.
+
+        """
         runtime = self._controller.get_zone_runtime(zone_id)
         if runtime is None:
-            return
+            return True  # Not a failure, zone doesn't exist
 
         # Read current temperature
         temp_state = self.hass.states.get(runtime.config.temp_sensor)
@@ -344,7 +522,8 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Query historical data from Recorder
         timing = self._controller.config.timing
 
-        # Valve state since observation start (for used_duration)
+        # CRITICAL: Valve state since observation start (for used_duration/quota)
+        # If this fails, we cannot safely make valve decisions
         period_start = self._controller.state.observation_start
         period_state_avg = await get_state_average(
             self.hass,
@@ -354,7 +533,16 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             on_value="on",
         )
 
-        # Valve state for open detection (recent window)
+        if period_state_avg is None:
+            LOGGER.error(
+                "Critical: Failed to query period state for zone %s, "
+                "blocking coordinator update",
+                zone_id,
+            )
+            return False  # Critical failure
+
+        # NON-CRITICAL: Valve state for open detection (recent window)
+        # Fallback: Use current valve entity state
         valve_start, valve_end = get_valve_open_window(now, timing.valve_open_time)
         open_state_avg = await get_state_average(
             self.hass,
@@ -364,13 +552,35 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             on_value="on",
         )
 
-        # Window sensors average (historical)
+        if open_state_avg is None:
+            # Fallback to current entity state
+            current_valve_state = self.hass.states.get(runtime.config.valve_switch)
+            open_state_avg = (
+                1.0
+                if current_valve_state and current_valve_state.state == "on"
+                else 0.0
+            )
+            LOGGER.warning(
+                "Using fallback valve state for zone %s: %.2f",
+                zone_id,
+                open_state_avg,
+            )
+
+        # NON-CRITICAL: Window sensors average (historical)
+        # Fallback: Assume windows are closed
         window_open_avg = await get_window_open_average(
             self.hass,
             runtime.config.window_sensors,
             period_start,
             now,
         )
+
+        if window_open_avg is None:
+            window_open_avg = 0.0  # Assume closed
+            LOGGER.warning(
+                "Using fallback window state for zone %s (assuming closed)",
+                zone_id,
+            )
 
         # Check if any window is currently open
         window_currently_open = self._is_any_window_open(runtime.config.window_sensors)
@@ -384,6 +594,8 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             window_currently_open=window_currently_open,
             elapsed_time=self._controller.state.period_elapsed,
         )
+
+        return True
 
     async def _execute_valve_actions(
         self,
@@ -475,6 +687,13 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "mode": self._controller.mode,
             "heat_request": self._controller.calculate_heat_request(),
             "observation_start": self._controller.state.observation_start,
+            "controller_status": self._status.value,
+            "consecutive_failures": self._consecutive_failures,
+            "last_successful_update": (
+                self._last_successful_update.isoformat()
+                if self._last_successful_update
+                else None
+            ),
             "zones": {},
         }
 

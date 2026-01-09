@@ -11,8 +11,8 @@ from homeassistant.components.binary_sensor import (
     BinarySensorEntityDescription,
 )
 
-from .const import SUBENTRY_TYPE_ZONE
-from .entity import UFHControllerZoneEntity
+from .const import SUBENTRY_TYPE_CONTROLLER, SUBENTRY_TYPE_ZONE, ControllerStatus
+from .entity import UFHControllerEntity, UFHControllerZoneEntity
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -22,6 +22,14 @@ if TYPE_CHECKING:
 
     from .coordinator import UFHControllerDataUpdateCoordinator
     from .data import UFHControllerConfigEntry
+
+
+def _get_controller_subentry_id(entry: UFHControllerConfigEntry) -> str | None:
+    """Get the controller subentry ID."""
+    for subentry in entry.subentries.values():
+        if subentry.subentry_type == SUBENTRY_TYPE_CONTROLLER:
+            return subentry.subentry_id
+    return None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -54,6 +62,14 @@ async def async_setup_entry(
 ) -> None:
     """Set up the binary sensor platform."""
     coordinator = entry.runtime_data.coordinator
+
+    # Add controller-level status sensor
+    controller_subentry_id = _get_controller_subentry_id(entry)
+    if controller_subentry_id is not None:
+        async_add_entities(
+            [UFHControllerStatusSensor(coordinator, controller_subentry_id)],
+            config_subentry_id=controller_subentry_id,
+        )
 
     # Add zone-level binary sensors for each zone subentry
     for subentry in entry.subentries.values():
@@ -103,3 +119,44 @@ class UFHZoneBinarySensor(UFHControllerZoneEntity, BinarySensorEntity):
         """Return the sensor state."""
         zone_data = self.coordinator.data.get("zones", {}).get(self._zone_id, {})
         return self.entity_description.value_fn(zone_data)
+
+
+class UFHControllerStatusSensor(UFHControllerEntity, BinarySensorEntity):
+    """
+    Binary sensor indicating controller operational status.
+
+    This sensor is ON when there is a problem (degraded or fail-safe mode),
+    and OFF when the controller is operating normally.
+    """
+
+    _attr_translation_key = "controller_status"
+    _attr_device_class = BinarySensorDeviceClass.PROBLEM
+
+    def __init__(
+        self,
+        coordinator: UFHControllerDataUpdateCoordinator,
+        subentry_id: str,
+    ) -> None:
+        """Initialize the status sensor."""
+        super().__init__(coordinator, subentry_id)
+
+        controller_id = coordinator.config_entry.data.get("controller_id", "")
+        self._attr_unique_id = f"{controller_id}_status"
+
+    @property
+    def is_on(self) -> bool:
+        """Return True if there is a problem (degraded or fail-safe)."""
+        return self.coordinator.status != ControllerStatus.NORMAL
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return additional status attributes."""
+        return {
+            "status": self.coordinator.status.value,
+            "consecutive_failures": self.coordinator.consecutive_failures,
+            "last_successful_update": (
+                self.coordinator.last_successful_update.isoformat()
+                if self.coordinator.last_successful_update
+                else None
+            ),
+        }

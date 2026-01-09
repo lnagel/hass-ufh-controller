@@ -69,6 +69,9 @@ max-complexity = 25
     "S106", # Allow hardcoded passwords in tests
     "ARG001", # Allow unused arguments in fixtures
     "PLR2004", # Allow magic values in tests
+    "SLF001", # Allow private member access in tests
+    "EM101", # Allow string literals in exceptions
+    "TRY003", # Allow long exception messages
 ]
 
 [tool.coverage.run]

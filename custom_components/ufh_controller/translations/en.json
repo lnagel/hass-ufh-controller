@@ -215,6 +215,25 @@
       },
       "heat_request": {
         "name": "Heat Request"
+      },
+      "controller_status": {
+        "name": "Controller Status",
+        "state_attributes": {
+          "status": {
+            "name": "Status",
+            "state": {
+              "normal": "Normal",
+              "degraded": "Degraded",
+              "fail_safe": "Fail-Safe"
+            }
+          },
+          "consecutive_failures": {
+            "name": "Consecutive Failures"
+          },
+          "last_successful_update": {
+            "name": "Last Successful Update"
+          }
+        }
       }
     },
     "select": {
