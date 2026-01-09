@@ -306,6 +306,83 @@ class TestCoordinatorUpdateZoneFailure:
         assert runtime is not None
         assert runtime.state.open_state_avg == 1.0
 
+    async def test_open_state_fallback_with_unavailable_state(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+    ) -> None:
+        """Test that unavailable valve state falls back to 0.0 (closed)."""
+        mock_config_entry.add_to_hass(hass)
+        hass.states.async_set("sensor.zone1_temp", "20.5")
+        hass.states.async_set("switch.zone1_valve", "unavailable")
+
+        coordinator = UFHControllerDataUpdateCoordinator(hass, mock_config_entry)
+
+        now = datetime.now(UTC)
+        coordinator._controller.state.observation_start = now - timedelta(hours=1)
+
+        call_count = 0
+
+        def mock_executor(*args: object, **kwargs: object) -> dict:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return {"switch.zone1_valve": []}
+            raise OperationalError("statement", {}, Exception("DB unavailable"))
+
+        mock_recorder = MagicMock()
+        mock_recorder.async_add_executor_job = AsyncMock(side_effect=mock_executor)
+
+        with patch(
+            "homeassistant.components.recorder.get_instance",
+            return_value=mock_recorder,
+        ):
+            result = await coordinator._update_zone("zone1", now, 60.0)
+
+        assert result is True
+        runtime = coordinator._controller.get_zone_runtime("zone1")
+        assert runtime is not None
+        # Unavailable state should fall back to 0.0 (assume closed)
+        assert runtime.state.open_state_avg == 0.0
+
+    async def test_open_state_fallback_with_off_state(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+    ) -> None:
+        """Test that off valve state falls back to 0.0."""
+        mock_config_entry.add_to_hass(hass)
+        hass.states.async_set("sensor.zone1_temp", "20.5")
+        hass.states.async_set("switch.zone1_valve", "off")
+
+        coordinator = UFHControllerDataUpdateCoordinator(hass, mock_config_entry)
+
+        now = datetime.now(UTC)
+        coordinator._controller.state.observation_start = now - timedelta(hours=1)
+
+        call_count = 0
+
+        def mock_executor(*args: object, **kwargs: object) -> dict:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return {"switch.zone1_valve": []}
+            raise OperationalError("statement", {}, Exception("DB unavailable"))
+
+        mock_recorder = MagicMock()
+        mock_recorder.async_add_executor_job = AsyncMock(side_effect=mock_executor)
+
+        with patch(
+            "homeassistant.components.recorder.get_instance",
+            return_value=mock_recorder,
+        ):
+            result = await coordinator._update_zone("zone1", now, 60.0)
+
+        assert result is True
+        runtime = coordinator._controller.get_zone_runtime("zone1")
+        assert runtime is not None
+        assert runtime.state.open_state_avg == 0.0
+
 
 class TestExecuteFailSafeActions:
     """Test fail-safe action execution."""
