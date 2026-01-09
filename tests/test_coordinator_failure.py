@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
+from sqlalchemy.exc import OperationalError
 
 from custom_components.ufh_controller.const import (
     FAIL_SAFE_TIMEOUT,
@@ -246,10 +247,10 @@ class TestCoordinatorUpdateZoneFailure:
         now = datetime.now(UTC)
         coordinator._controller.state.observation_start = now - timedelta(hours=1)
 
-        # Make the query fail
+        # Make the query fail with a SQLAlchemy error
         mock_recorder = MagicMock()
         mock_recorder.async_add_executor_job = AsyncMock(
-            side_effect=Exception("Recorder unavailable")
+            side_effect=OperationalError("statement", {}, Exception("DB unavailable"))
         )
 
         with patch(
@@ -284,8 +285,8 @@ class TestCoordinatorUpdateZoneFailure:
             if call_count == 1:
                 # First call (period_state_avg) succeeds
                 return {"switch.zone1_valve": []}
-            # Second call (open_state_avg) fails
-            raise Exception("Recorder unavailable")  # noqa: TRY002
+            # Second call (open_state_avg) fails with SQLAlchemy error
+            raise OperationalError("statement", {}, Exception("DB unavailable"))
 
         mock_recorder = MagicMock()
         mock_recorder.async_add_executor_job = AsyncMock(side_effect=mock_executor)

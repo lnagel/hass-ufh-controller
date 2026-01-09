@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from sqlalchemy.exc import SQLAlchemyError
 
 from .const import (
     DEFAULT_PID,
@@ -525,16 +526,16 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # CRITICAL: Valve state since observation start (for used_duration/quota)
         # If this fails, we cannot safely make valve decisions
         period_start = self._controller.state.observation_start
-        period_state_avg = await get_state_average(
-            self.hass,
-            runtime.config.valve_switch,
-            period_start,
-            now,
-            on_value="on",
-        )
-
-        if period_state_avg is None:
-            LOGGER.error(
+        try:
+            period_state_avg = await get_state_average(
+                self.hass,
+                runtime.config.valve_switch,
+                period_start,
+                now,
+                on_value="on",
+            )
+        except SQLAlchemyError:
+            LOGGER.exception(
                 "Critical: Failed to query period state for zone %s, "
                 "blocking coordinator update",
                 zone_id,
@@ -544,15 +545,15 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # NON-CRITICAL: Valve state for open detection (recent window)
         # Fallback: Use current valve entity state
         valve_start, valve_end = get_valve_open_window(now, timing.valve_open_time)
-        open_state_avg = await get_state_average(
-            self.hass,
-            runtime.config.valve_switch,
-            valve_start,
-            valve_end,
-            on_value="on",
-        )
-
-        if open_state_avg is None:
+        try:
+            open_state_avg = await get_state_average(
+                self.hass,
+                runtime.config.valve_switch,
+                valve_start,
+                valve_end,
+                on_value="on",
+            )
+        except SQLAlchemyError:
             # Fallback to current entity state
             current_valve_state = self.hass.states.get(runtime.config.valve_switch)
             open_state_avg = (
@@ -561,25 +562,28 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 else 0.0
             )
             LOGGER.warning(
-                "Using fallback valve state for zone %s: %.2f",
+                "Recorder query failed for open state, using fallback valve state "
+                "for zone %s: %.2f",
                 zone_id,
                 open_state_avg,
+                exc_info=True,
             )
 
         # NON-CRITICAL: Window sensors average (historical)
         # Fallback: Assume windows are closed
-        window_open_avg = await get_window_open_average(
-            self.hass,
-            runtime.config.window_sensors,
-            period_start,
-            now,
-        )
-
-        if window_open_avg is None:
+        try:
+            window_open_avg = await get_window_open_average(
+                self.hass,
+                runtime.config.window_sensors,
+                period_start,
+                now,
+            )
+        except SQLAlchemyError:
             window_open_avg = 0.0  # Assume closed
             LOGGER.warning(
-                "Using fallback window state for zone %s (assuming closed)",
+                "Recorder query failed for window state, assuming closed for zone %s",
                 zone_id,
+                exc_info=True,
             )
 
         # Check if any window is currently open

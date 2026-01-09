@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
-from custom_components.ufh_controller.const import DEFAULT_TIMING, LOGGER
+from custom_components.ufh_controller.const import DEFAULT_TIMING
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -66,7 +66,7 @@ async def get_state_average(
     start: datetime,
     end: datetime,
     on_value: str = "on",
-) -> float | None:
+) -> float:
     """
     Calculate time-weighted average of a binary state over a period.
 
@@ -81,7 +81,10 @@ async def get_state_average(
         on_value: State value considered "on" (default "on").
 
     Returns:
-        Average as a ratio (0.0 to 1.0), or None if the query fails.
+        Average as a ratio (0.0 to 1.0).
+
+    Raises:
+        SQLAlchemyError: If Recorder query fails.
 
     """
     # Import here to allow testing without HA recorder
@@ -94,22 +97,14 @@ async def get_state_average(
     if total_time <= 0:
         return 0.0
 
-    try:
-        # Query recorder for state changes
-        states = await get_instance(hass).async_add_executor_job(
-            state_changes_during_period,
-            hass,
-            start,
-            end,
-            entity_id,
-        )
-    except Exception:  # noqa: BLE001 - Intentionally catching any Recorder failure
-        LOGGER.warning(
-            "Recorder query failed for %s",
-            entity_id,
-            exc_info=True,
-        )
-        return None
+    # Query recorder for state changes
+    states = await get_instance(hass).async_add_executor_job(
+        state_changes_during_period,
+        hass,
+        start,
+        end,
+        entity_id,
+    )
 
     entity_states = states.get(entity_id)
     if not entity_states:
@@ -137,85 +132,12 @@ async def get_state_average(
     return total_on_time / total_time
 
 
-async def get_numeric_average(
-    hass: HomeAssistant,
-    entity_id: str,
-    start: datetime,
-    end: datetime,
-) -> float | None:
-    """
-    Calculate time-weighted average of a numeric sensor over a period.
-
-    Args:
-        hass: Home Assistant instance.
-        entity_id: Entity ID to query.
-        start: Start of the time period.
-        end: End of the time period.
-
-    Returns:
-        Average value, or None if no valid data.
-
-    """
-    from homeassistant.components.recorder import get_instance  # noqa: PLC0415
-    from homeassistant.components.recorder.history import (  # noqa: PLC0415
-        state_changes_during_period,
-    )
-
-    total_time = (end - start).total_seconds()
-    if total_time <= 0:
-        return None
-
-    states = await get_instance(hass).async_add_executor_job(
-        state_changes_during_period,
-        hass,
-        start,
-        end,
-        entity_id,
-    )
-
-    entity_states = states.get(entity_id)
-    if not entity_states:
-        # No state changes - try current state
-        current_state = hass.states.get(entity_id)
-        if current_state:
-            try:
-                return float(current_state.state)
-            except (ValueError, TypeError):
-                return None
-        return None
-
-    # Calculate time-weighted average
-    weighted_sum = 0.0
-    valid_time = 0.0
-
-    for i, state in enumerate(entity_states):
-        try:
-            value = float(state.state)
-        except (ValueError, TypeError):
-            continue
-
-        state_start = max(state.last_changed, start)
-        if i + 1 < len(entity_states):
-            state_end = entity_states[i + 1].last_changed
-        else:
-            state_end = end
-
-        duration = (state_end - state_start).total_seconds()
-        weighted_sum += value * duration
-        valid_time += duration
-
-    if valid_time <= 0:
-        return None
-
-    return weighted_sum / valid_time
-
-
 async def get_window_open_average(
     hass: HomeAssistant,
     window_sensors: list[str],
     start: datetime,
     end: datetime,
-) -> float | None:
+) -> float:
     """
     Calculate the average "open" time across multiple window sensors.
 
@@ -228,7 +150,10 @@ async def get_window_open_average(
         end: End of the time period.
 
     Returns:
-        Average open ratio (0.0 to 1.0), or None if any query fails.
+        Average open ratio (0.0 to 1.0).
+
+    Raises:
+        SQLAlchemyError: If Recorder query fails.
 
     """
     if not window_sensors:
@@ -238,9 +163,6 @@ async def get_window_open_average(
     max_open = 0.0
     for sensor_id in window_sensors:
         avg = await get_state_average(hass, sensor_id, start, end, on_value="on")
-        if avg is None:
-            # If any window query fails, return None
-            return None
         max_open = max(max_open, avg)
 
     return max_open

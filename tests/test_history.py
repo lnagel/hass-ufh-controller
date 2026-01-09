@@ -5,9 +5,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from homeassistant.core import HomeAssistant, State
+from sqlalchemy.exc import OperationalError
 
 from custom_components.ufh_controller.core.history import (
-    get_numeric_average,
     get_observation_start,
     get_state_average,
     get_valve_open_window,
@@ -178,95 +178,6 @@ class TestGetStateAverage:
         assert result == 0.0
 
 
-class TestGetNumericAverage:
-    """Test cases for get_numeric_average."""
-
-    @pytest.fixture
-    def mock_hass(self) -> MagicMock:
-        """Create a mock HomeAssistant instance."""
-        hass = MagicMock(spec=HomeAssistant)
-        hass.states = MagicMock()
-        return hass
-
-    async def test_no_state_changes_current_state(self, mock_hass: MagicMock) -> None:
-        """Test when no state changes but current state exists."""
-        start = datetime(2024, 1, 15, 14, 0, 0, tzinfo=UTC)
-        end = datetime(2024, 1, 15, 15, 0, 0, tzinfo=UTC)
-
-        mock_state = MagicMock()
-        mock_state.state = "50.0"
-        mock_hass.states.get.return_value = mock_state
-
-        with patch(
-            "homeassistant.components.recorder.get_instance"
-        ) as mock_get_instance:
-            mock_recorder = MagicMock()
-            mock_recorder.async_add_executor_job = AsyncMock(return_value={})
-            mock_get_instance.return_value = mock_recorder
-
-            result = await get_numeric_average(mock_hass, "sensor.test", start, end)
-
-        assert result == 50.0
-
-    async def test_weighted_average(self, mock_hass: MagicMock) -> None:
-        """Test time-weighted average calculation."""
-        start = datetime(2024, 1, 15, 14, 0, 0, tzinfo=UTC)
-        end = datetime(2024, 1, 15, 15, 0, 0, tzinfo=UTC)
-        mid = datetime(2024, 1, 15, 14, 30, 0, tzinfo=UTC)
-
-        state1 = MagicMock(spec=State)
-        state1.state = "20.0"
-        state1.last_changed = start
-
-        state2 = MagicMock(spec=State)
-        state2.state = "40.0"
-        state2.last_changed = mid
-
-        with patch(
-            "homeassistant.components.recorder.get_instance"
-        ) as mock_get_instance:
-            mock_recorder = MagicMock()
-            mock_recorder.async_add_executor_job = AsyncMock(
-                return_value={"sensor.test": [state1, state2]}
-            )
-            mock_get_instance.return_value = mock_recorder
-
-            result = await get_numeric_average(mock_hass, "sensor.test", start, end)
-
-        # 30 min at 20 + 30 min at 40 = (20*30 + 40*30) / 60 = 30
-        assert result == pytest.approx(30.0)
-
-    async def test_invalid_state_values(self, mock_hass: MagicMock) -> None:
-        """Test handling of non-numeric state values."""
-        start = datetime(2024, 1, 15, 14, 0, 0, tzinfo=UTC)
-        end = datetime(2024, 1, 15, 15, 0, 0, tzinfo=UTC)
-
-        state1 = MagicMock(spec=State)
-        state1.state = "unavailable"
-        state1.last_changed = start
-
-        with patch(
-            "homeassistant.components.recorder.get_instance"
-        ) as mock_get_instance:
-            mock_recorder = MagicMock()
-            mock_recorder.async_add_executor_job = AsyncMock(
-                return_value={"sensor.test": [state1]}
-            )
-            mock_get_instance.return_value = mock_recorder
-
-            result = await get_numeric_average(mock_hass, "sensor.test", start, end)
-
-        assert result is None
-
-    async def test_zero_time_period(self, mock_hass: MagicMock) -> None:
-        """Test with zero-length time period."""
-        now = datetime(2024, 1, 15, 14, 0, 0, tzinfo=UTC)
-
-        result = await get_numeric_average(mock_hass, "sensor.test", now, now)
-
-        assert result is None
-
-
 class TestGetWindowOpenAverage:
     """Test cases for get_window_open_average."""
 
@@ -334,8 +245,10 @@ class TestGetWindowOpenAverage:
         # Should return 1.0 (max of 0.0 and 1.0)
         assert result == 1.0
 
-    async def test_returns_none_when_query_fails(self, mock_hass: MagicMock) -> None:
-        """Test that get_window_open_average returns None when a query fails."""
+    async def test_raises_exception_when_query_fails(
+        self, mock_hass: MagicMock
+    ) -> None:
+        """Test that get_window_open_average raises exception when a query fails."""
         start = datetime(2024, 1, 15, 14, 0, 0, tzinfo=UTC)
         end = datetime(2024, 1, 15, 15, 0, 0, tzinfo=UTC)
 
@@ -344,22 +257,23 @@ class TestGetWindowOpenAverage:
         ) as mock_get_instance:
             mock_recorder = MagicMock()
             mock_recorder.async_add_executor_job = AsyncMock(
-                side_effect=Exception("Recorder unavailable")
+                side_effect=OperationalError(
+                    "statement", {}, Exception("DB unavailable")
+                )
             )
             mock_get_instance.return_value = mock_recorder
 
-            result = await get_window_open_average(
-                mock_hass,
-                ["binary_sensor.window1"],
-                start,
-                end,
-            )
-
-        assert result is None
+            with pytest.raises(OperationalError):
+                await get_window_open_average(
+                    mock_hass,
+                    ["binary_sensor.window1"],
+                    start,
+                    end,
+                )
 
 
 class TestRecorderQueryFailure:
-    """Test Recorder query failure handling."""
+    """Test Recorder query failure handling - exceptions propagate to caller."""
 
     @pytest.fixture
     def mock_hass(self) -> MagicMock:
@@ -368,10 +282,10 @@ class TestRecorderQueryFailure:
         hass.states = MagicMock()
         return hass
 
-    async def test_get_state_average_returns_none_on_exception(
+    async def test_get_state_average_raises_on_operational_error(
         self, mock_hass: MagicMock
     ) -> None:
-        """Test that get_state_average returns None when recorder fails."""
+        """Test that get_state_average raises OperationalError when recorder fails."""
         start = datetime(2024, 1, 15, 14, 0, 0, tzinfo=UTC)
         end = datetime(2024, 1, 15, 15, 0, 0, tzinfo=UTC)
 
@@ -380,73 +294,24 @@ class TestRecorderQueryFailure:
         ) as mock_get_instance:
             mock_recorder = MagicMock()
             mock_recorder.async_add_executor_job = AsyncMock(
-                side_effect=Exception("Recorder unavailable")
+                side_effect=OperationalError(
+                    "statement", {}, Exception("DB unavailable")
+                )
             )
             mock_get_instance.return_value = mock_recorder
 
-            result = await get_state_average(
-                mock_hass,
-                "switch.test",
-                start,
-                end,
-            )
+            with pytest.raises(OperationalError):
+                await get_state_average(
+                    mock_hass,
+                    "switch.test",
+                    start,
+                    end,
+                )
 
-        assert result is None
-
-    async def test_get_state_average_returns_none_on_timeout(
+    async def test_get_state_average_succeeds_after_previous_failure(
         self, mock_hass: MagicMock
     ) -> None:
-        """Test that get_state_average returns None on timeout."""
-        start = datetime(2024, 1, 15, 14, 0, 0, tzinfo=UTC)
-        end = datetime(2024, 1, 15, 15, 0, 0, tzinfo=UTC)
-
-        with patch(
-            "homeassistant.components.recorder.get_instance"
-        ) as mock_get_instance:
-            mock_recorder = MagicMock()
-            mock_recorder.async_add_executor_job = AsyncMock(
-                side_effect=TimeoutError("Query timed out")
-            )
-            mock_get_instance.return_value = mock_recorder
-
-            result = await get_state_average(
-                mock_hass,
-                "switch.test",
-                start,
-                end,
-            )
-
-        assert result is None
-
-    async def test_get_state_average_returns_none_on_db_error(
-        self, mock_hass: MagicMock
-    ) -> None:
-        """Test that get_state_average returns None on database errors."""
-        start = datetime(2024, 1, 15, 14, 0, 0, tzinfo=UTC)
-        end = datetime(2024, 1, 15, 15, 0, 0, tzinfo=UTC)
-
-        with patch(
-            "homeassistant.components.recorder.get_instance"
-        ) as mock_get_instance:
-            mock_recorder = MagicMock()
-            mock_recorder.async_add_executor_job = AsyncMock(
-                side_effect=RuntimeError("Database connection lost")
-            )
-            mock_get_instance.return_value = mock_recorder
-
-            result = await get_state_average(
-                mock_hass,
-                "switch.test",
-                start,
-                end,
-            )
-
-        assert result is None
-
-    async def test_get_state_average_succeeds_after_exception_is_caught(
-        self, mock_hass: MagicMock
-    ) -> None:
-        """Test that exception handling doesn't affect subsequent successful queries."""
+        """Test that failures don't affect subsequent successful queries."""
         start = datetime(2024, 1, 15, 14, 0, 0, tzinfo=UTC)
         end = datetime(2024, 1, 15, 15, 0, 0, tzinfo=UTC)
 
@@ -460,7 +325,7 @@ class TestRecorderQueryFailure:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                raise Exception("First call fails")  # noqa: TRY002
+                raise OperationalError("statement", {}, Exception("DB unavailable"))
             return {}
 
         with patch(
@@ -470,9 +335,9 @@ class TestRecorderQueryFailure:
             mock_recorder.async_add_executor_job = AsyncMock(side_effect=side_effect)
             mock_get_instance.return_value = mock_recorder
 
-            # First call should return None
-            result1 = await get_state_average(mock_hass, "switch.test", start, end)
-            assert result1 is None
+            # First call should raise
+            with pytest.raises(OperationalError):
+                await get_state_average(mock_hass, "switch.test", start, end)
 
             # Second call should succeed
             result2 = await get_state_average(mock_hass, "switch.test", start, end)
