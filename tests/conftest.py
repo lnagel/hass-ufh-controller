@@ -1,4 +1,4 @@
-"""Common fixtures for UFH Controller tests."""
+"""Common fixtures for Underfloor Heating Controller tests."""
 
 from collections.abc import Generator
 from typing import Any

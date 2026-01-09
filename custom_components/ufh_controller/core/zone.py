@@ -1,5 +1,5 @@
 """
-Zone state and decision logic for UFH Controller.
+Zone state and decision logic for Underfloor Heating Controller.
 
 This module contains the zone state dataclasses and decision functions
 for determining valve actions based on quota-based scheduling.

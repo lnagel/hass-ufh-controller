@@ -1,4 +1,4 @@
-"""Tests for UFH Controller config flow."""
+"""Tests for Underfloor Heating Controller config flow."""
 
 from typing import Any
 from unittest.mock import patch

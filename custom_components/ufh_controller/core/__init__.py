@@ -1,4 +1,4 @@
-"""Core control logic for UFH Controller."""
+"""Core control logic for Underfloor Heating Controller."""
 
 from .controller import (
     ControllerConfig,

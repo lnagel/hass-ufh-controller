@@ -1,4 +1,4 @@
-"""Tests for entity unavailability handling in UFH Controller."""
+"""Tests for entity unavailability handling in Underfloor Heating Controller."""
 
 from typing import Any
 

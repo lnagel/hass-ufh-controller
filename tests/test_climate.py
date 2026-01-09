@@ -1,4 +1,4 @@
-"""Tests for UFH Controller climate platform."""
+"""Tests for Underfloor Heating Controller climate platform."""
 
 from unittest.mock import patch
 

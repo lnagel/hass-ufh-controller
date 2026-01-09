@@ -1,4 +1,4 @@
-"""Binary sensor platform for UFH Controller."""
+"""Binary sensor platform for Underfloor Heating Controller."""
 
 from __future__ import annotations
 

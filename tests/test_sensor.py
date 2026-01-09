@@ -1,4 +1,4 @@
-"""Tests for UFH Controller sensor platform."""
+"""Tests for Underfloor Heating Controller sensor platform."""
 
 import pytest
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN

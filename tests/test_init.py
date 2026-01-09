@@ -1,4 +1,4 @@
-"""Test UFH Controller setup and unload."""
+"""Test Underfloor Heating Controller setup and unload."""
 
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry

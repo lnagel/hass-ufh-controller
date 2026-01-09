@@ -1,4 +1,4 @@
-"""Sensor platform for UFH Controller."""
+"""Sensor platform for Underfloor Heating Controller."""
 
 from __future__ import annotations
 

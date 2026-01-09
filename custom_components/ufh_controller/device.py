@@ -1,4 +1,4 @@
-"""Device helpers for UFH Controller."""
+"""Device helpers for Underfloor Heating Controller."""
 
 from __future__ import annotations
 
@@ -18,8 +18,8 @@ def get_controller_device_info(
     """Get device info for the main controller device."""
     return DeviceInfo(
         identifiers={(DOMAIN, coordinator.config_entry.entry_id)},
-        name=coordinator.config_entry.data.get("name", "UFH Controller"),
-        manufacturer="UFH Controller",
+        name=coordinator.config_entry.data.get("name", "Underfloor Heating Controller"),
+        manufacturer="Underfloor Heating Controller",
         model="Heating Controller",
         sw_version="0.1.0",
     )
@@ -34,7 +34,7 @@ def get_zone_device_info(
     return DeviceInfo(
         identifiers={(DOMAIN, f"{coordinator.config_entry.entry_id}_{zone_id}")},
         name=zone_name,
-        manufacturer="UFH Controller",
+        manufacturer="Underfloor Heating Controller",
         model="Heating Zone",
         via_device=(DOMAIN, coordinator.config_entry.entry_id),
     )

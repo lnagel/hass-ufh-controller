@@ -1,4 +1,4 @@
-"""Custom types for UFH Controller."""
+"""Custom types for Underfloor Heating Controller."""
 
 from __future__ import annotations
 
@@ -16,6 +16,6 @@ type UFHControllerConfigEntry = ConfigEntry[UFHControllerData]
 
 @dataclass
 class UFHControllerData:
-    """Data for the UFH Controller integration."""
+    """Data for the Underfloor Heating Controller integration."""
 
     coordinator: UFHControllerDataUpdateCoordinator

@@ -1,6 +1,6 @@
 {
   "domain": "ufh_controller",
-  "name": "UFH Controller",
+  "name": "Underfloor Heating Controller",
   "codeowners": [
     "@lnagel"
   ],

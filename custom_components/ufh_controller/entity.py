@@ -1,4 +1,4 @@
-"""Base entity classes for UFH Controller."""
+"""Base entity classes for Underfloor Heating Controller."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ def get_controller_subentry_id(entry: UFHControllerConfigEntry) -> str | None:
 
 
 class UFHControllerEntity(CoordinatorEntity[UFHControllerDataUpdateCoordinator]):
-    """Base class for controller-level UFH Controller entities."""
+    """Base class for controller-level Underfloor Heating Controller entities."""
 
     _attr_has_entity_name = True
 
@@ -39,7 +39,7 @@ class UFHControllerEntity(CoordinatorEntity[UFHControllerDataUpdateCoordinator])
 
 
 class UFHControllerZoneEntity(CoordinatorEntity[UFHControllerDataUpdateCoordinator]):
-    """Base class for zone-level UFH Controller entities."""
+    """Base class for zone-level Underfloor Heating Controller entities."""
 
     _attr_has_entity_name = True
 

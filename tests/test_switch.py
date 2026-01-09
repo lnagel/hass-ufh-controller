@@ -1,4 +1,4 @@
-"""Tests for UFH Controller switch platform."""
+"""Tests for Underfloor Heating Controller switch platform."""
 
 from homeassistant.components.switch import DOMAIN as SWITCH_DOMAIN
 from homeassistant.const import (

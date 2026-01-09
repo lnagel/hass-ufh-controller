@@ -1,5 +1,5 @@
 """
-Custom integration to integrate UFH Controller with Home Assistant.
+Custom integration to integrate Underfloor Heating Controller with Home Assistant.
 
 For more details about this integration, please refer to
 https://github.com/lnagel/hass-ufh-controller
@@ -45,8 +45,8 @@ async def async_setup_entry(
     hass: HomeAssistant,
     entry: UFHControllerConfigEntry,
 ) -> bool:
-    """Set up UFH Controller from a config entry."""
-    LOGGER.debug("Setting up UFH Controller entry: %s", entry.entry_id)
+    """Set up Underfloor Heating Controller from a config entry."""
+    LOGGER.debug("Setting up Underfloor Heating Controller entry: %s", entry.entry_id)
 
     # Ensure controller subentry exists (auto-create if missing)
     await _async_ensure_controller_subentry(hass, entry)
@@ -90,7 +90,7 @@ async def _async_ensure_controller_subentry(
     # Create controller subentry with timing data
     # Try to migrate timing from options if available, otherwise use defaults
     timing = entry.options.get("timing", DEFAULT_TIMING)
-    controller_name = entry.data.get("name", "UFH Controller")
+    controller_name = entry.data.get("name", "Underfloor Heating Controller")
     controller_subentry = ConfigSubentry(
         data=MappingProxyType({"timing": timing}),
         subentry_type=SUBENTRY_TYPE_CONTROLLER,
@@ -107,7 +107,7 @@ async def async_unload_entry(
     entry: UFHControllerConfigEntry,
 ) -> bool:
     """Handle removal of an entry."""
-    LOGGER.debug("Unloading UFH Controller entry: %s", entry.entry_id)
+    LOGGER.debug("Unloading Underfloor Heating Controller entry: %s", entry.entry_id)
 
     # Save state before unloading
     coordinator = entry.runtime_data.coordinator
