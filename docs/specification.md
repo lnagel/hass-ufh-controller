@@ -330,9 +330,11 @@ All controller entities belong to a device named after the controller (user-defi
 | Platform | Entity ID Pattern                          | Name                       | Description |
 |----------|--------------------------------------------|----------------------------|-------------|
 | select | `select.{controller_id}_mode`              | "{name} Mode"              | Control mode selector |
-| switch | `switch.{controller_id}_flush_enabled`     | "{name} Flush Enabled"     | DHW latent heat capture toggle |
+| switch | `switch.{controller_id}_flush_enabled`     | "{name} Flush Enabled"     | DHW latent heat capture toggle (only when `dhw_active_entity` configured) |
 | sensor | `sensor.{controller_id}_requesting_zones`  | "{name} Requesting Zones"  | Count of zones currently requesting heat |
 | binary_sensor | `binary_sensor.{controller_id}_status` | "{name} Status" | Controller operational status (problem when degraded/fail-safe) |
+
+**Note:** The flush enabled switch is only created when `dhw_active_entity` is configured, as the DHW latent heat capture feature requires DHW state input to function.
 
 **Select Options for Mode:**
 
