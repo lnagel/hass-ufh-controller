@@ -35,6 +35,20 @@ uv sync --all-extras
 
 This installs all dependencies including test and dev extras (pytest, ruff, ty).
 
+### Setting Up Pre-Commit Hooks (Recommended)
+
+This project uses [pre-commit](https://pre-commit.com/) to automatically run checks before each commit:
+
+```bash
+uv run pre-commit install
+```
+
+Once installed, the hooks will automatically run ruff format, ruff check, ty check, and pytest on every commit. You can also run them manually:
+
+```bash
+uv run pre-commit run --all-files
+```
+
 ## Pre-Commit Checklist
 
 **Before committing any changes, run ALL of these checks in order:**
