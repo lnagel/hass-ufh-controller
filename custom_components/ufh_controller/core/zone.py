@@ -95,6 +95,7 @@ class ControllerState:
 
     mode: str = "auto"
     observation_start: datetime = field(default_factory=datetime.now)
+    period_elapsed: float = 0.0  # Seconds elapsed in current observation period
     heat_request: bool = False
     flush_enabled: bool = False
     dhw_active: bool = False
@@ -162,6 +163,12 @@ def evaluate_zone(  # noqa: PLR0911
     # Window blocking - duration exceeded threshold
     if zone.window_open_seconds > timing.window_block_time:
         return ZoneAction.TURN_OFF if zone.valve_on else ZoneAction.STAY_OFF
+
+    # Near end of observation period - freeze valve positions to avoid cycling
+    # If time remaining is less than min_run_time, a state change would be too brief
+    time_remaining = timing.observation_period - controller.period_elapsed
+    if time_remaining < timing.min_run_time:
+        return ZoneAction.STAY_ON if zone.valve_on else ZoneAction.STAY_OFF
 
     # Quota-based scheduling
     if zone.used_duration < zone.requested_duration:

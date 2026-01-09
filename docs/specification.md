@@ -210,6 +210,7 @@ class ZoneState:
 class ControllerState:
     mode: str  # auto, flush, cycle, all_on, all_off, disabled
     observation_start: datetime
+    period_elapsed: float  # Seconds elapsed in current observation period
     heat_request: bool
     flush_enabled: bool
     zones: dict[str, ZoneState]
@@ -519,6 +520,11 @@ def evaluate_zone(zone: ZoneState, controller: ControllerState,
     # Window blocking - duration exceeded threshold
     if zone.window_open_seconds > timing.window_block_time:
         return ZoneAction.TURN_OFF
+
+    # Near end of observation period - freeze valve positions
+    time_remaining = timing.observation_period - controller.period_elapsed
+    if time_remaining < timing.min_run_time:
+        return ZoneAction.STAY_ON if zone.valve_on else ZoneAction.STAY_OFF
 
     # Quota-based scheduling
     if zone.used_duration < zone.requested_duration:
@@ -1006,15 +1012,24 @@ The observation period defines the time window used for quota-based valve schedu
 **Range:** 60-1800 seconds (1 to 30 minutes)
 **Config location:** Controller subentry → `data.timing.min_run_time`
 
-The minimum duration a valve must run if turned on. This prevents rapid valve cycling which causes mechanical wear and inefficient heating.
+The minimum meaningful duration for a valve state change. This parameter serves two purposes:
 
-**How it works:** Before turning on a valve, the controller checks if the zone's remaining quota is at least `min_run_time`. If a zone only has 300 seconds of quota remaining but `min_run_time` is 540 seconds, the valve stays off rather than doing a short run.
+1. **Prevents short valve runs:** Before turning ON a valve, the controller checks if the zone's remaining quota is at least `min_run_time`. If not, the valve stays off rather than doing a brief run.
+
+2. **Prevents end-of-period cycling:** When the time remaining in the observation period is less than `min_run_time`, valve positions are frozen. This prevents unnecessary cycling at period boundaries (e.g., turning off a valve only to turn it back on when the new period starts moments later).
+
+**How it works:** The controller applies two checks using this parameter:
+- Before turning ON: `remaining_quota >= min_run_time`
+- Before any change: `time_remaining_in_period >= min_run_time`
+
+If either check fails, the valve maintains its current state.
 
 **Examples:**
 - Zone has used 6700s of a 7200s quota (500s remaining). With `min_run_time=540s`, the valve won't turn on because 500 < 540.
 - Zone has used 0s of a 3600s quota (3600s remaining). With `min_run_time=540s`, the valve can turn on because 3600 > 540.
+- 5 minutes remain in the observation period and a zone's quota is met. With `min_run_time=540s` (9 min), the valve stays in its current state rather than turning off, since the new period would likely turn it back on anyway.
 
-**Why it matters:** Too low causes valve wear from frequent switching. Too high prevents zones from using their full quota in small increments, potentially reducing heating effectiveness.
+**Why it matters:** Too low causes valve wear from frequent switching. Too high prevents zones from using their full quota in small increments and extends the freeze period at observation boundaries.
 
 #### valve_open_time
 

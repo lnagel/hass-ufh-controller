@@ -263,11 +263,14 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if not self._controller.zone_ids:
             return self._build_state_dict()
 
-        # Update observation start
+        # Update observation start and elapsed time
         timing = self._controller.config.timing
         self._controller.state.observation_start = get_observation_start(
             now, timing.observation_period
         )
+        self._controller.state.period_elapsed = (
+            now - self._controller.state.observation_start
+        ).total_seconds()
 
         # Check DHW active state
         await self._update_dhw_state()
@@ -372,9 +375,6 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Check if any window is currently open
         window_currently_open = self._is_any_window_open(runtime.config.window_sensors)
 
-        # Calculate elapsed time since observation start
-        elapsed_time = (now - period_start).total_seconds()
-
         # Update zone with historical data
         self._controller.update_zone_historical(
             zone_id,
@@ -382,7 +382,7 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             open_state_avg=open_state_avg,
             window_open_avg=window_open_avg,
             window_currently_open=window_currently_open,
-            elapsed_time=elapsed_time,
+            elapsed_time=self._controller.state.period_elapsed,
         )
 
     async def _execute_valve_actions(

@@ -229,6 +229,95 @@ class TestEvaluateZoneWindowBlocking:
         assert result == ZoneAction.TURN_ON
 
 
+class TestEvaluateZonePeriodEndFreeze:
+    """Test period end freeze behavior to prevent valve cycling at boundaries."""
+
+    @pytest.fixture
+    def timing(self) -> TimingParams:
+        """Create timing params with 7200s period and 540s min run time."""
+        return TimingParams(observation_period=7200, min_run_time=540)
+
+    def test_near_period_end_valve_on_stays_on(self, timing: TimingParams) -> None:
+        """Valve on stays on when near end of observation period."""
+        zone = ZoneState(
+            zone_id="test",
+            valve_on=True,
+            requested_duration=1000.0,
+            used_duration=1000.0,  # Quota met, would normally turn off
+        )
+        # 7200 - 7000 = 200 seconds remaining, less than 540 min_run_time
+        controller = ControllerState(period_elapsed=7000.0)
+        result = evaluate_zone(zone, controller, timing)
+        assert result == ZoneAction.STAY_ON
+
+    def test_near_period_end_valve_off_stays_off(self, timing: TimingParams) -> None:
+        """Valve off stays off when near end of observation period."""
+        zone = ZoneState(
+            zone_id="test",
+            valve_on=False,
+            requested_duration=1000.0,
+            used_duration=0.0,  # Has quota, would normally turn on
+        )
+        # 7200 - 7000 = 200 seconds remaining, less than 540 min_run_time
+        controller = ControllerState(period_elapsed=7000.0)
+        result = evaluate_zone(zone, controller, timing)
+        assert result == ZoneAction.STAY_OFF
+
+    def test_enough_time_remaining_normal_behavior(self, timing: TimingParams) -> None:
+        """Normal behavior when enough time remaining in period."""
+        zone = ZoneState(
+            zone_id="test",
+            valve_on=False,
+            requested_duration=1000.0,
+            used_duration=0.0,
+        )
+        # 7200 - 6000 = 1200 seconds remaining, more than 540 min_run_time
+        controller = ControllerState(period_elapsed=6000.0)
+        result = evaluate_zone(zone, controller, timing)
+        assert result == ZoneAction.TURN_ON
+
+    def test_exactly_at_threshold_normal_behavior(self, timing: TimingParams) -> None:
+        """Normal behavior when exactly at min_run_time threshold."""
+        zone = ZoneState(
+            zone_id="test",
+            valve_on=False,
+            requested_duration=1000.0,
+            used_duration=0.0,
+        )
+        # 7200 - 6660 = 540 seconds remaining, exactly min_run_time
+        controller = ControllerState(period_elapsed=6660.0)
+        result = evaluate_zone(zone, controller, timing)
+        assert result == ZoneAction.TURN_ON
+
+    def test_one_second_below_threshold_freezes(self, timing: TimingParams) -> None:
+        """Freeze behavior when just below threshold."""
+        zone = ZoneState(
+            zone_id="test",
+            valve_on=False,
+            requested_duration=1000.0,
+            used_duration=0.0,  # Has quota, would normally turn on
+        )
+        # 7200 - 6661 = 539 seconds remaining, just below 540 min_run_time
+        controller = ControllerState(period_elapsed=6661.0)
+        result = evaluate_zone(zone, controller, timing)
+        assert result == ZoneAction.STAY_OFF
+
+    def test_window_blocking_takes_precedence(self, timing: TimingParams) -> None:
+        """Window blocking should still work even near period end."""
+        zone = ZoneState(
+            zone_id="test",
+            valve_on=True,
+            window_currently_open=True,  # Window open should turn off
+            requested_duration=1000.0,
+            used_duration=0.0,
+        )
+        # Near end of period, but window is open
+        controller = ControllerState(period_elapsed=7000.0)
+        result = evaluate_zone(zone, controller, timing)
+        # Window blocking takes precedence over period freeze
+        assert result == ZoneAction.TURN_OFF
+
+
 class TestEvaluateZoneQuotaScheduling:
     """Test quota-based scheduling behavior."""
 
@@ -507,6 +596,7 @@ class TestControllerState:
         """Test default values are set correctly."""
         controller = ControllerState()
         assert controller.mode == "auto"
+        assert controller.period_elapsed == 0.0
         assert controller.heat_request is False
         assert controller.flush_enabled is False
         assert controller.dhw_active is False
