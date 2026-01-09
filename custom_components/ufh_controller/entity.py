@@ -2,10 +2,24 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from .const import SUBENTRY_TYPE_CONTROLLER
 from .coordinator import UFHControllerDataUpdateCoordinator
 from .device import get_controller_device_info, get_zone_device_info
+
+if TYPE_CHECKING:
+    from .data import UFHControllerConfigEntry
+
+
+def get_controller_subentry_id(entry: UFHControllerConfigEntry) -> str | None:
+    """Get the controller subentry ID."""
+    for subentry in entry.subentries.values():
+        if subentry.subentry_type == SUBENTRY_TYPE_CONTROLLER:
+            return subentry.subentry_id
+    return None
 
 
 class UFHControllerEntity(CoordinatorEntity[UFHControllerDataUpdateCoordinator]):

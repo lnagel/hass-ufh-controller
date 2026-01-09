@@ -11,8 +11,12 @@ from homeassistant.components.binary_sensor import (
     BinarySensorEntityDescription,
 )
 
-from .const import SUBENTRY_TYPE_CONTROLLER, SUBENTRY_TYPE_ZONE, ControllerStatus
-from .entity import UFHControllerEntity, UFHControllerZoneEntity
+from .const import SUBENTRY_TYPE_ZONE, ControllerStatus
+from .entity import (
+    UFHControllerEntity,
+    UFHControllerZoneEntity,
+    get_controller_subentry_id,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -22,14 +26,6 @@ if TYPE_CHECKING:
 
     from .coordinator import UFHControllerDataUpdateCoordinator
     from .data import UFHControllerConfigEntry
-
-
-def _get_controller_subentry_id(entry: UFHControllerConfigEntry) -> str | None:
-    """Get the controller subentry ID."""
-    for subentry in entry.subentries.values():
-        if subentry.subentry_type == SUBENTRY_TYPE_CONTROLLER:
-            return subentry.subentry_id
-    return None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -64,7 +60,7 @@ async def async_setup_entry(
     coordinator = entry.runtime_data.coordinator
 
     # Add controller-level status sensor
-    controller_subentry_id = _get_controller_subentry_id(entry)
+    controller_subentry_id = get_controller_subentry_id(entry)
     if controller_subentry_id is not None:
         async_add_entities(
             [UFHControllerStatusSensor(coordinator, controller_subentry_id)],

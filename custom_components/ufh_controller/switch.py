@@ -6,8 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.switch import SwitchDeviceClass, SwitchEntity
 
-from .const import SUBENTRY_TYPE_CONTROLLER
-from .entity import UFHControllerEntity
+from .entity import UFHControllerEntity, get_controller_subentry_id
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -17,14 +16,6 @@ if TYPE_CHECKING:
     from .data import UFHControllerConfigEntry
 
 
-def _get_controller_subentry_id(entry: UFHControllerConfigEntry) -> str | None:
-    """Get the controller subentry ID."""
-    for subentry in entry.subentries.values():
-        if subentry.subentry_type == SUBENTRY_TYPE_CONTROLLER:
-            return subentry.subentry_id
-    return None
-
-
 async def async_setup_entry(
     _hass: HomeAssistant,
     entry: UFHControllerConfigEntry,
@@ -32,7 +23,7 @@ async def async_setup_entry(
 ) -> None:
     """Set up the switch platform."""
     coordinator = entry.runtime_data.coordinator
-    controller_subentry_id = _get_controller_subentry_id(entry)
+    controller_subentry_id = get_controller_subentry_id(entry)
 
     if controller_subentry_id is None:
         return
