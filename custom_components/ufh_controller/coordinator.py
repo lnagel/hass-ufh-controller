@@ -424,8 +424,19 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # Check current state
         current_state = self.hass.states.get(entity_id)
-        if current_state is not None and current_state.state == summer_mode_value:
+        if current_state is None:
+            # Entity doesn't exist yet, can't update
+            return
+        if current_state.state == summer_mode_value:
             return  # Already in correct mode
+
+        # Check if select service is available
+        if not self.hass.services.has_service("select", "select_option"):
+            LOGGER.debug(
+                "Select service 'select_option' not available, skipping call to %s",
+                entity_id,
+            )
+            return
 
         # Call select service to change mode
         await self.hass.services.async_call(
