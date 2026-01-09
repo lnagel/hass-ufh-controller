@@ -31,6 +31,21 @@ class OperationMode(StrEnum):
     DISABLED = "disabled"
 
 
+class ControllerStatus(StrEnum):
+    """Controller operational status for error tracking."""
+
+    NORMAL = "normal"  # All systems operating normally
+    DEGRADED = "degraded"  # Using fallback values, some queries failing
+    FAIL_SAFE = "fail_safe"  # Safety mode activated, valves closed
+
+
+# Failure handling constants
+FAILURE_NOTIFICATION_THRESHOLD = (
+    3  # Create notification after this many consecutive failures
+)
+FAIL_SAFE_TIMEOUT = 3600  # 1 hour in seconds before activating fail-safe mode
+
+
 class TimingDefaults(TypedDict):
     """Type for DEFAULT_TIMING dictionary."""
 

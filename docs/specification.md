@@ -332,6 +332,7 @@ All controller entities belong to a device named after the controller (user-defi
 | select | `select.{controller_id}_mode`              | "{name} Mode"              | Control mode selector |
 | switch | `switch.{controller_id}_flush_enabled`     | "{name} Flush Enabled"     | DHW latent heat capture toggle |
 | sensor | `sensor.{controller_id}_requesting_zones`  | "{name} Requesting Zones"  | Count of zones currently requesting heat |
+| binary_sensor | `binary_sensor.{controller_id}_status` | "{name} Status" | Controller operational status (problem when degraded/fail-safe) |
 
 **Select Options for Mode:**
 
@@ -705,7 +706,57 @@ For each zone, the coordinator queries:
 
 Note: `requested_duration` is calculated from the current instantaneous PID duty cycle output, not a historical average.
 
-### 8.3 Performance Considerations
+### 8.3 Recorder Failure Handling
+
+The controller implements graceful degradation when Recorder queries fail:
+
+**Query Criticality:**
+
+| Query | Criticality | Fallback on Failure |
+|-------|-------------|---------------------|
+| Period state average (quota) | Critical | Block coordinator update, retain valve states |
+| Valve open average | Non-critical | Use current valve entity state |
+| Window open average | Non-critical | Assume windows closed |
+
+**Failure Tracking:**
+
+The coordinator tracks consecutive failures and implements escalating responses:
+
+| Condition | Response |
+|-----------|----------|
+| 1-2 consecutive failures | Log warning, use fallbacks, continue operating |
+| 3+ consecutive failures | Create persistent HA notification |
+| >1 hour without successful update | Activate fail-safe mode |
+
+**Fail-Safe Mode:**
+
+When fail-safe mode activates:
+1. All valves are commanded closed
+2. Heat request is turned off
+3. Summer mode (if configured) is set to "summer"
+4. Persistent notification is created
+
+**Controller Status Entity:**
+
+The `binary_sensor.{controller_id}_status` entity exposes operational status:
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| `status` | string | "normal", "degraded", or "fail_safe" |
+| `consecutive_failures` | int | Number of consecutive failed updates |
+| `last_successful_update` | datetime | Timestamp of last successful update |
+
+The binary sensor is `on` (problem state) when status is degraded or fail-safe.
+
+**Recovery:**
+
+When Recorder queries succeed again:
+- Status returns to "normal"
+- Failure counter resets to 0
+- Notification is dismissed
+- Normal control resumes automatically
+
+### 8.4 Performance Considerations
 
 - Queries are batched where possible
 - Results are cached within each coordinator cycle
@@ -974,6 +1025,7 @@ repos:
 | Risk | Impact | Likelihood | Mitigation |
 |------|--------|------------|------------|
 | Recorder queries slow | Control loop delayed | Medium | Batch queries, cache results, set timeout |
+| Recorder queries fail | Control loop blocked, valves stuck | Medium | Graceful degradation with fallbacks (see §8.3) |
 | HA restart loses state | Observation period resets, valves may cycle | Low | Recalculate from Recorder history on startup |
 | PID integral windup | Overshoot after blocked period | Medium | PID integration paused when zone blocked (see §6.3) |
 | Valve rapid cycling | Wear, inefficiency | Low | Enforce minimum run time, hysteresis |
