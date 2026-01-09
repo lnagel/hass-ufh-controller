@@ -47,13 +47,14 @@ MOCK_ZONE_DATA: dict[str, Any] = {
 
 @pytest.fixture
 def mock_config_entry() -> MockConfigEntry:
-    """Return a mock config entry with a zone subentry."""
+    """Return a mock config entry with a zone subentry and DHW entity."""
     return MockConfigEntry(
         domain=DOMAIN,
         title="Test Controller",
         data={
             "name": "Test Controller",
             "controller_id": MOCK_CONTROLLER_ID,
+            "dhw_active_entity": "binary_sensor.dhw_active",
         },
         options={
             "timing": DEFAULT_TIMING,

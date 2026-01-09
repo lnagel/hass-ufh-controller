@@ -28,12 +28,15 @@ async def async_setup_entry(
     if controller_subentry_id is None:
         return
 
-    async_add_entities(
-        [
-            UFHFlushEnabledSwitch(coordinator, controller_subentry_id),
-        ],
-        config_subentry_id=controller_subentry_id,
-    )
+    # Only create flush switch if DHW entity is configured
+    # (flush feature requires DHW state to function)
+    if entry.data.get("dhw_active_entity"):
+        async_add_entities(
+            [
+                UFHFlushEnabledSwitch(coordinator, controller_subentry_id),
+            ],
+            config_subentry_id=controller_subentry_id,
+        )
 
 
 class UFHFlushEnabledSwitch(UFHControllerEntity, SwitchEntity):
