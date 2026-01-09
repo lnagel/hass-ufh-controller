@@ -1,4 +1,4 @@
-# CLAUDE.md - AI Agent Guidelines for hass-ufh-controller
+# CLAUDE.md - AI Agent Guidelines
 
 This document provides essential guidelines for AI agents working on this codebase.
 
@@ -216,6 +216,11 @@ uv run ty check
 
 # Full pre-commit check
 uv run pytest && uv run ruff format . && uv run ruff check . --fix && uv run ty check
+
+# Bump version (updates pyproject.toml and manifest.json)
+uv run bump-my-version bump patch  # 0.1.3 → 0.1.4
+uv run bump-my-version bump minor  # 0.1.3 → 0.2.0
+uv run bump-my-version bump major  # 0.1.3 → 1.0.0
 ```
 
 ## Domain Knowledge
