@@ -29,7 +29,6 @@ def get_zone_device_info(
     coordinator: UFHControllerDataUpdateCoordinator,
     zone_id: str,
     zone_name: str,
-    subentry_id: str,  # noqa: ARG001
 ) -> DeviceInfo:
     """Get device info for a zone device linked to a subentry."""
     return DeviceInfo(
