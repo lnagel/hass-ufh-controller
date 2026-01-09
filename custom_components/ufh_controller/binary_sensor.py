@@ -129,7 +129,7 @@ class UFHControllerStatusSensor(UFHControllerEntity, BinarySensorEntity):
     and OFF when the controller is operating normally.
     """
 
-    _attr_translation_key = "controller_status"
+    _attr_translation_key = "status"
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
 
     def __init__(

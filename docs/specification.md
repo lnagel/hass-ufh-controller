@@ -332,7 +332,7 @@ All controller entities belong to a device named after the controller (user-defi
 | select | `select.{controller_id}_mode`              | "{name} Mode"              | Control mode selector |
 | switch | `switch.{controller_id}_flush_enabled`     | "{name} Flush Enabled"     | DHW latent heat capture toggle |
 | sensor | `sensor.{controller_id}_requesting_zones`  | "{name} Requesting Zones"  | Count of zones currently requesting heat |
-| binary_sensor | `binary_sensor.{controller_id}_status` | "{name} Controller Status" | Controller operational status (problem when degraded/fail-safe) |
+| binary_sensor | `binary_sensor.{controller_id}_status` | "{name} Status" | Controller operational status (problem when degraded/fail-safe) |
 
 **Select Options for Mode:**
 

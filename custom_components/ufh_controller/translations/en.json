@@ -216,8 +216,8 @@
       "heat_request": {
         "name": "Heat Request"
       },
-      "controller_status": {
-        "name": "Controller Status",
+      "status": {
+        "name": "Status",
         "state_attributes": {
           "status": {
             "name": "Status",
