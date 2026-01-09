@@ -1,4 +1,4 @@
-"""Select platform for UFH Controller."""
+"""Select platform for Underfloor Heating Controller."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Tests for UFH Controller coordinator persistence."""
+"""Tests for Underfloor Heating Controller coordinator persistence."""
 
 from unittest.mock import AsyncMock, patch
 

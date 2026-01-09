@@ -1,13 +1,13 @@
-# Home Assistant UFH Controller
+# Underfloor Heating Controller
 
-A Home Assistant custom integration for underfloor heating controller.
+A Home Assistant custom integration for multi-zone underfloor heating control with PID-based temperature regulation.
 
 ## Installation
 
 ### HACS (Recommended)
 
 1. Add this repository to HACS as a custom repository
-2. Search for "UFH Controller" in HACS
+2. Search for "Underfloor Heating Controller" in HACS
 3. Install the integration
 4. Restart Home Assistant
 
@@ -20,7 +20,7 @@ A Home Assistant custom integration for underfloor heating controller.
 
 1. Go to Settings -> Devices & Services
 2. Click "Add Integration"
-3. Search for "Home Assistant UFH Controller"
+3. Search for "Underfloor Heating Controller"
 4. Follow the setup wizard
 
 ## Documentation

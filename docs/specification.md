@@ -252,7 +252,7 @@ On entry setup, a **controller subentry** is automatically created to:
 Zones are managed as **config subentries**. Users interact with zones through:
 
 **Adding a Zone:**
-- Navigate to: Settings → Devices & Services → UFH Controller → "+ Add Heating Zone"
+- Navigate to: Settings → Devices & Services → Underfloor Heating Controller → "+ Add Heating Zone"
 - Or: Device page → Controller device → "Add Heating Zone" button
 
 | Field | Type | Required | Description |
@@ -279,7 +279,7 @@ Zones are managed as **config subentries**. Users interact with zones through:
 
 ### 4.3 Options Flow (Timing Settings)
 
-Accessed via: Settings → Devices & Services → UFH Controller → Configure
+Accessed via: Settings → Devices & Services → Underfloor Heating Controller → Configure
 
 The options flow provides access to **timing parameters** that apply to the entire controller:
 
@@ -1037,7 +1037,7 @@ repos:
 
 ## 13. Configuration Reference
 
-This section provides detailed documentation for all configuration parameters in the UFH Controller. Each parameter directly affects how the heating system operates.
+This section provides detailed documentation for all configuration parameters in the Underfloor Heating Controller. Each parameter directly affects how the heating system operates.
 
 ### 13.1 Timing Parameters
 

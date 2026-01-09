@@ -1,4 +1,4 @@
-"""DataUpdateCoordinator for UFH Controller."""
+"""DataUpdateCoordinator for Underfloor Heating Controller."""
 
 from __future__ import annotations
 
@@ -49,7 +49,7 @@ if TYPE_CHECKING:
 
 
 class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
-    """Class to manage fetching UFH Controller data."""
+    """Class to manage fetching Underfloor Heating Controller data."""
 
     config_entry: UFHControllerConfigEntry
 
@@ -282,7 +282,7 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Clear fail-safe if previously activated
         if self._fail_safe_activated:
             self._fail_safe_activated = False
-            LOGGER.info("UFH Controller recovered from fail-safe mode")
+            LOGGER.info("Underfloor Heating Controller recovered from fail-safe mode")
 
         # Dismiss any existing notification
         if self._notification_created:
@@ -333,8 +333,8 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._fail_safe_activated = True
         self._status = ControllerStatus.FAIL_SAFE
         LOGGER.error(
-            "UFH Controller entering fail-safe mode after %d consecutive failures "
-            "and no successful update for over 1 hour",
+            "Underfloor Heating Controller entering fail-safe mode after %d "
+            "consecutive failures and no successful update for over 1 hour",
             self._consecutive_failures,
         )
 
@@ -355,12 +355,12 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "create",
                 {
                     "message": (
-                        f"The UFH Controller has experienced "
+                        f"The Underfloor Heating Controller has experienced "
                         f"{self._consecutive_failures} consecutive Recorder query "
                         f"failures. The controller is operating in {mode_text} mode. "
                         f"Check that the Recorder component is functioning correctly."
                     ),
-                    "title": "UFH Controller: Recorder Failure",
+                    "title": "Underfloor Heating Controller: Recorder Failure",
                     "notification_id": f"{DOMAIN}_recorder_failure",
                 },
             )

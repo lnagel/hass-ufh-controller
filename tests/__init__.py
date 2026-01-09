@@ -1,1 +1,1 @@
-"""Tests for UFH Controller integration."""
+"""Tests for Underfloor Heating Controller integration."""

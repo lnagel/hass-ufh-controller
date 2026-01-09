@@ -1,5 +1,5 @@
 """
-Controller logic for UFH Controller.
+Controller logic for Underfloor Heating Controller.
 
 This module provides the main HeatingController class that orchestrates
 zone control, operation modes, and heat request aggregation.

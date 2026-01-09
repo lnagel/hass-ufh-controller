@@ -1,5 +1,5 @@
 """
-PID controller implementation for UFH Controller.
+PID controller implementation for Underfloor Heating Controller.
 
 This module provides a pure Python PID controller with anti-windup
 for temperature regulation in heating zones.

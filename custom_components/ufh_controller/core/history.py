@@ -1,5 +1,5 @@
 """
-Historical state query helpers for UFH Controller.
+Historical state query helpers for Underfloor Heating Controller.
 
 This module provides functions for querying historical entity states
 from Home Assistant's Recorder component for time-windowed calculations.

@@ -1,4 +1,4 @@
-"""Constants for UFH Controller."""
+"""Constants for Underfloor Heating Controller."""
 
 from enum import StrEnum
 from logging import Logger, getLogger

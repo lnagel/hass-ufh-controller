@@ -1,4 +1,4 @@
-"""Config flow for UFH Controller."""
+"""Config flow for Underfloor Heating Controller."""
 
 from __future__ import annotations
 
@@ -462,7 +462,7 @@ def build_zone_data(user_input: dict[str, Any]) -> dict[str, Any]:
 
 
 class UFHControllerFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
-    """Config flow for UFH Controller."""
+    """Config flow for Underfloor Heating Controller."""
 
     VERSION = 1
 
@@ -483,7 +483,9 @@ class UFHControllerFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             await self.async_set_unique_id(controller_id)
             self._abort_if_unique_id_configured()
 
-            LOGGER.debug("Creating UFH Controller entry: %s", controller_id)
+            LOGGER.debug(
+                "Creating Underfloor Heating Controller entry: %s", controller_id
+            )
 
             return self.async_create_entry(
                 title=user_input[CONF_NAME],
@@ -543,7 +545,7 @@ class UFHControllerFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
-    """Handle options flow for UFH Controller."""
+    """Handle options flow for Underfloor Heating Controller."""
 
     async def async_step_init(
         self,

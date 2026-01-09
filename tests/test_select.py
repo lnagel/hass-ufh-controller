@@ -1,4 +1,4 @@
-"""Tests for UFH Controller select platform."""
+"""Tests for Underfloor Heating Controller select platform."""
 
 from homeassistant.components.select import (
     DOMAIN as SELECT_DOMAIN,
