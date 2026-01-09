@@ -31,6 +31,21 @@ class OperationMode(StrEnum):
     DISABLED = "disabled"
 
 
+class SummerMode(StrEnum):
+    """
+    Boiler summer mode values.
+
+    Controls whether the boiler's heating circuit is active:
+    - AUTO: Boiler controls summer/winter mode automatically
+    - WINTER: Heating circuit enabled (for UFH heating)
+    - SUMMER: Heating circuit disabled (DHW only)
+    """
+
+    AUTO = "auto"
+    WINTER = "winter"
+    SUMMER = "summer"
+
+
 class ControllerStatus(StrEnum):
     """Controller operational status for error tracking."""
 

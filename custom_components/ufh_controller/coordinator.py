@@ -22,6 +22,7 @@ from .const import (
     SUBENTRY_TYPE_ZONE,
     ControllerStatus,
     OperationMode,
+    SummerMode,
 )
 from .core import (
     ControllerConfig,
@@ -394,13 +395,13 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Turn off heat request
         await self._execute_heat_request(heat_request=False)
 
-        # Set summer mode to 'summer' (disable heating circuit)
+        # Set summer mode to 'auto' to pass control back to the boiler
         summer_entity = self._controller.config.summer_mode_entity
         if summer_entity:
             await self.hass.services.async_call(
                 "select",
                 "select_option",
-                {"entity_id": summer_entity, "option": "summer"},
+                {"entity_id": summer_entity, "option": SummerMode.AUTO},
             )
 
     async def _async_update_data(self) -> dict[str, Any]:

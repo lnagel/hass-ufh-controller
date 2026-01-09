@@ -8,6 +8,7 @@ import pytest
 from custom_components.ufh_controller.const import (
     DEFAULT_PID,
     DEFAULT_SETPOINT,
+    SummerMode,
 )
 from custom_components.ufh_controller.core.controller import (
     ControllerConfig,
@@ -852,7 +853,7 @@ class TestGetSummerModeValue:
         )
         controller = HeatingController(config)
         controller.mode = "flush"
-        assert controller.get_summer_mode_value(heat_request=True) == "summer"
+        assert controller.get_summer_mode_value(heat_request=True) == SummerMode.SUMMER
 
     def test_all_off_mode_returns_summer(self) -> None:
         """Test all_off mode returns summer."""
@@ -864,7 +865,7 @@ class TestGetSummerModeValue:
         )
         controller = HeatingController(config)
         controller.mode = "all_off"
-        assert controller.get_summer_mode_value(heat_request=False) == "summer"
+        assert controller.get_summer_mode_value(heat_request=False) == SummerMode.SUMMER
 
     def test_all_on_mode_returns_winter(self) -> None:
         """Test all_on mode returns winter."""
@@ -876,7 +877,7 @@ class TestGetSummerModeValue:
         )
         controller = HeatingController(config)
         controller.mode = "all_on"
-        assert controller.get_summer_mode_value(heat_request=True) == "winter"
+        assert controller.get_summer_mode_value(heat_request=True) == SummerMode.WINTER
 
     def test_auto_mode_with_heat_request(self) -> None:
         """Test auto mode with heat request returns winter."""
@@ -887,7 +888,7 @@ class TestGetSummerModeValue:
             zones=[],
         )
         controller = HeatingController(config)
-        assert controller.get_summer_mode_value(heat_request=True) == "winter"
+        assert controller.get_summer_mode_value(heat_request=True) == SummerMode.WINTER
 
     def test_auto_mode_without_heat_request(self) -> None:
         """Test auto mode without heat request returns summer."""
@@ -898,7 +899,7 @@ class TestGetSummerModeValue:
             zones=[],
         )
         controller = HeatingController(config)
-        assert controller.get_summer_mode_value(heat_request=False) == "summer"
+        assert controller.get_summer_mode_value(heat_request=False) == SummerMode.SUMMER
 
 
 class TestZoneConfig:
