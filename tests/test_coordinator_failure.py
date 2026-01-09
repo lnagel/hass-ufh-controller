@@ -95,6 +95,22 @@ class TestCoordinatorFailureTracking:
 
         assert coordinator.status == ControllerStatus.DEGRADED
 
+    async def test_non_critical_failure_sets_degraded_from_normal(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+    ) -> None:
+        """Test that non-critical failure sets degraded status from normal."""
+        mock_config_entry.add_to_hass(hass)
+        coordinator = UFHControllerDataUpdateCoordinator(hass, mock_config_entry)
+
+        assert coordinator.status == ControllerStatus.NORMAL
+
+        coordinator._record_failure(critical=False)
+
+        assert coordinator.status == ControllerStatus.DEGRADED
+        assert coordinator.consecutive_failures == 1
+
     async def test_notification_created_after_threshold(
         self,
         hass: HomeAssistant,
@@ -467,6 +483,9 @@ class TestCriticalFailureDuringUpdate:
         coordinator = UFHControllerDataUpdateCoordinator(hass, mock_config_entry)
 
         # Put coordinator into fail-safe mode
+        # Set notification_created to avoid background task trying to call
+        # persistent_notification service which isn't registered
+        coordinator._notification_created = True
         coordinator._last_successful_update = datetime.now(UTC) - timedelta(
             seconds=FAIL_SAFE_TIMEOUT + 60
         )
