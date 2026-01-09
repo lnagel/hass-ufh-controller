@@ -13,6 +13,7 @@ from custom_components.ufh_controller.const import (
     DEFAULT_TIMING,
     DOMAIN,
     SUBENTRY_TYPE_ZONE,
+    SummerMode,
 )
 
 MOCK_CONTROLLER_ID = "test_controller"
@@ -318,12 +319,12 @@ async def test_summer_mode_value_calculation(
     await hass.async_block_till_done()
 
     coordinator = mock_config_entry_with_summer_mode.runtime_data.coordinator
-    # No heat request should mean "summer" mode
+    # No heat request should mean SummerMode.SUMMER
     heat_request = coordinator.controller.calculate_heat_request()
     summer_mode_value = coordinator.controller.get_summer_mode_value(
         heat_request=heat_request
     )
-    assert summer_mode_value == "summer"
+    assert summer_mode_value == SummerMode.SUMMER
 
 
 # ============================================================================

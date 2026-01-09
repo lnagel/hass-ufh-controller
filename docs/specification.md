@@ -733,7 +733,7 @@ The coordinator tracks consecutive failures and implements escalating responses:
 When fail-safe mode activates:
 1. All valves are commanded closed
 2. Heat request is turned off
-3. Summer mode (if configured) is set to "summer"
+3. Summer mode (if configured) is set to "auto" (passes control back to the boiler)
 4. Persistent notification is created
 
 **Controller Status Entity:**

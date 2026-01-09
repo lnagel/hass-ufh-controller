@@ -14,6 +14,7 @@ from custom_components.ufh_controller.const import (
     DEFAULT_CYCLE_MODE_HOURS,
     DEFAULT_PID,
     DEFAULT_SETPOINT,
+    SummerMode,
 )
 
 from .pid import PIDController
@@ -419,7 +420,8 @@ class HeatingController:
             heat_request: Current heat request state.
 
         Returns:
-            "winter" for heating, "summer" for no heating, or None if not applicable.
+            SummerMode.WINTER for heating, SummerMode.SUMMER for no heating,
+            or None if not applicable.
 
         """
         if self.config.summer_mode_entity is None:
@@ -431,13 +433,13 @@ class HeatingController:
             return None
 
         if mode in ("flush", "all_off"):
-            return "summer"
+            return SummerMode.SUMMER
 
         if mode == "all_on":
-            return "winter"
+            return SummerMode.WINTER
 
         # Auto and cycle modes depend on heat request
-        return "winter" if heat_request else "summer"
+        return SummerMode.WINTER if heat_request else SummerMode.SUMMER
 
     @property
     def zone_ids(self) -> list[str]:
