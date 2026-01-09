@@ -1,0 +1,40 @@
+# Pre-commit hooks matching development practices from CLAUDE.md
+# Run `uv sync --all-extras` before `pre-commit install`
+#
+# Manual equivalent:
+#   uv run pytest && uv run ruff format . && uv run ruff check . --fix && uv run ty check
+
+repos:
+  # Ruff - formatting and linting (fast, runs first)
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.14.1
+    hooks:
+      # Format code (equivalent to `uv run ruff format .`)
+      - id: ruff-format
+        name: ruff format
+
+      # Lint and auto-fix (equivalent to `uv run ruff check . --fix`)
+      - id: ruff
+        name: ruff check
+        args: [--fix]
+
+  # Local hooks for tools that need uv
+  - repo: local
+    hooks:
+      # Type checking with ty (equivalent to `uv run ty check`)
+      - id: ty-check
+        name: ty check
+        entry: uv run ty check
+        language: system
+        types: [python]
+        pass_filenames: false
+
+      # Run tests (equivalent to `uv run pytest`)
+      - id: pytest
+        name: pytest
+        entry: uv run pytest
+        language: system
+        types: [python]
+        pass_filenames: false
+        # Only run on commit, not on push (tests run in CI on push)
+        stages: [pre-commit]

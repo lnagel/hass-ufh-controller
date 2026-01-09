@@ -24,6 +24,14 @@ This installs all dependencies including test and dev extras (pytest, ruff, ty).
 
 The `--all-extras` flag is equivalent to `--extra test --extra dev` and ensures all tools are available.
 
+**Optional: Install pre-commit hooks for automated checks:**
+
+```bash
+uv run pre-commit install
+```
+
+This installs git hooks that automatically run all checks (ruff format, ruff check, ty check, pytest) before each commit.
+
 ## Pre-Commit Checklist
 
 **BEFORE committing any changes, run ALL of these checks in order:**
@@ -158,7 +166,11 @@ uv run pytest
 uv run pytest
 git commit
 
-# RIGHT - full verification
+# RIGHT - use pre-commit hooks (runs all checks automatically)
+uv run pre-commit install  # one-time setup
+git commit  # hooks run automatically
+
+# ALTERNATIVE - manual verification
 uv run pytest && uv run ruff format . && uv run ruff check . --fix && uv run ty check
 git commit
 ```
@@ -199,6 +211,12 @@ All must pass for PR approval.
 # Setup environment
 uv sync --all-extras
 
+# Install pre-commit hooks (recommended, one-time setup)
+uv run pre-commit install
+
+# Run all checks via pre-commit (recommended)
+uv run pre-commit run --all-files
+
 # Run tests
 uv run pytest
 
@@ -214,7 +232,7 @@ uv run ruff check . --fix
 # Type check
 uv run ty check
 
-# Full pre-commit check
+# Full manual check (alternative to pre-commit)
 uv run pytest && uv run ruff format . && uv run ruff check . --fix && uv run ty check
 ```
 
