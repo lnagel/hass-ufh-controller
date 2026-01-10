@@ -132,42 +132,6 @@ async def get_state_average(
     return total_on_time / total_time
 
 
-async def get_window_open_average(
-    hass: HomeAssistant,
-    window_sensors: list[str],
-    start: datetime,
-    end: datetime,
-) -> float:
-    """
-    Calculate the average "open" time across multiple window sensors.
-
-    If any window sensor is open, it counts as open time.
-
-    Args:
-        hass: Home Assistant instance.
-        window_sensors: List of window/door sensor entity IDs.
-        start: Start of the time period.
-        end: End of the time period.
-
-    Returns:
-        Average open ratio (0.0 to 1.0).
-
-    Raises:
-        SQLAlchemyError: If Recorder query fails.
-
-    """
-    if not window_sensors:
-        return 0.0
-
-    # Get average for each sensor and take the max (any open = blocked)
-    max_open = 0.0
-    for sensor_id in window_sensors:
-        avg = await get_state_average(hass, sensor_id, start, end, on_value="on")
-        max_open = max(max_open, avg)
-
-    return max_open
-
-
 async def was_any_window_open_recently(
     hass: HomeAssistant,
     window_sensors: list[str],

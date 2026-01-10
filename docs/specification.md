@@ -199,8 +199,7 @@ class ZoneState:
     # Calculated values (from Recorder queries)
     period_state_avg: float    # Average since observation_start
     open_state_avg: float      # Average over valve_open_time
-    window_open_seconds: float # Total seconds window was open this period
-    window_currently_open: bool # Whether any window is currently open
+    window_recently_open: bool # Was any window open within blocking period
 
     # Derived
     used_duration: float       # Seconds valve was on this period
@@ -358,7 +357,7 @@ Each zone gets its own device named after the zone (user-defined). The valve swi
 | sensor | `sensor.{controller_id}_{zone_id}_pid_error` | "{zone_name} PID Error" | Current temperature error (setpoint - current) |
 | sensor | `sensor.{controller_id}_{zone_id}_pid_proportional` | "{zone_name} PID Proportional" | Proportional term (Kp * error) |
 | sensor | `sensor.{controller_id}_{zone_id}_pid_integral` | "{zone_name} PID Integral" | Integral term (Ki * accumulated error) |
-| binary_sensor | `binary_sensor.{controller_id}_{zone_id}_blocked` | "{zone_name} Blocked" | Zone heating blocked (window open, etc.) |
+| binary_sensor | `binary_sensor.{controller_id}_{zone_id}_blocked` | "{zone_name} Blocked" | Zone PID control paused (window was recently open) |
 | binary_sensor | `binary_sensor.{controller_id}_{zone_id}_heat_request` | "{zone_name} Heat Request" | Zone is contributing to heat request |
 
 ### 5.3 Climate Entity Details
@@ -493,18 +492,14 @@ def _should_pause_pid(self, runtime: ZoneRuntime) -> bool:
     if not runtime.state.enabled:
         return True
 
-    # Window currently open blocks heating - don't accumulate integral
-    if runtime.state.window_currently_open:
-        return True
-
-    # Window was open too long during observation period
-    if runtime.state.window_open_seconds > self.config.timing.window_block_time:
+    # Window was open recently - pause PID to let temperature stabilize
+    if runtime.state.window_recently_open:
         return True
 
     return False
 ```
 
-This prevents the common problem of integral windup where the integral term accumulates during blocked periods and causes overshoot when heating resumes.
+This prevents the common problem of integral windup where the integral term accumulates while the room temperature is unstable after a window opening, which would cause overshoot when normal control resumes.
 
 ### 6.4 Time Windows
 
@@ -534,13 +529,8 @@ def evaluate_zone(zone: ZoneState, controller: ControllerState,
         not any_regular_circuits_enabled(controller)):
         return ZoneAction.TURN_ON
 
-    # Window blocking - immediate if currently open
-    if zone.window_currently_open:
-        return ZoneAction.TURN_OFF
-
-    # Window blocking - duration exceeded threshold
-    if zone.window_open_seconds > timing.window_block_time:
-        return ZoneAction.TURN_OFF
+    # Note: Window blocking is handled via PID pause, not valve control
+    # Valves follow quota-based scheduling regardless of window state
 
     # Near end of observation period - freeze valve positions
     time_remaining = timing.observation_period - controller.period_elapsed
@@ -1218,16 +1208,16 @@ The minimum quota remaining before a zone stops requesting heat from the boiler,
 **Range:** 0-3600 seconds (0 to 60 minutes)
 **Config location:** Controller subentry → `data.timing.window_block_time`
 
-The maximum accumulated time windows/doors can be open during the current observation period before heating is blocked for that zone.
+The time period after a window closes during which PID control remains paused to allow room temperature to stabilize.
 
-**How it works:** The controller tracks how many total seconds any window sensor was open during the current observation period (`window_open_seconds`). If this exceeds `window_block_time`, the zone's valve is turned off and PID integration is paused. Additionally, if any window is currently open right now (`window_currently_open=True`), the valve is immediately turned off regardless of accumulated time.
+**How it works:** The controller checks if any window sensor was open within the last `window_block_time` seconds. If so, PID controller updates are paused but the valve maintains its last calculated duty cycle. This allows the room temperature to stabilize naturally after a window opening without the PID controller reacting to temporary temperature fluctuations. Once `window_block_time` seconds have passed since all windows were last open, PID control resumes.
 
 **Examples:**
-- A window was open for 3 minutes (180s), then closed, then opened again for 5 minutes (300s). Total `window_open_seconds = 480s`. With `window_block_time=600s`, heating continues.
-- Same scenario but window opened a third time for 3 minutes (180s). Now `window_open_seconds = 660s`. With `window_block_time=600s`, heating is blocked for this zone.
-- Window is currently open right now → valve immediately turns off, regardless of `window_block_time`.
+- Window opens at 14:00 and closes at 14:05 (5 minutes open). With `window_block_time=600s`, PID is paused from 14:00 until 14:15 (10 minutes after the window closed). At 14:15, PID control resumes.
+- Window is currently open → PID remains paused, valve maintains last duty cycle.
+- Window closed 15 minutes ago → PID control is active, valve follows quota-based scheduling.
 
-**Why it matters:** Prevents wasting energy heating a room while a window is open. Setting to 0 disables time-based blocking but immediate blocking (window currently open) still applies.
+**Why it matters:** For underfloor heating systems, pausing PID control rather than closing valves is more effective. The high thermal mass means temperature changes slowly, so letting the system stabilize naturally produces better control than immediate reactions. Setting to 0 disables window blocking entirely.
 
 #### controller_loop_interval
 

@@ -10,7 +10,6 @@ from .history import (
     get_observation_start,
     get_state_average,
     get_valve_open_window,
-    get_window_open_average,
     was_any_window_open_recently,
 )
 from .pid import PIDController, PIDOutput, PIDState
@@ -45,7 +44,6 @@ __all__ = [
     "get_observation_start",
     "get_state_average",
     "get_valve_open_window",
-    "get_window_open_average",
     "should_request_heat",
     "was_any_window_open_recently",
 ]

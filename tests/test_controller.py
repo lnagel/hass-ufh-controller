@@ -476,7 +476,6 @@ class TestUpdateZoneHistorical:
             "living_room",
             period_state_avg=0.25,
             open_state_avg=0.9,
-            window_open_avg=0.0,
             window_recently_open=False,
             elapsed_time=7200.0,  # Full observation period
         )
@@ -485,30 +484,9 @@ class TestUpdateZoneHistorical:
         assert state is not None
         assert state.period_state_avg == 0.25
         assert state.open_state_avg == 0.9
-        assert state.window_open_seconds == 0.0
         assert state.window_recently_open is False
         # Used duration = 0.25 * 7200 = 1800
         assert state.used_duration == 1800.0
-
-    def test_update_historical_window_open_seconds(
-        self, basic_config: ControllerConfig
-    ) -> None:
-        """Test window_open_seconds is calculated from window_open_avg."""
-        controller = HeatingController(basic_config)
-
-        controller.update_zone_historical(
-            "living_room",
-            period_state_avg=0.25,
-            open_state_avg=0.9,
-            window_open_avg=0.1,  # 10% of time
-            window_recently_open=False,
-            elapsed_time=7200.0,
-        )
-
-        state = controller.get_zone_state("living_room")
-        assert state is not None
-        # window_open_seconds = 0.1 * 7200 = 720 seconds
-        assert state.window_open_seconds == 720.0
 
     def test_update_unknown_zone(self, basic_config: ControllerConfig) -> None:
         """Test updating unknown zone does nothing."""
@@ -518,7 +496,6 @@ class TestUpdateZoneHistorical:
             "unknown",
             period_state_avg=0.25,
             open_state_avg=0.9,
-            window_open_avg=0.0,
             window_recently_open=False,
             elapsed_time=7200.0,
         )
@@ -543,7 +520,6 @@ class TestUpdateZoneHistorical:
             "living_room",
             period_state_avg=0.5,  # On 50% of elapsed time
             open_state_avg=0.9,
-            window_open_avg=0.0,
             window_recently_open=False,
             elapsed_time=1800.0,
         )
@@ -578,7 +554,6 @@ class TestUpdateZoneHistorical:
             "living_room",
             period_state_avg=0.8,
             open_state_avg=0.0,
-            window_open_avg=0.0,
             window_recently_open=False,
             elapsed_time=1800.0,
         )
@@ -604,7 +579,6 @@ class TestEvaluateZonesAutoMode:
             "living_room",
             period_state_avg=0.0,  # No usage yet
             open_state_avg=0.0,
-            window_open_avg=0.0,
             window_recently_open=False,
             elapsed_time=7200.0,  # Full observation period
         )
@@ -804,7 +778,6 @@ class TestCalculateHeatRequest:
             "living_room",
             period_state_avg=0.0,
             open_state_avg=0.9,  # Above 0.85 threshold
-            window_open_avg=0.0,
             window_recently_open=False,
             elapsed_time=7200.0,  # Full observation period
         )

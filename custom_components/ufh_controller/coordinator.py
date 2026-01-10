@@ -34,7 +34,6 @@ from .core import (
     get_observation_start,
     get_state_average,
     get_valve_open_window,
-    get_window_open_average,
     was_any_window_open_recently,
 )
 from .core.zone import CircuitType
@@ -450,23 +449,6 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 exc_info=True,
             )
 
-        # NON-CRITICAL: Window sensors average (historical, deprecated)
-        # Fallback: Assume windows are closed
-        try:
-            window_open_avg = await get_window_open_average(
-                self.hass,
-                runtime.config.window_sensors,
-                period_start,
-                now,
-            )
-        except SQLAlchemyError:
-            window_open_avg = 0.0  # Assume closed
-            LOGGER.warning(
-                "Recorder query failed for window state, assuming closed for zone %s",
-                zone_id,
-                exc_info=True,
-            )
-
         # NON-CRITICAL: Check if any window was open recently
         # This query checks the last window_block_time seconds to determine
         # if PID should be paused. Fallback: Assume windows were closed.
@@ -491,7 +473,6 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             zone_id,
             period_state_avg=period_state_avg,
             open_state_avg=open_state_avg,
-            window_open_avg=window_open_avg,
             window_recently_open=window_recently_open,
             elapsed_time=self._controller.state.period_elapsed,
         )

@@ -268,13 +268,12 @@ class HeatingController:
         # Window was open recently - pause PID to let temperature stabilize
         return runtime.state.window_recently_open
 
-    def update_zone_historical(  # noqa: PLR0913
+    def update_zone_historical(
         self,
         zone_id: str,
         *,
         period_state_avg: float,
         open_state_avg: float,
-        window_open_avg: float,
         window_recently_open: bool,
         elapsed_time: float,
     ) -> None:
@@ -285,7 +284,6 @@ class HeatingController:
             zone_id: Zone identifier.
             period_state_avg: Average valve state since observation start.
             open_state_avg: Average valve state for open detection.
-            window_open_avg: Average window open state (ratio 0-1, deprecated).
             window_recently_open: Was any window open within blocking period.
             elapsed_time: Actual elapsed time since observation start in seconds.
 
@@ -297,8 +295,6 @@ class HeatingController:
         runtime.state.period_state_avg = period_state_avg
         runtime.state.open_state_avg = open_state_avg
         runtime.state.window_recently_open = window_recently_open
-        # Convert window open average (ratio) to seconds (deprecated field)
-        runtime.state.window_open_seconds = window_open_avg * elapsed_time
 
         # Calculate used and requested durations
         period = self.config.timing.observation_period

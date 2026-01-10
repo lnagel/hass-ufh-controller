@@ -484,7 +484,7 @@ async def test_window_sensor_on_with_no_recorder_data(
     hass: HomeAssistant,
     mock_config_entry_with_window_sensor: MockConfigEntry,
 ) -> None:
-    """Test window sensor 'on' state without Recorder data (test setup limitation)."""
+    """Test window sensor 'on' state shows as recently open."""
     hass.states.async_set("binary_sensor.window1", "on")
     hass.states.async_set("sensor.zone1_temp", "20.5")
 
@@ -495,9 +495,9 @@ async def test_window_sensor_on_with_no_recorder_data(
     coordinator = mock_config_entry_with_window_sensor.runtime_data.coordinator
     runtime = coordinator.controller.get_zone_runtime("zone1")
     assert runtime is not None
-    # Without Recorder data (mocked), window_recently_open defaults to False
-    # In real operation with Recorder, this would check historical state
-    assert runtime.state.window_recently_open is False
+    # With no Recorder history, get_state_average checks current state
+    # Since window is "on", it returns True
+    assert runtime.state.window_recently_open is True
 
 
 async def test_window_sensor_off_with_no_recorder_data(
