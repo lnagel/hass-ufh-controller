@@ -761,7 +761,25 @@ The controller NEVER enters fail-safe if at least one zone is operating normally
 | Valve open average | Non-critical | Use current valve entity state |
 | Window open average | Non-critical | Assume windows closed |
 
-#### 8.3.4 Controller Status Aggregation
+#### 8.3.4 Valve Entity Handling
+
+When synchronizing valve state from Home Assistant:
+
+| Valve Entity State | Behavior | Logging |
+|-------------------|----------|---------|
+| `on` | Valve considered open | None |
+| `off` | Valve considered closed | None |
+| `unavailable` | Valve treated as closed | Warning logged |
+| `unknown` | Valve treated as closed | Warning logged |
+| Entity not found | Valve treated as closed | Warning logged |
+
+**Rationale:** Valve unavailability is treated as non-critical because:
+- The valve is a controlled actuator, not a feedback sensor
+- Safe default is to assume valve is closed
+- Zone continues operating even if valve state is unknown
+- User is notified via logs to investigate the issue
+
+#### 8.3.5 Controller Status Aggregation
 
 The controller status is derived from zone statuses:
 
@@ -783,7 +801,7 @@ The `binary_sensor.{controller_id}_status` entity exposes operational status:
 
 The binary sensor is `on` (problem state) when status is degraded or fail-safe.
 
-#### 8.3.5 Summer Mode Safety
+#### 8.3.6 Summer Mode Safety
 
 When ANY zone is in fail-safe state:
 - Summer mode is forced to "auto" permanently
@@ -791,7 +809,7 @@ When ANY zone is in fail-safe state:
 - Controller cannot override summer mode while any zone is in fail-safe
 - This ensures heating is available via physical fallback mechanisms
 
-#### 8.3.6 Recovery
+#### 8.3.7 Recovery
 
 **Zone Recovery:**
 - When temperature reading and Recorder queries succeed:

@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
+from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from sqlalchemy.exc import SQLAlchemyError
@@ -489,6 +490,22 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             current_valve_state is not None and current_valve_state.state == "on"
         )
         runtime.state.valve_on = actual_valve_on
+
+        # Log if valve entity is unavailable
+        if current_valve_state is None:
+            LOGGER.warning(
+                "Valve entity %s not found for zone %s, treating as closed",
+                runtime.config.valve_switch,
+                zone_id,
+            )
+        elif current_valve_state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+            LOGGER.warning(
+                "Valve entity %s unavailable for zone %s (state: %s), "
+                "treating as closed",
+                runtime.config.valve_switch,
+                zone_id,
+                current_valve_state.state,
+            )
 
         # Track zone-level failure state
         self._update_zone_failure_state(
