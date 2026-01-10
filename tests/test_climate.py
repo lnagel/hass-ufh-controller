@@ -281,7 +281,9 @@ async def test_climate_extra_attributes(
     # Check extra attributes are present
     assert "duty_cycle" in attrs
     assert "pid_error" in attrs
-    assert "i_term" in attrs
+    assert "pid_p_term" in attrs
+    assert "pid_i_term" in attrs
+    assert "pid_d_term" in attrs
     assert "blocked" in attrs
     assert "heat_request" in attrs
     assert "zone_status" in attrs
