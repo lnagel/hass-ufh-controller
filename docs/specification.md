@@ -398,6 +398,24 @@ The `hvac_action` attribute communicates the current operational state of each z
 | `preset_mode` | string | Active preset (if any) |
 | `preset_modes` | list | Available presets |
 
+### 5.4 Entity Availability Rules
+
+Entity availability is determined by a combination of coordinator status and zone status.
+
+| Entity Type | Available When |
+|-------------|----------------|
+| Climate (zone) | Coordinator updated AND current temperature known |
+| Sensor (zone) | Zone NORMAL or DEGRADED AND native value not None |
+| Binary Sensor (zone) | Zone NORMAL or DEGRADED |
+| Controller entities | Coordinator updated |
+
+**Design Rationale:**
+- **Climate unavailable when temp sensor fails:** Prevents "unknown" states from being recorded to history
+- **Zone sensors/binary sensors unavailable during INITIALIZING:** Values not meaningful before first PID calculation
+- **Zone sensors/binary sensors unavailable during FAIL_SAFE:** Zone not participating in control, values would be misleading
+
+**Note:** Controller-level entities (mode select, requesting zones sensor, status binary sensor) remain available regardless of individual zone status.
+
 ---
 
 ## 6. Control Algorithm
