@@ -23,6 +23,7 @@ from .const import (
     ControllerStatus,
     OperationMode,
     SummerMode,
+    ZoneStatus,
 )
 from .core import (
     ControllerConfig,
@@ -433,37 +434,29 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Check DHW active state
         await self._update_dhw_state()
 
-        # Update each zone and track critical failures
-        any_critical_failure = False
+        # Update each zone (each zone tracks its own failure state)
         for zone_id in self._controller.zone_ids:
-            success = await self._update_zone(zone_id, now, dt)
-            if not success:
-                any_critical_failure = True
+            await self._update_zone(zone_id, now, dt)
 
-        # Handle failure tracking
-        if any_critical_failure:
-            self._record_failure(critical=True)
-            # In fail-safe mode, execute fail-safe actions and skip normal evaluation
-            if self._status == ControllerStatus.FAIL_SAFE:
-                await self._execute_fail_safe_actions()
-                return self._build_state_dict()
-            # In degraded mode with critical failure, retain valve states (skip actions)
+        # Update controller status from zone statuses
+        self._update_controller_status_from_zones()
+
+        # If ALL zones are in fail-safe, execute controller-level fail-safe
+        if self._status == ControllerStatus.FAIL_SAFE:
+            await self._execute_fail_safe_actions()
             return self._build_state_dict()
 
-        # All queries succeeded - record success
-        self._record_success()
-
-        # Evaluate all zones and get actions
+        # Evaluate all zones and get actions (zones track their own status)
         actions = self._controller.evaluate_zones()
 
-        # Execute valve actions
-        await self._execute_valve_actions(actions)
+        # Execute valve actions with zone-level isolation
+        await self._execute_valve_actions_with_isolation(actions)
 
         # Calculate and execute heat request
         heat_request = self._controller.calculate_heat_request()
         await self._execute_heat_request(heat_request=heat_request)
 
-        # Update summer mode if configured
+        # Update summer mode if configured (with safety check)
         await self._update_summer_mode(heat_request=heat_request)
 
         # Save state after every update for crash resilience
@@ -493,30 +486,32 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         zone_id: str,
         now: datetime,
         dt: float,
-    ) -> bool:
+    ) -> None:
         """
         Update a single zone with current data and historical averages.
 
-        Returns:
-            True if all critical queries succeeded, False if a critical query failed.
-
+        Zone failures are tracked per-zone and don't affect other zones.
         """
         runtime = self._controller.get_zone_runtime(zone_id)
         if runtime is None:
-            return True  # Not a failure, zone doesn't exist
+            return  # Zone doesn't exist
 
         # Read current temperature
         temp_state = self.hass.states.get(runtime.config.temp_sensor)
         current: float | None = None
+        temp_unavailable = False
         if temp_state is not None:
             try:
                 current = float(temp_state.state)
             except (ValueError, TypeError):
+                temp_unavailable = True
                 LOGGER.warning(
                     "Invalid temperature state for %s: %s",
                     runtime.config.temp_sensor,
                     temp_state.state,
                 )
+        else:
+            temp_unavailable = True
 
         # Update PID controller
         self._controller.update_zone_pid(zone_id, current, dt)
@@ -525,8 +520,9 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         timing = self._controller.config.timing
 
         # CRITICAL: Valve state since observation start (for used_duration/quota)
-        # If this fails, we cannot safely make valve decisions
+        # If this fails, zone enters degraded state
         period_start = self._controller.state.observation_start
+        recorder_failure = False
         try:
             period_state_avg = await get_state_average(
                 self.hass,
@@ -536,12 +532,19 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 on_value="on",
             )
         except SQLAlchemyError:
-            LOGGER.exception(
-                "Critical: Failed to query period state for zone %s, "
-                "blocking coordinator update",
+            recorder_failure = True
+            LOGGER.warning(
+                "Zone %s: Failed to query period state, zone entering degraded mode",
                 zone_id,
+                exc_info=True,
             )
-            return False  # Critical failure
+            # Use fallback: assume current valve state has been stable
+            current_valve_state = self.hass.states.get(runtime.config.valve_switch)
+            period_state_avg = (
+                1.0
+                if current_valve_state and current_valve_state.state == "on"
+                else 0.0
+            )
 
         # NON-CRITICAL: Valve state for open detection (recent window)
         # Fallback: Use current valve entity state
@@ -600,7 +603,112 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             elapsed_time=self._controller.state.period_elapsed,
         )
 
-        return True
+        # Track zone-level failure state
+        self._update_zone_failure_state(
+            runtime,
+            now,
+            temp_unavailable=temp_unavailable,
+            recorder_failure=recorder_failure,
+        )
+
+    def _update_zone_failure_state(
+        self,
+        runtime: Any,  # ZoneRuntime
+        now: datetime,
+        *,
+        temp_unavailable: bool,
+        recorder_failure: bool,
+    ) -> None:
+        """Update zone failure tracking state."""
+        state = runtime.state
+
+        if temp_unavailable or recorder_failure:
+            # Zone has a failure - increment counter and check for fail-safe
+            state.consecutive_failures += 1
+
+            # Check for zone-level fail-safe (1 hour timeout)
+            if self._should_zone_fail_safe(state, now):
+                if state.zone_status != ZoneStatus.FAIL_SAFE:
+                    state.zone_status = ZoneStatus.FAIL_SAFE
+                    LOGGER.error(
+                        "Zone %s entering fail-safe mode after 1 hour of failures",
+                        state.zone_id,
+                    )
+            elif state.zone_status == ZoneStatus.NORMAL:
+                state.zone_status = ZoneStatus.DEGRADED
+                LOGGER.warning(
+                    "Zone %s entering degraded mode: temp_unavailable=%s, "
+                    "recorder_failure=%s",
+                    state.zone_id,
+                    temp_unavailable,
+                    recorder_failure,
+                )
+        else:
+            # Zone succeeded - reset failure tracking
+            if state.zone_status != ZoneStatus.NORMAL:
+                LOGGER.info(
+                    "Zone %s recovered from %s mode",
+                    state.zone_id,
+                    state.zone_status.value,
+                )
+            state.zone_status = ZoneStatus.NORMAL
+            state.last_successful_update = now
+            state.consecutive_failures = 0
+
+    def _should_zone_fail_safe(self, state: Any, now: datetime) -> bool:
+        """Check if a zone should enter fail-safe mode."""
+        if state.last_successful_update is None:
+            # First failure - start tracking
+            state.last_successful_update = now
+            return False
+
+        elapsed = (now - state.last_successful_update).total_seconds()
+        return elapsed > FAIL_SAFE_TIMEOUT
+
+    def _update_controller_status_from_zones(self) -> None:
+        """Update controller status based on zone statuses."""
+        zone_statuses: list[ZoneStatus] = []
+        for zone_id in self._controller.zone_ids:
+            runtime = self._controller.get_zone_runtime(zone_id)
+            if runtime is not None:
+                zone_statuses.append(runtime.state.zone_status)
+
+        if not zone_statuses:
+            self._status = ControllerStatus.NORMAL
+            return
+
+        # Count zones in each state
+        normal_count = sum(1 for s in zone_statuses if s == ZoneStatus.NORMAL)
+        fail_safe_count = sum(1 for s in zone_statuses if s == ZoneStatus.FAIL_SAFE)
+
+        # Controller status logic:
+        # - If ANY zone is normal, controller operates (not fail-safe)
+        # - All zones in fail-safe = controller fail-safe
+        # - Any zone degraded/fail-safe but at least one normal = controller degraded
+        if normal_count > 0:
+            # At least one zone is normal - controller is operational
+            if fail_safe_count > 0 or any(
+                s == ZoneStatus.DEGRADED for s in zone_statuses
+            ):
+                self._status = ControllerStatus.DEGRADED
+            else:
+                self._status = ControllerStatus.NORMAL
+        # No zones are normal
+        elif all(s == ZoneStatus.FAIL_SAFE for s in zone_statuses):
+            self._status = ControllerStatus.FAIL_SAFE
+        else:
+            self._status = ControllerStatus.DEGRADED
+
+    def _any_zone_in_fail_safe(self) -> bool:
+        """Check if any zone is in fail-safe mode."""
+        for zone_id in self._controller.zone_ids:
+            runtime = self._controller.get_zone_runtime(zone_id)
+            if (
+                runtime is not None
+                and runtime.state.zone_status == ZoneStatus.FAIL_SAFE
+            ):
+                return True
+        return False
 
     async def _execute_valve_actions(
         self,
@@ -620,6 +728,31 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 await self._call_switch_service(valve_entity, turn_on=False)
             # STAY_ON and STAY_OFF don't require action
 
+    async def _execute_valve_actions_with_isolation(
+        self,
+        actions: dict[str, ZoneAction],
+    ) -> None:
+        """Execute valve actions respecting zone-level fail-safe."""
+        for zone_id, action in actions.items():
+            runtime = self._controller.get_zone_runtime(zone_id)
+            if runtime is None:
+                continue
+
+            valve_entity = runtime.config.valve_switch
+
+            # Zone in fail-safe: force valve closed, ignore normal action
+            if runtime.state.zone_status == ZoneStatus.FAIL_SAFE:
+                await self._call_switch_service(valve_entity, turn_on=False)
+                runtime.state.valve_on = False
+                continue
+
+            # Normal action execution
+            if action == ZoneAction.TURN_ON:
+                await self._call_switch_service(valve_entity, turn_on=True)
+            elif action == ZoneAction.TURN_OFF:
+                await self._call_switch_service(valve_entity, turn_on=False)
+            # STAY_ON and STAY_OFF don't require action
+
     async def _execute_heat_request(self, *, heat_request: bool) -> None:
         """Execute heat request by calling switch service if configured."""
         entity_id = self._controller.config.heat_request_entity
@@ -628,16 +761,28 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         await self._call_switch_service(entity_id, turn_on=heat_request)
 
     async def _update_summer_mode(self, *, heat_request: bool) -> None:
-        """Update boiler summer mode if configured."""
-        summer_mode_value = self._controller.get_summer_mode_value(
-            heat_request=heat_request
-        )
-        if summer_mode_value is None:
-            return
+        """
+        Update boiler summer mode if configured.
 
+        Safety: If ANY zone is in fail-safe, summer mode is forced to 'auto'
+        to allow physical fallback valves to receive heated water.
+        """
         entity_id = self._controller.config.summer_mode_entity
         if entity_id is None:
             return
+
+        # Safety check: if any zone is in fail-safe, force summer mode to 'auto'
+        if self._any_zone_in_fail_safe():
+            summer_mode_value = SummerMode.AUTO
+            LOGGER.debug(
+                "Zone(s) in fail-safe, forcing summer mode to 'auto' for fallbacks"
+            )
+        else:
+            summer_mode_value = self._controller.get_summer_mode_value(
+                heat_request=heat_request
+            )
+            if summer_mode_value is None:
+                return
 
         # Check current state
         current_state = self.hass.states.get(entity_id)
@@ -688,6 +833,17 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     def _build_state_dict(self) -> dict[str, Any]:
         """Build state dictionary for entities to consume."""
+        # Count zones in each state
+        zones_degraded = 0
+        zones_fail_safe = 0
+        for zone_id in self._controller.zone_ids:
+            runtime = self._controller.get_zone_runtime(zone_id)
+            if runtime is not None:
+                if runtime.state.zone_status == ZoneStatus.DEGRADED:
+                    zones_degraded += 1
+                elif runtime.state.zone_status == ZoneStatus.FAIL_SAFE:
+                    zones_fail_safe += 1
+
         result: dict[str, Any] = {
             "mode": self._controller.mode,
             "heat_request": self._controller.calculate_heat_request(),
@@ -699,6 +855,8 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 if self._last_successful_update
                 else None
             ),
+            "zones_degraded": zones_degraded,
+            "zones_fail_safe": zones_fail_safe,
             "zones": {},
         }
 
@@ -729,6 +887,7 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "blocked": blocked,
                     "heat_request": heat_request,
                     "preset_mode": self._zone_presets.get(zone_id),
+                    "zone_status": state.zone_status.value,
                 }
 
         return result

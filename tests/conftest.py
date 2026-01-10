@@ -44,6 +44,24 @@ MOCK_ZONE_DATA: dict[str, Any] = {
     },
 }
 
+MOCK_ZONE2_DATA: dict[str, Any] = {
+    "id": "zone2",
+    "name": "Test Zone 2",
+    "circuit_type": "regular",
+    "temp_sensor": "sensor.zone2_temp",
+    "valve_switch": "switch.zone2_valve",
+    "setpoint": DEFAULT_SETPOINT,
+    "pid": DEFAULT_PID,
+    "window_sensors": [],
+    "presets": {
+        "home": 21.0,
+        "away": 16.0,
+        "eco": 19.0,
+        "comfort": 22.0,
+        "boost": 25.0,
+    },
+}
+
 
 @pytest.fixture
 def mock_config_entry() -> MockConfigEntry:
@@ -88,6 +106,42 @@ def mock_config_entry_no_zones() -> MockConfigEntry:
         },
         entry_id="test_entry_id_no_zones",
         unique_id=f"{MOCK_CONTROLLER_ID}_no_zones",
+    )
+
+
+@pytest.fixture
+def mock_config_entry_multiple_zones() -> MockConfigEntry:
+    """Return a mock config entry with two zone subentries for isolation testing."""
+    return MockConfigEntry(
+        domain=DOMAIN,
+        title="Test Controller Multi",
+        data={
+            "name": "Test Controller Multi",
+            "controller_id": f"{MOCK_CONTROLLER_ID}_multi",
+            "dhw_active_entity": "binary_sensor.dhw_active",
+            "summer_mode_entity": "select.summer_mode",
+        },
+        options={
+            "timing": DEFAULT_TIMING,
+        },
+        entry_id="test_entry_id_multi",
+        unique_id=f"{MOCK_CONTROLLER_ID}_multi",
+        subentries_data=[
+            {
+                "data": MOCK_ZONE_DATA,
+                "subentry_id": "subentry_zone1",
+                "subentry_type": SUBENTRY_TYPE_ZONE,
+                "title": "Test Zone 1",
+                "unique_id": "zone1",
+            },
+            {
+                "data": MOCK_ZONE2_DATA,
+                "subentry_id": "subentry_zone2",
+                "subentry_type": SUBENTRY_TYPE_ZONE,
+                "title": "Test Zone 2",
+                "unique_id": "zone2",
+            },
+        ],
     )
 
 

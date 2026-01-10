@@ -45,6 +45,14 @@ class ControllerStatus(StrEnum):
     FAIL_SAFE = "fail_safe"  # Safety mode activated, valves closed
 
 
+class ZoneStatus(StrEnum):
+    """Zone operational status for fault isolation."""
+
+    NORMAL = "normal"  # Zone operating normally with valid temperature readings
+    DEGRADED = "degraded"  # Temp sensor unavailable or Recorder query failing
+    FAIL_SAFE = "fail_safe"  # No successful update for >1 hour, valve forced closed
+
+
 # Failure handling constants
 FAILURE_NOTIFICATION_THRESHOLD = (
     3  # Create notification after this many consecutive failures
