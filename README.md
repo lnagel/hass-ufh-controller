@@ -28,6 +28,12 @@ Most underfloor heating systems either run valves in simple on/off mode (ineffic
 - **DHW latent heat capture** - flush circuits can use waste heat from hot water heating
 - **Boiler summer mode** - disables heating circuit when not needed
 
+### Fault Tolerance
+- **Zone isolation** - sensor failures in one zone don't affect other zones
+- **Graceful degradation** - zones continue operating with last-known demand for 1 hour
+- **Visual status** - climate entities show zone status (normal, degraded, fail-safe)
+- **Physical fallback support** - summer mode forced to "auto" when zones fail, enabling physical fallback valves
+
 ### Multiple Operation Modes
 | Mode | Description |
 |------|-------------|
@@ -189,13 +195,21 @@ The defaults work well for most underfloor heating systems. Increase Kp if rooms
 2. Ensure your temperature sensor isn't affected by drafts or direct sunlight
 3. Check that valve open time allows the valve to fully open before heat is requested
 
-### Controller Status Shows Problem
+### Controller or Zone Status Shows Problem
 
-The controller tracks recorder query failures:
-- **Degraded**: Some queries failing, using fallbacks
-- **Fail-safe**: Extended failures, valves closed for safety
+The controller tracks failures at both zone and controller level:
 
-Check Home Assistant logs for recorder issues.
+**Zone Status** (visible in climate entity attributes):
+- **Normal**: Zone operating correctly
+- **Degraded**: Temperature sensor unavailable, using last-known demand
+- **Fail-safe**: No valid data for >1 hour, zone valve closed
+
+**Controller Status**:
+- **Normal**: All zones operating correctly
+- **Degraded**: One or more zones have issues, but others continue
+- **Fail-safe**: All zones in fail-safe (rare - requires all sensors to fail)
+
+Key point: A failing sensor in one zone won't affect your other zones. Check Home Assistant logs for specific error details.
 
 ## Documentation
 

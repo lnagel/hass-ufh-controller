@@ -709,35 +709,67 @@ For each zone, the coordinator queries:
 
 Note: `requested_duration` is calculated from the current instantaneous PID duty cycle output, not a historical average.
 
-### 8.3 Recorder Failure Handling
+### 8.3 Zone-Level Fault Isolation
 
-The controller implements graceful degradation when Recorder queries fail:
+The controller implements zone-level fault isolation to ensure that failures in one zone do not affect other zones. This is critical for multi-zone installations where individual temperature sensors or valve entities may fail independently.
 
-**Query Criticality:**
+#### 8.3.1 Zone Status
+
+Each zone tracks its own operational status independently:
+
+| Status | Description |
+|--------|-------------|
+| `normal` | Zone operating normally with valid temperature readings |
+| `degraded` | Temperature sensor unavailable or Recorder query failing; using fallback values |
+| `fail_safe` | No successful update for >1 hour; valve forced closed |
+
+**Zone Degraded Behavior:**
+
+When a zone enters degraded status:
+- PID controller continues with last-known duty cycle
+- Valve scheduling continues based on cached demand
+- Climate entity shows `zone_status: degraded` in attributes
+- Zone can still respond to setpoint changes
+
+**Zone Fail-Safe Behavior:**
+
+When a zone enters fail-safe (after 1 hour of degraded operation):
+- Zone's valve is forced closed
+- Zone no longer participates in heating
+- Climate entity shows `zone_status: fail_safe` in attributes
+- Recovery requires successful temperature reading and Recorder query
+
+#### 8.3.2 Zone Isolation Guarantee
+
+**Critical Requirement:** Working zones must NEVER be affected by failing zones.
+
+| Scenario | Result |
+|----------|--------|
+| 1 of 7 zones fails | 6 zones continue operating indefinitely |
+| 6 of 7 zones fail | 1 zone continues operating indefinitely |
+| All zones fail | Controller enters fail-safe only after all zones are in fail-safe |
+
+The controller NEVER enters fail-safe if at least one zone is operating normally.
+
+#### 8.3.3 Recorder Query Handling
+
+**Query Criticality (per-zone):**
 
 | Query | Criticality | Fallback on Failure |
 |-------|-------------|---------------------|
-| Period state average (quota) | Critical | Block coordinator update, retain valve states |
+| Period state average (quota) | Critical for zone | Zone enters degraded, retains last valve state |
 | Valve open average | Non-critical | Use current valve entity state |
 | Window open average | Non-critical | Assume windows closed |
 
-**Failure Tracking:**
+#### 8.3.4 Controller Status Aggregation
 
-The coordinator tracks consecutive failures and implements escalating responses:
+The controller status is derived from zone statuses:
 
-| Condition | Response |
-|-----------|----------|
-| 1-2 consecutive failures | Log warning, use fallbacks, continue operating |
-| 3+ consecutive failures | Create persistent HA notification |
-| >1 hour without successful update | Activate fail-safe mode |
-
-**Fail-Safe Mode:**
-
-When fail-safe mode activates:
-1. All valves are commanded closed
-2. Heat request is turned off
-3. Summer mode (if configured) is set to "auto" (passes control back to the boiler)
-4. Persistent notification is created
+| Condition | Controller Status |
+|-----------|-------------------|
+| All zones normal | `normal` |
+| Any zone degraded or fail-safe, but at least one normal | `degraded` |
+| All zones in fail-safe | `fail_safe` |
 
 **Controller Status Entity:**
 
@@ -746,18 +778,30 @@ The `binary_sensor.{controller_id}_status` entity exposes operational status:
 | Attribute | Type | Description |
 |-----------|------|-------------|
 | `status` | string | "normal", "degraded", or "fail_safe" |
-| `consecutive_failures` | int | Number of consecutive failed updates |
-| `last_successful_update` | datetime | Timestamp of last successful update |
+| `zones_degraded` | int | Number of zones in degraded state |
+| `zones_fail_safe` | int | Number of zones in fail-safe state |
 
 The binary sensor is `on` (problem state) when status is degraded or fail-safe.
 
-**Recovery:**
+#### 8.3.5 Summer Mode Safety
 
-When Recorder queries succeed again:
-- Status returns to "normal"
-- Failure counter resets to 0
-- Notification is dismissed
-- Normal control resumes automatically
+When ANY zone is in fail-safe state:
+- Summer mode is forced to "auto" permanently
+- This allows physical fallback valves to receive heated water
+- Controller cannot override summer mode while any zone is in fail-safe
+- This ensures heating is available via physical fallback mechanisms
+
+#### 8.3.6 Recovery
+
+**Zone Recovery:**
+- When temperature reading and Recorder queries succeed:
+  - Zone status returns to "normal"
+  - Zone failure counter resets to 0
+  - Normal control resumes automatically
+
+**Controller Recovery:**
+- When all zones recover, controller status returns to "normal"
+- Summer mode returns to automatic control when no zones are in fail-safe
 
 ### 8.4 Performance Considerations
 

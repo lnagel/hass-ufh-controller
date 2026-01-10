@@ -188,4 +188,5 @@ class UFHZoneClimate(UFHControllerZoneEntity, ClimateEntity):
             "i_term": zone_data.get("i_term"),
             "blocked": zone_data.get("blocked", False),
             "heat_request": zone_data.get("heat_request", False),
+            "zone_status": zone_data.get("zone_status", "normal"),
         }

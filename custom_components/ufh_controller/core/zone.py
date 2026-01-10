@@ -15,6 +15,7 @@ from custom_components.ufh_controller.const import (
     DEFAULT_SETPOINT,
     DEFAULT_TIMING,
     DEFAULT_VALVE_OPEN_THRESHOLD,
+    ZoneStatus,
 )
 
 
@@ -87,6 +88,11 @@ class ZoneState:
 
     # Zone enabled state
     enabled: bool = True
+
+    # Zone fault isolation state
+    zone_status: ZoneStatus = ZoneStatus.NORMAL
+    last_successful_update: datetime | None = None
+    consecutive_failures: int = 0
 
 
 @dataclass
