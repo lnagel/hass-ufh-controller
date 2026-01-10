@@ -481,6 +481,15 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             elapsed_time=self._controller.state.period_elapsed,
         )
 
+        # Sync valve state from actual HA entity
+        # This ensures we detect when external factors change the valve state
+        # (e.g., user toggle, automation, device reset)
+        current_valve_state = self.hass.states.get(runtime.config.valve_switch)
+        actual_valve_on = (
+            current_valve_state is not None and current_valve_state.state == "on"
+        )
+        runtime.state.valve_on = actual_valve_on
+
         # Track zone-level failure state
         self._update_zone_failure_state(
             runtime,
