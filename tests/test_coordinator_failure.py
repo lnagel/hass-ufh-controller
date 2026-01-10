@@ -9,7 +9,6 @@ from sqlalchemy.exc import OperationalError
 
 from custom_components.ufh_controller.const import (
     FAIL_SAFE_TIMEOUT,
-    FAILURE_NOTIFICATION_THRESHOLD,
     ControllerStatus,
     ZoneStatus,
 )
@@ -18,8 +17,8 @@ from custom_components.ufh_controller.coordinator import (
 )
 
 
-class TestCoordinatorFailureTracking:
-    """Test coordinator failure tracking."""
+class TestCoordinatorStatus:
+    """Test coordinator status tracking."""
 
     async def test_initial_status_is_normal(
         self,
@@ -31,201 +30,6 @@ class TestCoordinatorFailureTracking:
         coordinator = UFHControllerDataUpdateCoordinator(hass, mock_config_entry)
 
         assert coordinator.status == ControllerStatus.NORMAL
-        assert coordinator.consecutive_failures == 0
-        assert coordinator.last_successful_update is None
-
-    async def test_record_success_updates_status(
-        self,
-        hass: HomeAssistant,
-        mock_config_entry: MockConfigEntry,
-    ) -> None:
-        """Test that successful update records correctly."""
-        mock_config_entry.add_to_hass(hass)
-        coordinator = UFHControllerDataUpdateCoordinator(hass, mock_config_entry)
-
-        # Simulate recording success
-        coordinator._record_success()
-
-        assert coordinator.status == ControllerStatus.NORMAL
-        assert coordinator.consecutive_failures == 0
-        assert coordinator.last_successful_update is not None
-
-    async def test_record_failure_increments_counter(
-        self,
-        hass: HomeAssistant,
-        mock_config_entry: MockConfigEntry,
-    ) -> None:
-        """Test that failures increment counter."""
-        mock_config_entry.add_to_hass(hass)
-        coordinator = UFHControllerDataUpdateCoordinator(hass, mock_config_entry)
-
-        coordinator._record_failure(critical=True)
-        assert coordinator.consecutive_failures == 1
-
-        coordinator._record_failure(critical=True)
-        assert coordinator.consecutive_failures == 2
-
-    async def test_record_success_resets_failures(
-        self,
-        hass: HomeAssistant,
-        mock_config_entry: MockConfigEntry,
-    ) -> None:
-        """Test that success resets failure counter."""
-        mock_config_entry.add_to_hass(hass)
-        coordinator = UFHControllerDataUpdateCoordinator(hass, mock_config_entry)
-
-        # Record some failures
-        coordinator._record_failure(critical=True)
-        coordinator._record_failure(critical=True)
-        assert coordinator.consecutive_failures == 2
-
-        # Success should reset
-        coordinator._record_success()
-        assert coordinator.consecutive_failures == 0
-
-    async def test_critical_failure_sets_degraded_status(
-        self,
-        hass: HomeAssistant,
-        mock_config_entry: MockConfigEntry,
-    ) -> None:
-        """Test that critical failure sets degraded status."""
-        mock_config_entry.add_to_hass(hass)
-        coordinator = UFHControllerDataUpdateCoordinator(hass, mock_config_entry)
-
-        coordinator._record_failure(critical=True)
-
-        assert coordinator.status == ControllerStatus.DEGRADED
-
-    async def test_non_critical_failure_sets_degraded_from_normal(
-        self,
-        hass: HomeAssistant,
-        mock_config_entry: MockConfigEntry,
-    ) -> None:
-        """Test that non-critical failure sets degraded status from normal."""
-        mock_config_entry.add_to_hass(hass)
-        coordinator = UFHControllerDataUpdateCoordinator(hass, mock_config_entry)
-
-        assert coordinator.status == ControllerStatus.NORMAL
-
-        coordinator._record_failure(critical=False)
-
-        assert coordinator.status == ControllerStatus.DEGRADED
-        assert coordinator.consecutive_failures == 1
-
-    async def test_notification_created_after_threshold(
-        self,
-        hass: HomeAssistant,
-        mock_config_entry: MockConfigEntry,
-    ) -> None:
-        """Test that notification is created after threshold failures."""
-        mock_config_entry.add_to_hass(hass)
-        coordinator = UFHControllerDataUpdateCoordinator(hass, mock_config_entry)
-
-        # Record failures up to threshold
-        for _ in range(FAILURE_NOTIFICATION_THRESHOLD):
-            coordinator._record_failure(critical=True)
-
-        # Should have set notification_created flag
-        assert coordinator._notification_created is True
-
-    async def test_notification_not_duplicated(
-        self,
-        hass: HomeAssistant,
-        mock_config_entry: MockConfigEntry,
-    ) -> None:
-        """Test that notification flag is only set once."""
-        mock_config_entry.add_to_hass(hass)
-        coordinator = UFHControllerDataUpdateCoordinator(hass, mock_config_entry)
-
-        # Record failures past threshold
-        for _ in range(FAILURE_NOTIFICATION_THRESHOLD):
-            coordinator._record_failure(critical=True)
-
-        assert coordinator._notification_created is True
-
-        # Record more failures - flag should remain True
-        for _ in range(5):
-            coordinator._record_failure(critical=True)
-
-        assert coordinator._notification_created is True
-
-    async def test_notification_dismissed_on_recovery(
-        self,
-        hass: HomeAssistant,
-        mock_config_entry: MockConfigEntry,
-    ) -> None:
-        """Test that notification flag is cleared when controller recovers."""
-        mock_config_entry.add_to_hass(hass)
-        coordinator = UFHControllerDataUpdateCoordinator(hass, mock_config_entry)
-
-        # Create notification
-        for _ in range(FAILURE_NOTIFICATION_THRESHOLD):
-            coordinator._record_failure(critical=True)
-
-        assert coordinator._notification_created is True
-
-        # Recover
-        coordinator._record_success()
-
-        # Should clear notification flag
-        assert coordinator._notification_created is False
-
-    async def test_fail_safe_not_activated_immediately(
-        self,
-        hass: HomeAssistant,
-        mock_config_entry: MockConfigEntry,
-    ) -> None:
-        """Test that fail-safe is not activated immediately on failure."""
-        mock_config_entry.add_to_hass(hass)
-        coordinator = UFHControllerDataUpdateCoordinator(hass, mock_config_entry)
-
-        # Single failure should not trigger fail-safe
-        coordinator._record_failure(critical=True)
-
-        assert coordinator.status != ControllerStatus.FAIL_SAFE
-        assert coordinator._fail_safe_activated is False
-
-    async def test_fail_safe_activated_after_timeout(
-        self,
-        hass: HomeAssistant,
-        mock_config_entry: MockConfigEntry,
-    ) -> None:
-        """Test that fail-safe is activated after 1 hour timeout."""
-        mock_config_entry.add_to_hass(hass)
-        coordinator = UFHControllerDataUpdateCoordinator(hass, mock_config_entry)
-
-        # Set last successful update to more than 1 hour ago
-        coordinator._last_successful_update = datetime.now(UTC) - timedelta(
-            seconds=FAIL_SAFE_TIMEOUT + 60
-        )
-
-        # Record failure - should trigger fail-safe
-        coordinator._record_failure(critical=True)
-
-        assert coordinator.status == ControllerStatus.FAIL_SAFE
-        assert coordinator._fail_safe_activated is True
-
-    async def test_recovery_from_fail_safe(
-        self,
-        hass: HomeAssistant,
-        mock_config_entry: MockConfigEntry,
-    ) -> None:
-        """Test that controller recovers from fail-safe mode."""
-        mock_config_entry.add_to_hass(hass)
-        coordinator = UFHControllerDataUpdateCoordinator(hass, mock_config_entry)
-
-        # Put into fail-safe mode
-        coordinator._last_successful_update = datetime.now(UTC) - timedelta(
-            seconds=FAIL_SAFE_TIMEOUT + 60
-        )
-        coordinator._record_failure(critical=True)
-        assert coordinator.status == ControllerStatus.FAIL_SAFE
-
-        # Recover
-        coordinator._record_success()
-
-        assert coordinator.status == ControllerStatus.NORMAL
-        assert coordinator._fail_safe_activated is False
 
     async def test_state_dict_includes_controller_status(
         self,
@@ -234,15 +38,17 @@ class TestCoordinatorFailureTracking:
     ) -> None:
         """Test that state dict includes controller status information."""
         mock_config_entry.add_to_hass(hass)
+        hass.states.async_set("sensor.zone1_temp", "20.5")
+        hass.states.async_set("switch.zone1_valve", "off")
+
         coordinator = UFHControllerDataUpdateCoordinator(hass, mock_config_entry)
 
         state_dict = coordinator._build_state_dict()
 
         assert "controller_status" in state_dict
         assert state_dict["controller_status"] == "normal"
-        assert "consecutive_failures" in state_dict
-        assert state_dict["consecutive_failures"] == 0
-        assert "last_successful_update" in state_dict
+        assert "zones_degraded" in state_dict
+        assert "zones_fail_safe" in state_dict
 
 
 class TestCoordinatorUpdateZoneFailure:

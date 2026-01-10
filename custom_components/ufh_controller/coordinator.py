@@ -16,7 +16,6 @@ from .const import (
     DEFAULT_VALVE_OPEN_THRESHOLD,
     DOMAIN,
     FAIL_SAFE_TIMEOUT,
-    FAILURE_NOTIFICATION_THRESHOLD,
     LOGGER,
     SUBENTRY_TYPE_CONTROLLER,
     SUBENTRY_TYPE_ZONE,
@@ -84,12 +83,8 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Track preset modes per zone (not part of core controller state)
         self._zone_presets: dict[str, str | None] = {}
 
-        # Failure tracking state
-        self._consecutive_failures: int = 0
-        self._last_successful_update: datetime | None = None
+        # Controller status (derived from zone statuses)
         self._status: ControllerStatus = ControllerStatus.NORMAL
-        self._notification_created: bool = False
-        self._fail_safe_activated: bool = False
 
     def _build_controller(self, entry: UFHControllerConfigEntry) -> HeatingController:
         """Build HeatingController from config entry."""
@@ -265,122 +260,6 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Return the current controller operational status."""
         return self._status
 
-    @property
-    def consecutive_failures(self) -> int:
-        """Return the number of consecutive update failures."""
-        return self._consecutive_failures
-
-    @property
-    def last_successful_update(self) -> datetime | None:
-        """Return the timestamp of the last successful update."""
-        return self._last_successful_update
-
-    def _record_success(self) -> None:
-        """Record a successful coordinator update."""
-        self._consecutive_failures = 0
-        self._last_successful_update = datetime.now(UTC)
-
-        # Clear fail-safe if previously activated
-        if self._fail_safe_activated:
-            self._fail_safe_activated = False
-            LOGGER.info("Underfloor Heating Controller recovered from fail-safe mode")
-
-        # Dismiss any existing notification
-        if self._notification_created:
-            self._dismiss_failure_notification()
-
-        self._status = ControllerStatus.NORMAL
-
-    def _record_failure(self, *, critical: bool = False) -> None:
-        """Record a failed coordinator update."""
-        self._consecutive_failures += 1
-
-        # Check for notification threshold
-        if (
-            self._consecutive_failures >= FAILURE_NOTIFICATION_THRESHOLD
-            and not self._notification_created
-        ):
-            self._create_failure_notification()
-
-        # Check for fail-safe timeout
-        if self._should_activate_fail_safe():
-            self._activate_fail_safe()
-        elif critical:
-            # Critical failure - update status but don't immediately fail-safe
-            # unless timeout has elapsed
-            if self._status != ControllerStatus.FAIL_SAFE:
-                self._status = ControllerStatus.DEGRADED
-        elif self._status == ControllerStatus.NORMAL:
-            self._status = ControllerStatus.DEGRADED
-
-    def _should_activate_fail_safe(self) -> bool:
-        """Check if fail-safe mode should be activated."""
-        if self._last_successful_update is None:
-            # No successful update yet - don't activate fail-safe immediately
-            # but do start tracking from now
-            if self._consecutive_failures == 1:
-                # First failure - start the clock
-                self._last_successful_update = datetime.now(UTC)
-            return False
-
-        elapsed = (datetime.now(UTC) - self._last_successful_update).total_seconds()
-        return elapsed > FAIL_SAFE_TIMEOUT
-
-    def _activate_fail_safe(self) -> None:
-        """Activate fail-safe mode - close all valves, disable heating."""
-        if self._fail_safe_activated:
-            return
-
-        self._fail_safe_activated = True
-        self._status = ControllerStatus.FAIL_SAFE
-        LOGGER.error(
-            "Underfloor Heating Controller entering fail-safe mode after %d "
-            "consecutive failures and no successful update for over 1 hour",
-            self._consecutive_failures,
-        )
-
-        # Ensure notification exists
-        if not self._notification_created:
-            self._create_failure_notification()
-
-    def _create_failure_notification(self) -> None:
-        """Create a persistent notification about controller failure."""
-        if self._notification_created:
-            return
-
-        self._notification_created = True
-        mode_text = "fail-safe" if self._fail_safe_activated else "degraded"
-        self.hass.async_create_task(
-            self.hass.services.async_call(
-                "persistent_notification",
-                "create",
-                {
-                    "message": (
-                        f"The Underfloor Heating Controller has experienced "
-                        f"{self._consecutive_failures} consecutive Recorder query "
-                        f"failures. The controller is operating in {mode_text} mode. "
-                        f"Check that the Recorder component is functioning correctly."
-                    ),
-                    "title": "Underfloor Heating Controller: Recorder Failure",
-                    "notification_id": f"{DOMAIN}_recorder_failure",
-                },
-            )
-        )
-
-    def _dismiss_failure_notification(self) -> None:
-        """Dismiss the failure notification."""
-        if not self._notification_created:
-            return
-
-        self._notification_created = False
-        self.hass.async_create_task(
-            self.hass.services.async_call(
-                "persistent_notification",
-                "dismiss",
-                {"notification_id": f"{DOMAIN}_recorder_failure"},
-            )
-        )
-
     async def _execute_fail_safe_actions(self) -> None:
         """Execute fail-safe mode actions - close all valves and disable heating."""
         # Close all valves
@@ -419,7 +298,6 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # Skip if no zones configured
         if not self._controller.zone_ids:
-            self._record_success()
             return self._build_state_dict()
 
         # Update observation start and elapsed time
@@ -849,12 +727,6 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "heat_request": self._controller.calculate_heat_request(),
             "observation_start": self._controller.state.observation_start,
             "controller_status": self._status.value,
-            "consecutive_failures": self._consecutive_failures,
-            "last_successful_update": (
-                self._last_successful_update.isoformat()
-                if self._last_successful_update
-                else None
-            ),
             "zones_degraded": zones_degraded,
             "zones_fail_safe": zones_fail_safe,
             "zones": {},
