@@ -90,7 +90,7 @@ class ZoneState:
     enabled: bool = True
 
     # Zone fault isolation state
-    zone_status: ZoneStatus = ZoneStatus.NORMAL
+    zone_status: ZoneStatus = ZoneStatus.INITIALIZING
     last_successful_update: datetime | None = None
     consecutive_failures: int = 0
 

@@ -142,7 +142,10 @@ class UFHControllerStatusSensor(UFHControllerEntity, BinarySensorEntity):
     @property
     def is_on(self) -> bool:
         """Return True if there is a problem (degraded or fail-safe)."""
-        return self.coordinator.status != ControllerStatus.NORMAL
+        return self.coordinator.status in (
+            ControllerStatus.DEGRADED,
+            ControllerStatus.FAIL_SAFE,
+        )
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:

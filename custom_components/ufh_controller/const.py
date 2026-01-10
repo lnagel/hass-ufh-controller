@@ -40,6 +40,7 @@ class SummerMode(StrEnum):
 class ControllerStatus(StrEnum):
     """Controller operational status for error tracking."""
 
+    INITIALIZING = "initializing"  # Controller starting up, no updates yet
     NORMAL = "normal"  # All systems operating normally
     DEGRADED = "degraded"  # Using fallback values, some queries failing
     FAIL_SAFE = "fail_safe"  # Safety mode activated, valves closed
@@ -48,6 +49,7 @@ class ControllerStatus(StrEnum):
 class ZoneStatus(StrEnum):
     """Zone operational status for fault isolation."""
 
+    INITIALIZING = "initializing"  # Zone starting up, awaiting first successful update
     NORMAL = "normal"  # Zone operating normally with valid temperature readings
     DEGRADED = "degraded"  # Temp sensor unavailable or Recorder query failing
     FAIL_SAFE = "fail_safe"  # No successful update for >1 hour, valve forced closed

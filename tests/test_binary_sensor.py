@@ -111,3 +111,23 @@ async def test_no_binary_sensors_without_zones(
     # No zone sensors
     assert not any("blocked" in s for s in states)
     assert not any("heat_request" in s for s in states)
+
+
+async def test_controller_status_off_when_initializing(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    controller_status_entity_id: str,
+) -> None:
+    """Test controller status is OFF during initialization (not a problem)."""
+    # Note: No mock_temp_sensor fixture, so zone stays in INITIALIZING
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get(controller_status_entity_id)
+    assert state is not None
+    # Binary sensor with PROBLEM device class: OFF = no problem
+    # Initializing is NOT a problem, so sensor should be OFF
+    assert state.state == "off"
+    # But status attribute should show "initializing"
+    assert state.attributes["controller_status"] == "initializing"

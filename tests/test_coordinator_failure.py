@@ -20,16 +20,16 @@ from custom_components.ufh_controller.coordinator import (
 class TestCoordinatorStatus:
     """Test coordinator status tracking."""
 
-    async def test_initial_status_is_normal(
+    async def test_initial_status_is_initializing(
         self,
         hass: HomeAssistant,
         mock_config_entry: MockConfigEntry,
     ) -> None:
-        """Test that coordinator starts in normal status."""
+        """Test that coordinator starts in initializing status."""
         mock_config_entry.add_to_hass(hass)
         coordinator = UFHControllerDataUpdateCoordinator(hass, mock_config_entry)
 
-        assert coordinator.status == ControllerStatus.NORMAL
+        assert coordinator.status == ControllerStatus.INITIALIZING
 
     async def test_state_dict_includes_controller_status(
         self,
@@ -46,7 +46,8 @@ class TestCoordinatorStatus:
         state_dict = coordinator._build_state_dict()
 
         assert "controller_status" in state_dict
-        assert state_dict["controller_status"] == "normal"
+        # Before first update, zones are initializing
+        assert state_dict["controller_status"] == "initializing"
         assert "zones_degraded" in state_dict
         assert "zones_fail_safe" in state_dict
 
@@ -54,17 +55,22 @@ class TestCoordinatorStatus:
 class TestCoordinatorUpdateZoneFailure:
     """Test coordinator _update_zone failure handling."""
 
-    async def test_period_state_failure_sets_zone_degraded(
+    async def test_zone_stays_initializing_on_first_failure(
         self,
         hass: HomeAssistant,
         mock_config_entry: MockConfigEntry,
     ) -> None:
-        """Test that period_state query failure sets zone to degraded."""
+        """Test that zone stays initializing on first failure (no false alarms)."""
         mock_config_entry.add_to_hass(hass)
         hass.states.async_set("sensor.zone1_temp", "20.5")
         hass.states.async_set("switch.zone1_valve", "off")
 
         coordinator = UFHControllerDataUpdateCoordinator(hass, mock_config_entry)
+
+        # Zone starts in INITIALIZING
+        runtime = coordinator._controller.get_zone_runtime("zone1")
+        assert runtime is not None
+        assert runtime.state.zone_status == ZoneStatus.INITIALIZING
 
         # Set observation_start to make it timezone-aware
         now = datetime.now(UTC)
@@ -82,9 +88,45 @@ class TestCoordinatorUpdateZoneFailure:
         ):
             await coordinator._update_zone("zone1", now, 60.0)
 
-        # Zone should be in degraded state
+        # Zone should STILL be initializing (not degraded) - no false alarm
+        # before first success
+        assert runtime.state.zone_status == ZoneStatus.INITIALIZING
+
+    async def test_period_state_failure_sets_zone_degraded_after_normal(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+    ) -> None:
+        """Test that period_state query failure sets zone to degraded after normal."""
+        mock_config_entry.add_to_hass(hass)
+        hass.states.async_set("sensor.zone1_temp", "20.5")
+        hass.states.async_set("switch.zone1_valve", "off")
+
+        coordinator = UFHControllerDataUpdateCoordinator(hass, mock_config_entry)
+
+        # First, set zone to NORMAL (as if it had a successful update)
         runtime = coordinator._controller.get_zone_runtime("zone1")
         assert runtime is not None
+        runtime.state.zone_status = ZoneStatus.NORMAL
+        runtime.state.last_successful_update = datetime.now(UTC)
+
+        # Set observation_start to make it timezone-aware
+        now = datetime.now(UTC)
+        coordinator._controller.state.observation_start = now - timedelta(hours=1)
+
+        # Make the query fail with a SQLAlchemy error
+        mock_recorder = MagicMock()
+        mock_recorder.async_add_executor_job = AsyncMock(
+            side_effect=OperationalError("statement", {}, Exception("DB unavailable"))
+        )
+
+        with patch(
+            "homeassistant.components.recorder.get_instance",
+            return_value=mock_recorder,
+        ):
+            await coordinator._update_zone("zone1", now, 60.0)
+
+        # Zone should be in degraded state now
         assert runtime.state.zone_status == ZoneStatus.DEGRADED
 
     async def test_open_state_failure_uses_fallback(
@@ -260,8 +302,23 @@ class TestCriticalFailureDuringUpdate:
         hass.services.async_register("switch", "turn_on", track_switch_call)
         hass.services.async_register("switch", "turn_off", track_switch_call)
 
-        # Make recorder query fail
+        # First, do a successful update to get zone to NORMAL
         mock_recorder = MagicMock()
+        mock_recorder.async_add_executor_job = AsyncMock(return_value={})
+
+        with patch(
+            "homeassistant.components.recorder.get_instance",
+            return_value=mock_recorder,
+        ):
+            await coordinator.async_refresh()
+
+        # Verify zone is now NORMAL
+        zone1 = coordinator._controller.get_zone_runtime("zone1")
+        assert zone1 is not None
+        assert zone1.state.zone_status == ZoneStatus.NORMAL
+        assert coordinator.status == ControllerStatus.NORMAL
+
+        # Now make recorder query fail
         mock_recorder.async_add_executor_job = AsyncMock(
             side_effect=OperationalError("statement", {}, Exception("DB unavailable"))
         )
@@ -276,8 +333,6 @@ class TestCriticalFailureDuringUpdate:
         assert coordinator.status == ControllerStatus.DEGRADED
 
         # Zone should be degraded
-        zone1 = coordinator._controller.get_zone_runtime("zone1")
-        assert zone1 is not None
         assert zone1.state.zone_status == ZoneStatus.DEGRADED
 
         # Valve actions SHOULD still happen - this is the key change from old behavior
@@ -365,15 +420,16 @@ class TestZoneIsolation:
             await coordinator._update_zone("zone1", now, 60.0)
             await coordinator._update_zone("zone2", now, 60.0)
 
-        # Zone 1 should be normal (has valid temp)
+        # Zone 1 should be normal (has valid temp, first successful update)
         zone1 = coordinator._controller.get_zone_runtime("zone1")
         assert zone1 is not None
         assert zone1.state.zone_status == ZoneStatus.NORMAL
 
-        # Zone 2 should be degraded (temp unavailable)
+        # Zone 2 should still be initializing (temp unavailable, no successful update)
+        # Zones don't report "degraded" until they've had a successful update
         zone2 = coordinator._controller.get_zone_runtime("zone2")
         assert zone2 is not None
-        assert zone2.state.zone_status == ZoneStatus.DEGRADED
+        assert zone2.state.zone_status == ZoneStatus.INITIALIZING
 
     async def test_zone_fail_safe_after_one_hour(
         self,
@@ -514,8 +570,8 @@ class TestZoneIsolation:
     ) -> None:
         """Test zone recovers from degraded status when temp becomes available."""
         mock_config_entry.add_to_hass(hass)
-        # Start with unavailable temp
-        hass.states.async_set("sensor.zone1_temp", "unavailable")
+        # Start with valid temp for first successful update
+        hass.states.async_set("sensor.zone1_temp", "20.5")
         hass.states.async_set("switch.zone1_valve", "off")
 
         coordinator = UFHControllerDataUpdateCoordinator(hass, mock_config_entry)
@@ -530,11 +586,23 @@ class TestZoneIsolation:
             "homeassistant.components.recorder.get_instance",
             return_value=mock_recorder,
         ):
-            # First update - zone should be degraded
+            # First update - successful, zone goes to NORMAL
             await coordinator._update_zone("zone1", now, 60.0)
 
         zone1 = coordinator._controller.get_zone_runtime("zone1")
         assert zone1 is not None
+        assert zone1.state.zone_status == ZoneStatus.NORMAL
+
+        # Now make temp unavailable
+        hass.states.async_set("sensor.zone1_temp", "unavailable")
+
+        with patch(
+            "homeassistant.components.recorder.get_instance",
+            return_value=mock_recorder,
+        ):
+            # Second update - failure, zone goes to DEGRADED
+            await coordinator._update_zone("zone1", now + timedelta(seconds=60), 60.0)
+
         assert zone1.state.zone_status == ZoneStatus.DEGRADED
 
         # Fix the temperature sensor
@@ -544,8 +612,8 @@ class TestZoneIsolation:
             "homeassistant.components.recorder.get_instance",
             return_value=mock_recorder,
         ):
-            # Second update - zone should recover
-            await coordinator._update_zone("zone1", now + timedelta(seconds=60), 60.0)
+            # Third update - zone should recover to NORMAL
+            await coordinator._update_zone("zone1", now + timedelta(seconds=120), 60.0)
 
         assert zone1.state.zone_status == ZoneStatus.NORMAL
 
@@ -604,7 +672,8 @@ class TestZoneIsolation:
         assert "zones" in state_dict
         assert "zone1" in state_dict["zones"]
         assert "zone_status" in state_dict["zones"]["zone1"]
-        assert state_dict["zones"]["zone1"]["zone_status"] == "normal"
+        # Before first update, zone is initializing
+        assert state_dict["zones"]["zone1"]["zone_status"] == "initializing"
 
         # Check zone counts
         assert "zones_degraded" in state_dict

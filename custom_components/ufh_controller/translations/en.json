@@ -222,6 +222,7 @@
           "status": {
             "name": "Status",
             "state": {
+              "initializing": "Initializing",
               "normal": "Normal",
               "degraded": "Degraded",
               "fail_safe": "Fail-Safe"

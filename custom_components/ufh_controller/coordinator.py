@@ -84,7 +84,7 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._zone_presets: dict[str, str | None] = {}
 
         # Controller status (derived from zone statuses)
-        self._status: ControllerStatus = ControllerStatus.NORMAL
+        self._status: ControllerStatus = ControllerStatus.INITIALIZING
 
     def _build_controller(self, entry: UFHControllerConfigEntry) -> HeatingController:
         """Build HeatingController from config entry."""
@@ -513,6 +513,7 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         state.zone_id,
                     )
             elif state.zone_status == ZoneStatus.NORMAL:
+                # Only transition to DEGRADED if we were previously NORMAL
                 state.zone_status = ZoneStatus.DEGRADED
                 LOGGER.warning(
                     "Zone %s entering degraded mode: temp_unavailable=%s, "
@@ -521,9 +522,11 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     temp_unavailable,
                     recorder_failure,
                 )
+            # If zone is still INITIALIZING, keep it that way - don't report
+            # problems before we've had a successful update
         else:
             # Zone succeeded - reset failure tracking
-            if state.zone_status != ZoneStatus.NORMAL:
+            if state.zone_status not in (ZoneStatus.NORMAL, ZoneStatus.INITIALIZING):
                 LOGGER.info(
                     "Zone %s recovered from %s mode",
                     state.zone_id,
@@ -556,25 +559,40 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return
 
         # Count zones in each state
+        initializing_count = sum(
+            1 for s in zone_statuses if s == ZoneStatus.INITIALIZING
+        )
         normal_count = sum(1 for s in zone_statuses if s == ZoneStatus.NORMAL)
         fail_safe_count = sum(1 for s in zone_statuses if s == ZoneStatus.FAIL_SAFE)
+        degraded_count = sum(1 for s in zone_statuses if s == ZoneStatus.DEGRADED)
 
         # Controller status logic:
-        # - If ANY zone is normal, controller operates (not fail-safe)
-        # - All zones in fail-safe = controller fail-safe
-        # - Any zone degraded/fail-safe but at least one normal = controller degraded
-        if normal_count > 0:
+        # - If ALL zones are initializing → controller initializing
+        # - If ANY zone is normal → controller operational (degraded if others fail)
+        # - If ANY zone is still initializing → don't go to fail-safe yet
+        # - Only go to fail-safe if ALL zones are in fail-safe
+
+        if initializing_count == len(zone_statuses):
+            # All zones still initializing - controller is initializing
+            self._status = ControllerStatus.INITIALIZING
+        elif normal_count > 0:
             # At least one zone is normal - controller is operational
-            if fail_safe_count > 0 or any(
-                s == ZoneStatus.DEGRADED for s in zone_statuses
-            ):
+            if fail_safe_count > 0 or degraded_count > 0:
                 self._status = ControllerStatus.DEGRADED
             else:
                 self._status = ControllerStatus.NORMAL
-        # No zones are normal
-        elif all(s == ZoneStatus.FAIL_SAFE for s in zone_statuses):
+        elif initializing_count > 0:
+            # Some zones still initializing, but no zones are normal yet
+            # Don't report fail-safe while zones are still initializing
+            if fail_safe_count > 0 or degraded_count > 0:
+                self._status = ControllerStatus.DEGRADED
+            else:
+                self._status = ControllerStatus.INITIALIZING
+        elif fail_safe_count == len(zone_statuses):
+            # ALL zones are in fail-safe (no normal, no initializing, no degraded)
             self._status = ControllerStatus.FAIL_SAFE
         else:
+            # Mix of degraded and fail-safe, but no normal or initializing
             self._status = ControllerStatus.DEGRADED
 
     def _any_zone_in_fail_safe(self) -> bool:
