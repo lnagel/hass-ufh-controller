@@ -284,6 +284,8 @@ async def test_climate_extra_attributes(
     assert "i_term" in attrs
     assert "blocked" in attrs
     assert "heat_request" in attrs
+    assert "zone_status" in attrs
+    assert attrs["zone_status"] == "normal"
 
 
 async def test_climate_hvac_action_idle(

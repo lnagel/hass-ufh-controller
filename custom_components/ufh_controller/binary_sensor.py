@@ -148,7 +148,7 @@ class UFHControllerStatusSensor(UFHControllerEntity, BinarySensorEntity):
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return additional status attributes."""
         return {
-            "status": self.coordinator.status.value,
+            "controller_status": self.coordinator.status.value,
             "zones_degraded": self.coordinator.data.get("zones_degraded", 0),
             "zones_fail_safe": self.coordinator.data.get("zones_fail_safe", 0),
         }
