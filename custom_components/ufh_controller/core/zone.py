@@ -80,8 +80,7 @@ class ZoneState:
     # Historical averages from Recorder queries
     period_state_avg: float = 0.0
     open_state_avg: float = 0.0
-    window_open_seconds: float = 0.0  # Total seconds window was open in period
-    window_currently_open: bool = False  # Whether any window is currently open
+    window_recently_open: bool = False  # Was any window open within blocking period
 
     # Derived scheduling values
     used_duration: float = 0.0
@@ -138,8 +137,8 @@ def evaluate_zone(  # noqa: PLR0911
     """
     Evaluate zone state and determine valve action.
 
-    Implements quota-based scheduling with window blocking
-    and flush circuit priority.
+    Implements quota-based scheduling and flush circuit priority.
+    Note: Window blocking is handled via PID pause, not valve control.
 
     Args:
         zone: Current zone state.
@@ -165,14 +164,6 @@ def evaluate_zone(  # noqa: PLR0911
         and not _any_regular_circuits_active(controller)
     ):
         return ZoneAction.TURN_ON if not valve_on else ZoneAction.STAY_ON
-
-    # Window blocking - immediate if any window is currently open
-    if zone.window_currently_open:
-        return ZoneAction.STAY_OFF if valve_off else ZoneAction.TURN_OFF
-
-    # Window blocking - duration exceeded threshold
-    if zone.window_open_seconds > timing.window_block_time:
-        return ZoneAction.STAY_OFF if valve_off else ZoneAction.TURN_OFF
 
     # Near end of observation period - freeze valve positions to avoid cycling
     # If time remaining is less than min_run_time, a state change would be too brief

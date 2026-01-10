@@ -163,7 +163,7 @@ class TestEvaluateZoneFlushCircuit:
 
 
 class TestEvaluateZoneWindowBlocking:
-    """Test window blocking behavior."""
+    """Test that window state does NOT affect valve control."""
 
     @pytest.fixture
     def timing(self) -> TimingParams:
@@ -175,69 +175,59 @@ class TestEvaluateZoneWindowBlocking:
         """Create default controller state."""
         return ControllerState()
 
-    def test_window_currently_open_blocks_valve_off(
+    def test_window_recently_open_valve_follows_quota_off(
         self, timing: TimingParams, controller: ControllerState
     ) -> None:
-        """Window currently open stays off."""
+        """Window recently open doesn't block valve - follows quota (off case)."""
         zone = ZoneState(
             zone_id="test",
             valve_state=ValveState.OFF,
-            window_currently_open=True,
+            window_recently_open=True,
             requested_duration=1000.0,
+            used_duration=0.0,  # Has quota
         )
         result = evaluate_zone(zone, controller, timing)
-        assert result == ZoneAction.STAY_OFF
+        # Valve should turn on based on quota, not blocked by window
+        assert result == ZoneAction.TURN_ON
 
-    def test_window_currently_open_turns_off_valve(
+    def test_window_recently_open_valve_follows_quota_on(
         self, timing: TimingParams, controller: ControllerState
     ) -> None:
-        """Window currently open turns off valve."""
+        """Window recently open doesn't turn off valve - follows quota (on case)."""
         zone = ZoneState(
             zone_id="test",
             valve_state=ValveState.ON,
-            window_currently_open=True,
+            window_recently_open=True,
             requested_duration=1000.0,
+            used_duration=500.0,  # Still has quota
         )
         result = evaluate_zone(zone, controller, timing)
-        assert result == ZoneAction.TURN_OFF
+        # Valve should stay on based on quota
+        assert result == ZoneAction.STAY_ON
 
-    def test_window_open_duration_exceeded_valve_off(
+    def test_window_recently_open_quota_met_turns_off(
         self, timing: TimingParams, controller: ControllerState
     ) -> None:
-        """Window open duration exceeded threshold stays off."""
-        zone = ZoneState(
-            zone_id="test",
-            valve_state=ValveState.OFF,
-            window_currently_open=False,
-            window_open_seconds=700.0,  # Above 600 second threshold
-            requested_duration=1000.0,
-        )
-        result = evaluate_zone(zone, controller, timing)
-        assert result == ZoneAction.STAY_OFF
-
-    def test_window_open_duration_exceeded_turns_off(
-        self, timing: TimingParams, controller: ControllerState
-    ) -> None:
-        """Window open duration exceeded threshold turns off valve."""
+        """When quota met, valve turns off regardless of window state."""
         zone = ZoneState(
             zone_id="test",
             valve_state=ValveState.ON,
-            window_currently_open=False,
-            window_open_seconds=700.0,  # Above 600 second threshold
+            window_recently_open=True,
             requested_duration=1000.0,
+            used_duration=1000.0,  # Quota met
         )
         result = evaluate_zone(zone, controller, timing)
+        # Valve should turn off because quota is met, not because of window
         assert result == ZoneAction.TURN_OFF
 
-    def test_window_below_threshold(
+    def test_no_window_state_normal_operation(
         self, timing: TimingParams, controller: ControllerState
     ) -> None:
-        """Window open time below threshold doesn't block."""
+        """With no window activity, normal quota-based operation."""
         zone = ZoneState(
             zone_id="test",
             valve_state=ValveState.OFF,
-            window_currently_open=False,
-            window_open_seconds=300.0,  # Below 600 second threshold
+            window_recently_open=False,
             requested_duration=1000.0,
             used_duration=0.0,
         )
@@ -318,20 +308,22 @@ class TestEvaluateZonePeriodEndFreeze:
         result = evaluate_zone(zone, controller, timing)
         assert result == ZoneAction.STAY_OFF
 
-    def test_window_blocking_takes_precedence(self, timing: TimingParams) -> None:
-        """Window blocking should still work even near period end."""
+    def test_period_freeze_with_window_recently_open(
+        self, timing: TimingParams
+    ) -> None:
+        """Period freeze still applies even when window was recently open."""
         zone = ZoneState(
             zone_id="test",
             valve_state=ValveState.ON,
-            window_currently_open=True,  # Window open should turn off
+            window_recently_open=True,  # Window was recently open
             requested_duration=1000.0,
             used_duration=0.0,
         )
-        # Near end of period, but window is open
+        # Near end of period - period freeze takes effect
         controller = ControllerState(period_elapsed=7000.0)
         result = evaluate_zone(zone, controller, timing)
-        # Window blocking takes precedence over period freeze
-        assert result == ZoneAction.TURN_OFF
+        # Period freeze applies - valve stays on to avoid cycling
+        assert result == ZoneAction.STAY_ON
 
 
 class TestPeriodTransitionScenario:

@@ -166,3 +166,42 @@ async def get_window_open_average(
         max_open = max(max_open, avg)
 
     return max_open
+
+
+async def was_any_window_open_recently(
+    hass: HomeAssistant,
+    window_sensors: list[str],
+    now: datetime,
+    lookback_seconds: int,
+) -> bool:
+    """
+    Check if any window was open within the recent lookback period.
+
+    This is used to determine if PID control should be paused after a window
+    opening event. The lookback includes the time window was open PLUS the
+    configured delay period.
+
+    Args:
+        hass: Home Assistant instance.
+        window_sensors: List of window/door sensor entity IDs.
+        now: Current datetime.
+        lookback_seconds: How far back to check for window openings.
+
+    Returns:
+        True if any window was open within the lookback period.
+
+    Raises:
+        SQLAlchemyError: If Recorder query fails.
+
+    """
+    if not window_sensors:
+        return False
+
+    # Check each sensor for any open time in the recent window
+    start = now - timedelta(seconds=lookback_seconds)
+    for sensor_id in window_sensors:
+        avg = await get_state_average(hass, sensor_id, start, now, on_value="on")
+        if avg > 0.0:  # Any open time at all = pause PID
+            return True
+
+    return False

@@ -195,9 +195,10 @@ class HeatingController:
         - Temperature reading is unavailable
         - Controller mode is not 'auto' (PID only meaningful in auto mode)
         - Zone is disabled
-        - Window is open (above threshold)
+        - Window was open recently (within blocking period + delay)
 
-        This prevents integral windup during blocked periods.
+        This prevents integral windup during blocked periods while allowing
+        the valve to remain open at the last calculated duty cycle.
 
         Args:
             zone_id: Zone identifier.
@@ -247,7 +248,7 @@ class HeatingController:
         PID is paused when:
         - Controller mode is not 'auto' (other modes don't use PID control)
         - Zone is disabled
-        - Window is currently open or was open too long
+        - Window was open recently (within blocking period)
 
         Args:
             runtime: Zone runtime data.
@@ -264,12 +265,8 @@ class HeatingController:
         if not runtime.state.enabled:
             return True
 
-        # Window currently open blocks heating - don't accumulate integral
-        if runtime.state.window_currently_open:
-            return True
-
-        # Window was open too long during observation period
-        return runtime.state.window_open_seconds > self.config.timing.window_block_time
+        # Window was open recently - pause PID to let temperature stabilize
+        return runtime.state.window_recently_open
 
     def update_zone_historical(  # noqa: PLR0913
         self,
@@ -278,7 +275,7 @@ class HeatingController:
         period_state_avg: float,
         open_state_avg: float,
         window_open_avg: float,
-        window_currently_open: bool,
+        window_recently_open: bool,
         elapsed_time: float,
     ) -> None:
         """
@@ -288,8 +285,8 @@ class HeatingController:
             zone_id: Zone identifier.
             period_state_avg: Average valve state since observation start.
             open_state_avg: Average valve state for open detection.
-            window_open_avg: Average window open state (ratio 0-1).
-            window_currently_open: Whether any window is currently open.
+            window_open_avg: Average window open state (ratio 0-1, deprecated).
+            window_recently_open: Was any window open within blocking period.
             elapsed_time: Actual elapsed time since observation start in seconds.
 
         """
@@ -299,8 +296,8 @@ class HeatingController:
 
         runtime.state.period_state_avg = period_state_avg
         runtime.state.open_state_avg = open_state_avg
-        runtime.state.window_currently_open = window_currently_open
-        # Convert window open average (ratio) to seconds
+        runtime.state.window_recently_open = window_recently_open
+        # Convert window open average (ratio) to seconds (deprecated field)
         runtime.state.window_open_seconds = window_open_avg * elapsed_time
 
         # Calculate used and requested durations

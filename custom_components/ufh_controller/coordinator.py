@@ -35,6 +35,7 @@ from .core import (
     get_state_average,
     get_valve_open_window,
     get_window_open_average,
+    was_any_window_open_recently,
 )
 from .core.zone import CircuitType
 
@@ -357,14 +358,6 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         state = self.hass.states.get(dhw_entity)
         self._controller.state.dhw_active = state is not None and state.state == "on"
 
-    def _is_any_window_open(self, window_sensors: list[str]) -> bool:
-        """Check if any window sensor is currently in 'on' state."""
-        for sensor_id in window_sensors:
-            state = self.hass.states.get(sensor_id)
-            if state is not None and state.state == "on":
-                return True
-        return False
-
     async def _update_zone(
         self,
         zone_id: str,
@@ -457,7 +450,7 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 exc_info=True,
             )
 
-        # NON-CRITICAL: Window sensors average (historical)
+        # NON-CRITICAL: Window sensors average (historical, deprecated)
         # Fallback: Assume windows are closed
         try:
             window_open_avg = await get_window_open_average(
@@ -474,8 +467,24 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 exc_info=True,
             )
 
-        # Check if any window is currently open
-        window_currently_open = self._is_any_window_open(runtime.config.window_sensors)
+        # NON-CRITICAL: Check if any window was open recently
+        # This query checks the last window_block_time seconds to determine
+        # if PID should be paused. Fallback: Assume windows were closed.
+        try:
+            window_recently_open = await was_any_window_open_recently(
+                self.hass,
+                runtime.config.window_sensors,
+                now,
+                timing.window_block_time,
+            )
+        except SQLAlchemyError:
+            window_recently_open = False  # Assume closed
+            LOGGER.warning(
+                "Recorder query failed for recent window state, "
+                "assuming closed for zone %s",
+                zone_id,
+                exc_info=True,
+            )
 
         # Update zone with historical data
         self._controller.update_zone_historical(
@@ -483,7 +492,7 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             period_state_avg=period_state_avg,
             open_state_avg=open_state_avg,
             window_open_avg=window_open_avg,
-            window_currently_open=window_currently_open,
+            window_recently_open=window_recently_open,
             elapsed_time=self._controller.state.period_elapsed,
         )
 
@@ -802,11 +811,8 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             runtime = self._controller.get_zone_runtime(zone_id)
             if runtime is not None:
                 state = runtime.state
-                blocked = (
-                    state.window_currently_open
-                    or state.window_open_seconds
-                    > self._controller.config.timing.window_block_time
-                )
+                # Blocked now means PID is paused due to recent window activity
+                blocked = state.window_recently_open
                 heat_request = (
                     state.valve_state == ValveState.ON
                     and state.open_state_avg >= DEFAULT_VALVE_OPEN_THRESHOLD
