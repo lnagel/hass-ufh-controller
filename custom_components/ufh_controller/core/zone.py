@@ -150,12 +150,12 @@ def evaluate_zone(  # noqa: PLR0911
         The action to take on the zone valve.
 
     """
-    # Treat valve as "on" only when state is confirmed ON
     valve_on = zone.valve_state == ValveState.ON
+    valve_off = zone.valve_state == ValveState.OFF
 
     # Zone disabled - always off
     if not zone.enabled:
-        return ZoneAction.TURN_OFF if valve_on else ZoneAction.STAY_OFF
+        return ZoneAction.STAY_OFF if valve_off else ZoneAction.TURN_OFF
 
     # Flush circuit priority during DHW heating
     if (
@@ -168,17 +168,19 @@ def evaluate_zone(  # noqa: PLR0911
 
     # Window blocking - immediate if any window is currently open
     if zone.window_currently_open:
-        return ZoneAction.TURN_OFF if valve_on else ZoneAction.STAY_OFF
+        return ZoneAction.STAY_OFF if valve_off else ZoneAction.TURN_OFF
 
     # Window blocking - duration exceeded threshold
     if zone.window_open_seconds > timing.window_block_time:
-        return ZoneAction.TURN_OFF if valve_on else ZoneAction.STAY_OFF
+        return ZoneAction.STAY_OFF if valve_off else ZoneAction.TURN_OFF
 
     # Near end of observation period - freeze valve positions to avoid cycling
     # If time remaining is less than min_run_time, a state change would be too brief
     time_remaining = timing.observation_period - controller.period_elapsed
     if time_remaining < timing.min_run_time:
-        return ZoneAction.STAY_ON if valve_on else ZoneAction.STAY_OFF
+        if valve_on:
+            return ZoneAction.STAY_ON
+        return ZoneAction.STAY_OFF if valve_off else ZoneAction.TURN_OFF
 
     # Quota-based scheduling
     if zone.used_duration < zone.requested_duration:
@@ -191,17 +193,17 @@ def evaluate_zone(  # noqa: PLR0911
         remaining_quota = zone.requested_duration - zone.used_duration
         if remaining_quota < timing.min_run_time:
             # Not enough quota left to justify turning on
-            return ZoneAction.STAY_OFF
+            return ZoneAction.STAY_OFF if valve_off else ZoneAction.TURN_OFF
 
         if controller.dhw_active and zone.circuit_type == CircuitType.REGULAR:
             # Wait for DHW heating to finish
-            return ZoneAction.STAY_OFF
+            return ZoneAction.STAY_OFF if valve_off else ZoneAction.TURN_OFF
 
         # Turn on
         return ZoneAction.TURN_ON
 
     # Zone has met its quota
-    return ZoneAction.TURN_OFF if valve_on else ZoneAction.STAY_OFF
+    return ZoneAction.STAY_OFF if valve_off else ZoneAction.TURN_OFF
 
 
 def should_request_heat(

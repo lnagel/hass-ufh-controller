@@ -69,6 +69,21 @@ class TestEvaluateZoneDisabled:
         result = evaluate_zone(zone, controller, timing)
         assert result == ZoneAction.TURN_OFF
 
+    @pytest.mark.parametrize(
+        "valve_state", [ValveState.UNKNOWN, ValveState.UNAVAILABLE]
+    )
+    def test_disabled_zone_valve_unknown_turns_off(
+        self,
+        timing: TimingParams,
+        controller: ControllerState,
+        valve_state: ValveState,
+    ) -> None:
+        """Disabled zone with unknown/unavailable valve state emits TURN_OFF."""
+        zone = ZoneState(zone_id="test", enabled=False, valve_state=valve_state)
+        result = evaluate_zone(zone, controller, timing)
+        # When valve state is uncertain, actively turn off to ensure safe state
+        assert result == ZoneAction.TURN_OFF
+
 
 class TestEvaluateZoneFlushCircuit:
     """Test flush circuit priority behavior."""
@@ -513,6 +528,26 @@ class TestEvaluateZoneQuotaScheduling:
         )
         result = evaluate_zone(zone, controller, timing)
         assert result == ZoneAction.STAY_OFF
+
+    @pytest.mark.parametrize(
+        "valve_state", [ValveState.UNKNOWN, ValveState.UNAVAILABLE]
+    )
+    def test_quota_met_unknown_valve_turns_off(
+        self,
+        timing: TimingParams,
+        controller: ControllerState,
+        valve_state: ValveState,
+    ) -> None:
+        """Zone that met quota with unknown valve emits TURN_OFF."""
+        zone = ZoneState(
+            zone_id="test",
+            valve_state=valve_state,
+            requested_duration=1000.0,
+            used_duration=1000.0,
+        )
+        result = evaluate_zone(zone, controller, timing)
+        # When valve state is uncertain, actively turn off
+        assert result == ZoneAction.TURN_OFF
 
 
 class TestEvaluateZoneDHWBlocking:

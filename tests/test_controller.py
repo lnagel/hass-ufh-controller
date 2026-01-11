@@ -634,10 +634,25 @@ class TestEvaluateZonesAutoMode:
 
         assert actions["living_room"] == ZoneAction.TURN_ON
 
-    def test_disabled_zone_stays_off(self, basic_config: ControllerConfig) -> None:
-        """Test disabled zone stays off."""
+    def test_disabled_zone_turns_off(self, basic_config: ControllerConfig) -> None:
+        """Test disabled zone with unknown valve state emits TURN_OFF."""
         controller = HeatingController(basic_config)
         controller.set_zone_enabled("living_room", enabled=False)
+
+        actions = controller.evaluate_zones()
+
+        # Valve state is UNKNOWN by default, so actively turn off
+        assert actions["living_room"] == ZoneAction.TURN_OFF
+
+    def test_disabled_zone_confirmed_off_stays_off(
+        self, basic_config: ControllerConfig
+    ) -> None:
+        """Test disabled zone with confirmed OFF valve stays off."""
+        controller = HeatingController(basic_config)
+        controller.set_zone_enabled("living_room", enabled=False)
+        zone_state = controller.get_zone_state("living_room")
+        assert zone_state is not None
+        zone_state.valve_state = ValveState.OFF
 
         actions = controller.evaluate_zones()
 
