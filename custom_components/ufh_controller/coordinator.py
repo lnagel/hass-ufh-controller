@@ -357,6 +357,14 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         state = self.hass.states.get(dhw_entity)
         self._controller.state.dhw_active = state is not None and state.state == "on"
 
+    def _is_any_window_open(self, window_sensors: list[str]) -> bool:
+        """Check if any window sensor is currently in 'on' state."""
+        for sensor_id in window_sensors:
+            state = self.hass.states.get(sensor_id)
+            if state is not None and state.state == "on":
+                return True
+        return False
+
     async def _update_zone(
         self,
         zone_id: str,
@@ -461,7 +469,7 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
         except SQLAlchemyError:
             # Fallback to current window state if Recorder unavailable
-            window_recently_open = self._is_any_window_currently_open(
+            window_recently_open = self._is_any_window_open(
                 runtime.config.window_sensors
             )
             LOGGER.warning(
@@ -556,31 +564,6 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             state.zone_status = ZoneStatus.NORMAL
             state.last_successful_update = now
             state.consecutive_failures = 0
-
-    def _is_any_window_currently_open(self, window_sensors: list[str]) -> bool:
-        """
-        Check if any window sensor is currently in the "on" state.
-
-        Used as a fallback when Recorder queries fail. This only checks the
-        current state, not historical data, so it's less accurate but better
-        than assuming all windows are closed.
-
-        Args:
-            window_sensors: List of window/door sensor entity IDs.
-
-        Returns:
-            True if any window sensor is currently "on", False otherwise.
-
-        """
-        if not window_sensors:
-            return False
-
-        for sensor_id in window_sensors:
-            state = self.hass.states.get(sensor_id)
-            if state is not None and state.state == "on":
-                return True
-
-        return False
 
     def _should_zone_fail_safe(self, state: Any, now: datetime) -> bool:
         """Check if a zone should enter fail-safe mode."""
