@@ -12,7 +12,7 @@ from .history import (
     get_valve_open_window,
     was_any_window_open_recently,
 )
-from .pid import PIDController, PIDOutput, PIDState
+from .pid import PIDController, PIDState
 from .zone import (
     CircuitType,
     ControllerState,
@@ -31,7 +31,6 @@ __all__ = [
     "ControllerState",
     "HeatingController",
     "PIDController",
-    "PIDOutput",
     "PIDState",
     "TimingParams",
     "ZoneAction",

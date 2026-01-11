@@ -4,7 +4,6 @@ import pytest
 
 from custom_components.ufh_controller.core.pid import (
     PIDController,
-    PIDOutput,
     PIDState,
 )
 
@@ -41,13 +40,14 @@ class TestPIDController:
 
         # First update: integral = ki * error * dt = 1.0 * 1 * 60 = 60%
         result1 = pid.update(setpoint=21.0, current=20.0, dt=60.0)
-        assert pid.state.integral == 60.0
+        assert pid.state is not None
+        assert pid.state.i_term == 60.0
         assert result1.duty_cycle == pytest.approx(60.0)
         assert result1.i_term == pytest.approx(60.0)
 
         # Second update: integral = 60 + 60 = 120%
         result2 = pid.update(setpoint=21.0, current=20.0, dt=60.0)
-        assert pid.state.integral == 120.0
+        assert pid.state.i_term == 120.0
         assert result2.duty_cycle == pytest.approx(100.0)  # Clamped to 100%
 
     def test_integral_anti_windup(self) -> None:
@@ -56,12 +56,13 @@ class TestPIDController:
 
         # Large error should clamp integral at max: 0.1 * 10 * 60 = 60, clamped to 50
         result = pid.update(setpoint=30.0, current=20.0, dt=60.0)
-        assert pid.state.integral == 50.0  # Clamped at max
+        assert pid.state is not None
+        assert pid.state.i_term == 50.0  # Clamped at max
         assert result.duty_cycle == pytest.approx(50.0)
 
         # Further updates should not increase integral beyond max
         pid.update(setpoint=30.0, current=20.0, dt=60.0)
-        assert pid.state.integral == 50.0
+        assert pid.state.i_term == 50.0
 
     def test_integral_anti_windup_negative(self) -> None:
         """Test that integral is clamped at minimum too."""
@@ -71,7 +72,8 @@ class TestPIDController:
 
         # Negative error should drive integral down: 1.0 * -2 * 30 = -60, clamped to -50
         pid.update(setpoint=18.0, current=20.0, dt=30.0)
-        assert pid.state.integral == -50.0
+        assert pid.state is not None
+        assert pid.state.i_term == -50.0
 
     def test_output_clamped_at_zero(self) -> None:
         """Test that output is clamped at 0%."""
@@ -91,9 +93,10 @@ class TestPIDController:
         """Test that derivative term responds to rate of change."""
         pid = PIDController(kp=0.0, ki=0.0, kd=10.0)
 
-        # First update sets last_error
+        # First update sets last_error (via state.error)
         result1 = pid.update(setpoint=21.0, current=20.0, dt=60.0)
-        assert pid.state.last_error == 1.0
+        assert pid.state is not None
+        assert pid.state.error == 1.0  # error is stored for next derivative calc
         # d_term = 10 * (1 - 0) / 60 = 0.167
         assert result1.d_term == pytest.approx(10.0 / 60.0, rel=0.01)
         assert result1.duty_cycle == pytest.approx(10.0 / 60.0, rel=0.01)
@@ -114,52 +117,42 @@ class TestPIDController:
         pid = PIDController(kp=50.0, ki=0.1, kd=1.0)
 
         pid.update(setpoint=22.0, current=20.0, dt=60.0)
-        assert pid.state.integral != 0.0
-        assert pid.state.last_error != 0.0
+        assert pid.state is not None
+        assert pid.state.i_term != 0.0
+        assert pid.state.error != 0.0
 
         pid.reset()
-        assert pid.state.integral == 0.0
-        assert pid.state.last_error == 0.0
+        assert pid.state is None
 
-    def test_set_integral(self) -> None:
-        """Test that set_integral sets the integral value in % units."""
+    def test_set_state(self) -> None:
+        """Test that set_state sets the full PID state."""
         pid = PIDController(kp=50.0, ki=0.1, kd=0.0, integral_max=100.0)
 
-        # Integral is stored in % units, so 50.0 means 50% i_term contribution
-        pid.set_integral(50.0)
-        assert pid.state.integral == 50.0
-
-    def test_set_integral_respects_max(self) -> None:
-        """Test that set_integral clamps to integral_max."""
-        pid = PIDController(integral_max=100.0)
-
-        pid.set_integral(150.0)
-        # Clamped to integral_max=100%
-        assert pid.state.integral == 100.0
-
-    def test_set_integral_respects_min(self) -> None:
-        """Test that set_integral clamps to integral_min."""
-        pid = PIDController(integral_min=0.0, integral_max=100.0)
-
-        pid.set_integral(-10.0)
-        # Clamped to integral_min=0%
-        assert pid.state.integral == 0.0
+        # Set full state directly
+        state = PIDState(
+            error=2.0, p_term=100.0, i_term=50.0, d_term=0.0, duty_cycle=50.0
+        )
+        pid.set_state(state)
+        assert pid.state is not None
+        assert pid.state.i_term == 50.0
+        assert pid.state.error == 2.0
+        assert pid.state.duty_cycle == 50.0
 
     def test_zero_dt(self) -> None:
-        """Test that zero dt returns zero PIDOutput."""
+        """Test that zero dt returns zero PIDState."""
         pid = PIDController(kp=50.0, ki=0.1, kd=1.0)
 
         result = pid.update(setpoint=22.0, current=20.0, dt=0.0)
-        assert result == PIDOutput(
+        assert result == PIDState(
             error=0.0, p_term=0.0, i_term=0.0, d_term=0.0, duty_cycle=0.0
         )
 
     def test_negative_dt(self) -> None:
-        """Test that negative dt returns zero PIDOutput."""
+        """Test that negative dt returns zero PIDState."""
         pid = PIDController(kp=50.0, ki=0.1, kd=1.0)
 
         result = pid.update(setpoint=22.0, current=20.0, dt=-60.0)
-        assert result == PIDOutput(
+        assert result == PIDState(
             error=0.0, p_term=0.0, i_term=0.0, d_term=0.0, duty_cycle=0.0
         )
 
@@ -173,13 +166,17 @@ class TestPIDController:
         assert pid.integral_min == 0.0
         assert pid.integral_max == 100.0
 
-    def test_state_property(self) -> None:
-        """Test that state property returns correct state."""
+    def test_state_property_none_initially(self) -> None:
+        """Test that state property is None initially."""
         pid = PIDController()
+        assert pid.state is None
 
+    def test_state_property_after_update(self) -> None:
+        """Test that state property returns correct state after update."""
+        pid = PIDController()
+        pid.update(setpoint=22.0, current=20.0, dt=60.0)
+        assert pid.state is not None
         assert isinstance(pid.state, PIDState)
-        assert pid.state.integral == 0.0
-        assert pid.state.last_error == 0.0
 
     def test_combined_pid(self) -> None:
         """Test combined P, I, and D terms."""
@@ -211,34 +208,53 @@ class TestPIDController:
         # Accumulate some integral: ki * error * dt = 0.01 * 2 * 60 = 1.2% per update
         pid.update(setpoint=22.0, current=20.0, dt=60.0)
         pid.update(setpoint=22.0, current=20.0, dt=60.0)
-        assert pid.state.integral == pytest.approx(2.4)  # 1.2% + 1.2% = 2.4%
+        assert pid.state is not None
+        assert pid.state.i_term == pytest.approx(2.4)  # 1.2% + 1.2% = 2.4%
 
         # Store the integral before ki change
-        integral_before = pid.state.integral
+        integral_before = pid.state.i_term
 
         # Now change ki - this should NOT affect the stored integral
         pid.ki = 0.02
 
         # Integral should remain unchanged
-        assert pid.state.integral == integral_before
+        assert pid.state.i_term == integral_before
 
         # Next update uses new ki: adds ki * error * dt = 0.02 * 2 * 60 = 2.4%
         result = pid.update(setpoint=22.0, current=20.0, dt=60.0)
-        assert pid.state.integral == pytest.approx(4.8)  # 2.4% + 2.4% = 4.8%
+        assert pid.state.i_term == pytest.approx(4.8)  # 2.4% + 2.4% = 4.8%
         assert result.duty_cycle == pytest.approx(4.8)  # i_term = integral = 4.8%
 
 
 class TestPIDState:
     """Test cases for PIDState dataclass."""
 
-    def test_default_state(self) -> None:
-        """Test default PIDState values."""
-        state = PIDState()
-        assert state.integral == 0.0
-        assert state.last_error == 0.0
+    def test_state_is_frozen(self) -> None:
+        """Test that PIDState is immutable (frozen)."""
+        state = PIDState(
+            error=1.0, p_term=50.0, i_term=10.0, d_term=0.0, duty_cycle=60.0
+        )
 
-    def test_custom_state(self) -> None:
-        """Test PIDState with custom values."""
-        state = PIDState(integral=50.0, last_error=1.5)
-        assert state.integral == 50.0
-        assert state.last_error == 1.5
+        with pytest.raises(AttributeError):
+            state.error = 2.0  # type: ignore[misc]
+
+    def test_state_fields(self) -> None:
+        """Test PIDState with all fields."""
+        state = PIDState(
+            error=2.0, p_term=100.0, i_term=30.0, d_term=0.5, duty_cycle=75.0
+        )
+        assert state.error == 2.0
+        assert state.p_term == 100.0
+        assert state.i_term == 30.0
+        assert state.d_term == 0.5
+        assert state.duty_cycle == 75.0
+
+    def test_state_equality(self) -> None:
+        """Test PIDState equality comparison."""
+        state1 = PIDState(
+            error=1.0, p_term=50.0, i_term=10.0, d_term=0.0, duty_cycle=60.0
+        )
+        state2 = PIDState(
+            error=1.0, p_term=50.0, i_term=10.0, d_term=0.0, duty_cycle=60.0
+        )
+        assert state1 == state2

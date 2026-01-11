@@ -24,24 +24,11 @@ from custom_components.ufh_controller.core.zone import ZoneState
 
 class TestZoneStateInitialization:
     """
-    Test that ZoneState fields initialize to None (not 0.0).
+    Test that ZoneState and PIDController fields initialize to None (not 0.0).
 
     This prevents incorrect 0.0 values from being recorded in HA history
     during restarts before actual values are calculated.
     """
-
-    def test_zone_state_pid_fields_initialize_to_none(self) -> None:
-        """Test PID fields are None when ZoneState is first created."""
-        state = ZoneState(zone_id="test_zone")
-
-        # These should be None, not 0.0, because no PID calculation has happened
-        assert state.error is None, "error should be None before PID calculation"
-        assert state.p_term is None, "p_term should be None before PID calculation"
-        assert state.i_term is None, "i_term should be None before PID calculation"
-        assert state.d_term is None, "d_term should be None before PID calculation"
-        assert state.duty_cycle is None, (
-            "duty_cycle should be None before PID calculation"
-        )
 
     def test_zone_state_current_is_none(self) -> None:
         """Test current temperature is None when no reading available."""
@@ -71,18 +58,14 @@ class TestControllerZoneInitialization:
     def test_controller_zone_pid_fields_start_as_none(
         self, basic_config: ControllerConfig
     ) -> None:
-        """Test zone PID fields are None before first PID update."""
+        """Test zone PID state is None before first PID update."""
         controller = HeatingController(basic_config)
 
-        state = controller.get_zone_state("living_room")
-        assert state is not None
+        runtime = controller.get_zone_runtime("living_room")
+        assert runtime is not None
 
-        # Before any PID calculation, these should all be None
-        assert state.error is None, "error should be None before first update"
-        assert state.p_term is None, "p_term should be None before first update"
-        assert state.i_term is None, "i_term should be None before first update"
-        assert state.d_term is None, "d_term should be None before first update"
-        assert state.duty_cycle is None, "duty_cycle should be None before first update"
+        # Before any PID calculation, PID state should be None
+        assert runtime.pid.state is None, "PID state should be None before first update"
 
     def test_controller_zone_pid_fields_have_values_after_update(
         self, basic_config: ControllerConfig
@@ -94,15 +77,24 @@ class TestControllerZoneInitialization:
         # Perform a PID update with a valid temperature
         controller.update_zone_pid("living_room", 20.0, 60.0)
 
-        state = controller.get_zone_state("living_room")
-        assert state is not None
+        runtime = controller.get_zone_runtime("living_room")
+        assert runtime is not None
+        assert runtime.pid.state is not None
 
         # After PID calculation, these should be floats (not None)
-        assert isinstance(state.error, float), "error should be a float after update"
-        assert isinstance(state.p_term, float), "p_term should be a float after update"
-        assert isinstance(state.i_term, float), "i_term should be a float after update"
-        assert isinstance(state.d_term, float), "d_term should be a float after update"
-        assert isinstance(state.duty_cycle, float), (
+        assert isinstance(runtime.pid.state.error, float), (
+            "error should be a float after update"
+        )
+        assert isinstance(runtime.pid.state.p_term, float), (
+            "p_term should be a float after update"
+        )
+        assert isinstance(runtime.pid.state.i_term, float), (
+            "i_term should be a float after update"
+        )
+        assert isinstance(runtime.pid.state.d_term, float), (
+            "d_term should be a float after update"
+        )
+        assert isinstance(runtime.pid.state.duty_cycle, float), (
             "duty_cycle should be a float after update"
         )
 

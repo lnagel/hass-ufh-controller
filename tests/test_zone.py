@@ -737,11 +737,6 @@ class TestZoneState:
         assert zone.circuit_type == CircuitType.REGULAR
         assert zone.current is None
         assert zone.setpoint == 21.0
-        assert zone.duty_cycle is None
-        assert zone.error is None
-        assert zone.p_term is None
-        assert zone.i_term is None
-        assert zone.d_term is None
         assert zone.valve_state == ValveState.UNKNOWN
         assert zone.enabled is True
 

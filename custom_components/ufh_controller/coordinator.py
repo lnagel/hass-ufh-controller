@@ -28,6 +28,7 @@ from .const import (
 from .core import (
     ControllerConfig,
     HeatingController,
+    PIDState,
     TimingParams,
     ZoneAction,
     ZoneConfig,
@@ -203,14 +204,16 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if runtime is None:
             return
 
-        # Restore PID integral (only if not yet calculated - i_term is None or 0.0)
-        if runtime.state.i_term is None or runtime.state.i_term == 0.0:
-            integral = zone_state.get("integral", 0.0)
-            last_error = zone_state.get("last_error", 0.0)
-            if integral != 0.0:
-                runtime.pid.set_integral(integral)
-                runtime.pid.set_last_error(last_error)
-                runtime.state.i_term = integral
+        # Restore full PID state if available (only if not yet calculated)
+        if runtime.pid.state is None and "duty_cycle" in zone_state:
+            pid_state = PIDState(
+                error=zone_state.get("error", 0.0),
+                p_term=zone_state.get("p_term", 0.0),
+                i_term=zone_state.get("i_term", 0.0),
+                d_term=zone_state.get("d_term", 0.0),
+                duty_cycle=zone_state.get("duty_cycle", 0.0),
+            )
+            runtime.pid.set_state(pid_state)
 
         # Restore setpoint
         if "setpoint" in zone_state:
@@ -236,11 +239,16 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             runtime = self._controller.get_zone_runtime(zone_id)
             if runtime is not None:
                 zone_data: dict[str, Any] = {
-                    "integral": runtime.pid.state.integral,
-                    "last_error": runtime.pid.state.last_error,
                     "setpoint": runtime.state.setpoint,
                     "enabled": runtime.state.enabled,
                 }
+                # Save full PID state if available
+                if runtime.pid.state is not None:
+                    zone_data["error"] = runtime.pid.state.error
+                    zone_data["p_term"] = runtime.pid.state.p_term
+                    zone_data["i_term"] = runtime.pid.state.i_term
+                    zone_data["d_term"] = runtime.pid.state.d_term
+                    zone_data["duty_cycle"] = runtime.pid.state.duty_cycle
                 # Include preset_mode if set
                 preset_mode = self._zone_presets.get(zone_id)
                 if preset_mode is not None:
@@ -804,6 +812,7 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             runtime = self._controller.get_zone_runtime(zone_id)
             if runtime is not None:
                 state = runtime.state
+                pid_state = runtime.pid.state
                 # Blocked now means PID is paused due to recent window activity
                 blocked = state.window_recently_open
                 heat_request = (
@@ -814,11 +823,11 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 result["zones"][zone_id] = {
                     "current": state.current,
                     "setpoint": state.setpoint,
-                    "duty_cycle": state.duty_cycle,
-                    "error": state.error,
-                    "p_term": state.p_term,
-                    "i_term": state.i_term,
-                    "d_term": state.d_term,
+                    "duty_cycle": pid_state.duty_cycle if pid_state else None,
+                    "error": pid_state.error if pid_state else None,
+                    "p_term": pid_state.p_term if pid_state else None,
+                    "i_term": pid_state.i_term if pid_state else None,
+                    "d_term": pid_state.d_term if pid_state else None,
                     "valve_state": state.valve_state.value,
                     "enabled": state.enabled,
                     "blocked": blocked,

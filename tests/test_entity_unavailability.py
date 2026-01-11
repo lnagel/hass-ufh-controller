@@ -415,9 +415,10 @@ async def test_heat_request_calculation_with_unavailable_switch(
     # Duty cycle should be calculated based on temperature error
     runtime = coordinator.controller.get_zone_runtime("zone1")
     assert runtime is not None
+    assert runtime.pid.state is not None
     # 3°C error (21 - 18) should result in high duty cycle
-    assert runtime.state.duty_cycle is not None
-    assert runtime.state.duty_cycle >= 90.0
+    assert runtime.pid.state.duty_cycle is not None
+    assert runtime.pid.state.duty_cycle >= 90.0
 
 
 # ============================================================================

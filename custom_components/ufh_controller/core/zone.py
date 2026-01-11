@@ -57,21 +57,16 @@ class ZoneState:
     """
     Runtime state for a single zone.
 
-    Contains PID state, valve state, historical averages,
-    and derived scheduling values.
+    Contains valve state, historical averages, and derived scheduling values.
+    PID state is stored separately in PIDController.state.
     """
 
     zone_id: str
     circuit_type: CircuitType = CircuitType.REGULAR
 
-    # PID state
+    # Temperature state
     current: float | None = None
     setpoint: float = DEFAULT_SETPOINT["default"]
-    error: float | None = None
-    p_term: float | None = None
-    i_term: float | None = None
-    d_term: float | None = None
-    duty_cycle: float | None = None
 
     # Valve state
     valve_state: ValveState = ValveState.UNKNOWN
