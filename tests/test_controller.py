@@ -401,26 +401,29 @@ class TestPIDIntegrationPause:
         assert returned_duty == initial_duty_cycle
         assert runtime.pid.state.duty_cycle == initial_duty_cycle
 
-    def test_pid_paused_updates_error_for_display(
+    def test_pid_paused_preserves_last_error(
         self, basic_config: ControllerConfig
     ) -> None:
-        """Test that error is still updated when PID is paused (for UI display)."""
+        """Test that error is preserved (not updated) when PID is paused."""
         controller = HeatingController(basic_config)
         controller.set_zone_setpoint("living_room", 22.0)
 
         # Establish state in auto mode
         controller.update_zone_pid("living_room", 20.0, 60.0)
 
+        runtime = controller.get_zone_runtime("living_room")
+        assert runtime is not None
+        # Error from initial update: setpoint (22) - current (20) = 2
+        assert runtime.pid.state.error == 2.0
+
         # Switch to mode that pauses PID
         controller.mode = "all_off"
 
-        # Update with new temperature
+        # Update with new temperature - PID is paused so state should not change
         controller.update_zone_pid("living_room", 18.0, 60.0)
 
-        runtime = controller.get_zone_runtime("living_room")
-        assert runtime is not None
-        # Error should reflect current state: setpoint (22) - current (18) = 4
-        assert runtime.pid.state.error == 4.0
+        # Error should still reflect last PID calculation, not current temperature
+        assert runtime.pid.state.error == 2.0
 
     def test_pid_resumes_after_pause(self, basic_config: ControllerConfig) -> None:
         """Test that PID resumes accumulating integral after pause ends."""

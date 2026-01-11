@@ -225,29 +225,6 @@ class TestPIDController:
         assert pid.state.i_term == pytest.approx(4.8)  # 2.4% + 2.4% = 4.8%
         assert result.duty_cycle == pytest.approx(4.8)  # i_term = integral = 4.8%
 
-    def test_update_error(self) -> None:
-        """Test that update_error updates only error while preserving other values."""
-        pid = PIDController(kp=50.0, ki=0.1, kd=0.0)
-
-        # First do a normal update to establish state
-        pid.update(setpoint=22.0, current=20.0, dt=60.0)
-        assert pid.state is not None
-        original_duty = pid.state.duty_cycle
-        original_i_term = pid.state.i_term
-
-        # Now update only error
-        result = pid.update_error(error=3.0)
-        assert result is not None
-        assert result.error == 3.0
-        assert result.duty_cycle == original_duty  # Preserved
-        assert result.i_term == original_i_term  # Preserved
-
-    def test_update_error_returns_none_if_no_state(self) -> None:
-        """Test that update_error returns None if no previous state exists."""
-        pid = PIDController()
-        result = pid.update_error(error=2.0)
-        assert result is None
-
 
 class TestPIDState:
     """Test cases for PIDState dataclass."""

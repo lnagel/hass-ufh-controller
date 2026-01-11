@@ -222,9 +222,6 @@ class HeatingController:
 
         # Check if PID should be paused (prevent integral windup)
         if self._should_pause_pid(runtime):
-            # Update error for display purposes but don't run PID
-            error = runtime.state.setpoint - current
-            runtime.pid.update_error(error)
             return runtime.pid.state.duty_cycle if runtime.pid.state else None
 
         pid_state = runtime.pid.update(

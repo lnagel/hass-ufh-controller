@@ -115,29 +115,3 @@ class PIDController:
 
         """
         self._state = state
-
-    def update_error(self, error: float) -> PIDState | None:
-        """
-        Update only the error value, keeping other state values.
-
-        Used when PID is paused but we want to display current error.
-        Returns None if no previous state exists.
-
-        Args:
-            error: The new error value (setpoint - current).
-
-        Returns:
-            New PIDState with updated error, or None if no previous state.
-
-        """
-        if self._state is None:
-            return None
-
-        self._state = PIDState(
-            error=error,
-            p_term=self._state.p_term,
-            i_term=self._state.i_term,
-            d_term=self._state.d_term,
-            duty_cycle=self._state.duty_cycle,
-        )
-        return self._state
