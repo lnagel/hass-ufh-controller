@@ -273,14 +273,17 @@ def aggregate_heat_request(
 
 def _any_regular_circuits_active(controller: ControllerState) -> bool:
     """
-    Check if any regular circuits have heating demand.
+    Check if any regular circuits are currently running (valve ON).
 
     Used for flush circuit priority - flush circuits only run
-    during DHW when no regular circuits need heat.
+    when no regular circuits are actively heating. This allows
+    flush circuits to capture DHW waste heat even when regular
+    zones have heating demand but their valves are OFF due to
+    DHW priority.
     """
     return any(
         zone.circuit_type == CircuitType.REGULAR
         and zone.enabled
-        and zone.requested_duration > 0
+        and zone.valve_state == ValveState.ON
         for zone in controller.zones.values()
     )

@@ -339,7 +339,7 @@ All controller entities belong to a device named after the controller (user-defi
 **Note:** The flush enabled switch and flush request sensor are only created when `dhw_active_entity` is configured, as the DHW latent heat capture feature requires DHW state input to function.
 
 **Flush Enabled Behavior:**
-- **Enabled:** Flush-type circuits can turn on during DHW heating AND for a configurable period after DHW ends (`flush_duration`) to capture latent heat (only when no regular circuits have demand).
+- **Enabled:** Flush-type circuits can turn on during DHW heating AND for a configurable period after DHW ends (`flush_duration`) to capture latent heat (only when no regular circuits are currently running with valve ON).
 - **Disabled:** Flush-type circuits behave like regular circuits — no special DHW priority.
 - **DHW priority for regular zones is independent of this setting.** Regular zones that are OFF cannot turn ON during DHW heating regardless of the flush enabled state. This switch only controls whether flush circuits get special treatment.
 
@@ -540,7 +540,7 @@ def evaluate_zone(zone: ZoneState, controller: ControllerState,
     if (zone.circuit_type == "flush" and
         controller.flush_enabled and
         is_flush_requested(controller) and  # True during DHW or post-DHW period
-        not any_regular_circuits_enabled(controller)):
+        not any_regular_circuits_active(controller)):  # No regular valves currently ON
         return ZoneAction.TURN_ON
 
     # Note: Window blocking is handled via PID pause, not valve control
@@ -1520,7 +1520,7 @@ A binary sensor indicating when the boiler is heating domestic hot water (DHW).
 
 - **Regular circuits already ON**: Continue running (STAY_ON). This allows existing heating to continue circulating water through the floor, maintaining heat distribution even though no new heat is being added.
 - **Regular circuits currently OFF**: Cannot turn ON (STAY_OFF). New heating cycles are blocked until DHW completes.
-- **Flush circuits**: Can capture latent heat if flush mode is enabled and no regular circuits have demand.
+- **Flush circuits**: Can capture latent heat if flush mode is enabled and no regular circuits are currently running (valve ON).
 
 **Example:** `binary_sensor.boiler_tapwater_active` → When DHW heating starts, this turns on. Regular zones that were already heating continue to circulate water, but zones that were off wait until DHW finishes.
 

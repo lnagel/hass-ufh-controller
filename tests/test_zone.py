@@ -126,8 +126,8 @@ class TestEvaluateZoneFlushCircuit:
         result = evaluate_zone(zone, controller, timing)
         assert result == ZoneAction.STAY_ON
 
-    def test_flush_blocked_by_regular_demand(self, timing: TimingParams) -> None:
-        """Flush circuit blocked when regular circuit has demand."""
+    def test_flush_blocked_by_regular_valve_on(self, timing: TimingParams) -> None:
+        """Flush circuit blocked when regular circuit valve is ON."""
         flush_zone = ZoneState(
             zone_id="bathroom",
             circuit_type=CircuitType.FLUSH,
@@ -137,6 +137,7 @@ class TestEvaluateZoneFlushCircuit:
             zone_id="living_room",
             circuit_type=CircuitType.REGULAR,
             enabled=True,
+            valve_state=ValveState.ON,  # Valve is actively running
             requested_duration=1000.0,
         )
         controller = ControllerState(
@@ -147,6 +148,31 @@ class TestEvaluateZoneFlushCircuit:
         # Should fall through to normal quota logic (stays off with 0 quota)
         result = evaluate_zone(flush_zone, controller, timing)
         assert result == ZoneAction.STAY_OFF
+
+    def test_flush_not_blocked_by_regular_demand_only(
+        self, timing: TimingParams
+    ) -> None:
+        """Flush circuit NOT blocked when regular has demand but valve is OFF."""
+        flush_zone = ZoneState(
+            zone_id="bathroom",
+            circuit_type=CircuitType.FLUSH,
+            valve_state=ValveState.OFF,
+        )
+        regular_zone = ZoneState(
+            zone_id="living_room",
+            circuit_type=CircuitType.REGULAR,
+            enabled=True,
+            valve_state=ValveState.OFF,  # Valve is OFF (due to DHW priority)
+            requested_duration=1000.0,  # Has demand but not running
+        )
+        controller = ControllerState(
+            flush_enabled=True,
+            dhw_active=True,
+            zones={"bathroom": flush_zone, "living_room": regular_zone},
+        )
+        # Flush should turn on - regular valve is OFF
+        result = evaluate_zone(flush_zone, controller, timing)
+        assert result == ZoneAction.TURN_ON
 
     def test_flush_disabled_no_priority(self, timing: TimingParams) -> None:
         """Flush circuit follows normal logic when flush disabled."""
@@ -892,10 +918,10 @@ class TestEvaluateZoneFlushCircuitPostDHW:
         # Should follow normal logic (stays off with no quota)
         assert result == ZoneAction.STAY_OFF
 
-    def test_flush_during_post_dhw_blocked_by_regular_demand(
+    def test_flush_during_post_dhw_blocked_by_regular_valve_on(
         self, timing: TimingParams
     ) -> None:
-        """Flush circuit blocked during post-DHW when regular circuit has demand."""
+        """Flush circuit blocked during post-DHW when regular valve is ON."""
         future_time = datetime.now(UTC) + timedelta(minutes=5)
         flush_zone = ZoneState(
             zone_id="bathroom",
@@ -906,6 +932,7 @@ class TestEvaluateZoneFlushCircuitPostDHW:
             zone_id="living_room",
             circuit_type=CircuitType.REGULAR,
             enabled=True,
+            valve_state=ValveState.ON,  # Valve is actively running
             requested_duration=1000.0,
         )
         controller = ControllerState(
@@ -917,6 +944,33 @@ class TestEvaluateZoneFlushCircuitPostDHW:
         result = evaluate_zone(flush_zone, controller, timing)
         # Should fall through to normal quota logic (stays off with 0 quota)
         assert result == ZoneAction.STAY_OFF
+
+    def test_flush_during_post_dhw_not_blocked_by_regular_demand_only(
+        self, timing: TimingParams
+    ) -> None:
+        """Flush circuit NOT blocked during post-DHW when regular valve is OFF."""
+        future_time = datetime.now(UTC) + timedelta(minutes=5)
+        flush_zone = ZoneState(
+            zone_id="bathroom",
+            circuit_type=CircuitType.FLUSH,
+            valve_state=ValveState.OFF,
+        )
+        regular_zone = ZoneState(
+            zone_id="living_room",
+            circuit_type=CircuitType.REGULAR,
+            enabled=True,
+            valve_state=ValveState.OFF,  # Valve is OFF
+            requested_duration=1000.0,  # Has demand but not running
+        )
+        controller = ControllerState(
+            flush_enabled=True,
+            dhw_active=False,
+            flush_until=future_time,
+            zones={"bathroom": flush_zone, "living_room": regular_zone},
+        )
+        result = evaluate_zone(flush_zone, controller, timing)
+        # Flush should turn on - regular valve is OFF
+        assert result == ZoneAction.TURN_ON
 
 
 class TestControllerStateFlushUntil:
