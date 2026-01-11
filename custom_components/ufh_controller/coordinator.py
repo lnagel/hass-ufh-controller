@@ -197,6 +197,10 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if stored_mode in [mode.value for mode in OperationMode]:
                 self._controller.mode = stored_mode
 
+        # Restore flush_enabled state
+        if "flush_enabled" in stored_data:
+            self._controller.state.flush_enabled = stored_data["flush_enabled"]
+
         # Restore zone state
         zones_data = stored_data.get("zones", {})
         for zone_id, zone_state in zones_data.items():
@@ -265,6 +269,7 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "version": STORAGE_VERSION,
             "saved_at": datetime.now(UTC).isoformat(),
             "controller_mode": self._controller.mode,
+            "flush_enabled": self._controller.state.flush_enabled,
             "zones": zones_data,
         }
 

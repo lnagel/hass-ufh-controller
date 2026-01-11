@@ -721,6 +721,114 @@ async def test_crash_recovery_partial_zone_state_restoration(
     await hass.config_entries.async_unload(config_entry.entry_id)
 
 
+async def test_flush_enabled_saved_in_state(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Test that flush_enabled is saved in coordinator state."""
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = mock_config_entry.runtime_data.coordinator
+
+    # Set flush_enabled to True
+    coordinator.controller.state.flush_enabled = True
+
+    saved_data = None
+
+    async def capture_save(data: dict) -> None:
+        nonlocal saved_data
+        saved_data = data
+
+    with patch(
+        "homeassistant.helpers.storage.Store.async_save", side_effect=capture_save
+    ):
+        await coordinator.async_save_state()
+
+    assert saved_data is not None
+    assert "flush_enabled" in saved_data
+    assert saved_data["flush_enabled"] is True
+
+    # Also test with False
+    coordinator.controller.state.flush_enabled = False
+
+    with patch(
+        "homeassistant.helpers.storage.Store.async_save", side_effect=capture_save
+    ):
+        await coordinator.async_save_state()
+
+    assert saved_data["flush_enabled"] is False
+
+
+async def test_flush_enabled_restored_from_state(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Test that flush_enabled is restored from stored state."""
+    stored_data = {
+        "version": 1,
+        "controller_mode": "auto",
+        "flush_enabled": True,
+        "zones": {
+            "zone1": {
+                "error": 0.0,
+                "p_term": 0.0,
+                "i_term": 0.0,
+                "d_term": 0.0,
+                "duty_cycle": 0.0,
+            },
+        },
+    }
+
+    with patch(
+        "homeassistant.helpers.storage.Store.async_load",
+        return_value=stored_data,
+    ):
+        mock_config_entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    coordinator = mock_config_entry.runtime_data.coordinator
+
+    # Check flush_enabled was restored
+    assert coordinator.controller.state.flush_enabled is True
+
+
+async def test_flush_enabled_defaults_to_false_when_not_stored(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Test that flush_enabled defaults to False when not in stored state."""
+    # Stored data without flush_enabled (simulates old storage format)
+    stored_data = {
+        "version": 1,
+        "controller_mode": "auto",
+        "zones": {
+            "zone1": {
+                "error": 0.0,
+                "p_term": 0.0,
+                "i_term": 0.0,
+                "d_term": 0.0,
+                "duty_cycle": 0.0,
+            },
+        },
+    }
+
+    with patch(
+        "homeassistant.helpers.storage.Store.async_load",
+        return_value=stored_data,
+    ):
+        mock_config_entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    coordinator = mock_config_entry.runtime_data.coordinator
+
+    # flush_enabled should remain at default (False)
+    assert coordinator.controller.state.flush_enabled is False
+
+
 async def test_crash_recovery_stale_zone_in_stored_state(
     hass: HomeAssistant,
 ) -> None:
