@@ -284,6 +284,11 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "select_option",
                 {"entity_id": summer_entity, "option": SummerMode.AUTO},
             )
+            LOGGER.debug(
+                "Select service 'select_option' called for %s with option '%s'",
+                summer_entity,
+                SummerMode.AUTO,
+            )
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Update data via controller logic."""
@@ -734,6 +739,11 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "select",
             "select_option",
             {"entity_id": entity_id, "option": summer_mode_value},
+        )
+        LOGGER.debug(
+            "Select service 'select_option' called for %s with option '%s'",
+            entity_id,
+            summer_mode_value,
         )
 
     async def _call_switch_service(
