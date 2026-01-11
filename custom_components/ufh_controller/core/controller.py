@@ -15,6 +15,7 @@ from custom_components.ufh_controller.const import (
     DEFAULT_PID,
     DEFAULT_SETPOINT,
     SummerMode,
+    ValveState,
 )
 
 from .pid import PIDController
@@ -329,8 +330,11 @@ class HeatingController:
         for zone_id, runtime in self._zones.items():
             action = self._evaluate_single_zone(zone_id, runtime)
             actions[zone_id] = action
-            # Update valve state based on action
-            runtime.state.valve_on = action in (ZoneAction.TURN_ON, ZoneAction.STAY_ON)
+            # Update expected valve state based on action
+            if action in (ZoneAction.TURN_ON, ZoneAction.STAY_ON):
+                runtime.state.valve_state = ValveState.ON
+            else:
+                runtime.state.valve_state = ValveState.OFF
 
         return actions
 
@@ -341,7 +345,7 @@ class HeatingController:
     ) -> ZoneAction:
         """Evaluate a single zone based on current mode."""
         mode = self._state.mode
-        valve_on = runtime.state.valve_on
+        valve_on = runtime.state.valve_state == ValveState.ON
 
         if mode == "disabled":
             # Disabled mode - no action, maintain current state
@@ -372,7 +376,7 @@ class HeatingController:
         # Get current hour of day
         now = datetime.now(UTC)
         cycle_hour = now.hour % DEFAULT_CYCLE_MODE_HOURS
-        valve_on = runtime.state.valve_on
+        valve_on = runtime.state.valve_state == ValveState.ON
 
         if cycle_hour == 0:
             # Rest hour - all closed

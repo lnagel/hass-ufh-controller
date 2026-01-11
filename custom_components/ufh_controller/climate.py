@@ -11,7 +11,7 @@ from homeassistant.components.climate import (
     HVACMode,
 )
 
-from .const import DEFAULT_SETPOINT, SUBENTRY_TYPE_ZONE
+from .const import DEFAULT_SETPOINT, SUBENTRY_TYPE_ZONE, ValveState
 from .entity import UFHControllerZoneEntity
 
 if TYPE_CHECKING:
@@ -119,7 +119,7 @@ class UFHZoneClimate(UFHControllerZoneEntity, ClimateEntity):
         if not zone_data.get("enabled", True):
             return HVACAction.OFF
 
-        if zone_data.get("valve_on", False):
+        if zone_data.get("valve_state") == ValveState.ON:
             return HVACAction.HEATING
 
         return HVACAction.IDLE

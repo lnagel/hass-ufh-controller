@@ -9,6 +9,7 @@ from custom_components.ufh_controller.const import (
     DEFAULT_PID,
     DEFAULT_SETPOINT,
     SummerMode,
+    ValveState,
 )
 from custom_components.ufh_controller.core.controller import (
     ControllerConfig,
@@ -93,7 +94,7 @@ class TestHeatingControllerInit:
         assert state is not None
         assert state.zone_id == "living_room"
         assert state.setpoint == 21.0
-        assert state.valve_on is False
+        assert state.valve_state == ValveState.UNKNOWN
         assert state.enabled is True
 
 
@@ -816,7 +817,7 @@ class TestCalculateHeatRequest:
         # Manually set valve on
         runtime = controller.get_zone_runtime("living_room")
         assert runtime is not None
-        runtime.state.valve_on = True
+        runtime.state.valve_state = ValveState.ON
         runtime.state.requested_duration = 3600.0  # 1 hour
         runtime.state.used_duration = 0.0
 

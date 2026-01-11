@@ -763,21 +763,35 @@ The controller NEVER enters fail-safe if at least one zone is operating normally
 
 #### 8.3.4 Valve Entity Handling
 
-When synchronizing valve state from Home Assistant:
+Valve state is tracked using the `ValveState` enum with explicit uncertainty handling:
 
-| Valve Entity State | Behavior | Logging |
-|-------------------|----------|---------|
-| `on` | Valve considered open | None |
-| `off` | Valve considered closed | None |
-| `unavailable` | Valve treated as closed | Warning logged |
-| `unknown` | Valve treated as closed | Warning logged |
-| Entity not found | Valve treated as closed | Warning logged |
+```python
+class ValveState(StrEnum):
+    ON = "on"           # Valve confirmed open
+    OFF = "off"         # Valve confirmed closed
+    UNKNOWN = "unknown" # State unknown (HA reports unknown)
+    UNAVAILABLE = "unavailable"  # Entity unavailable or not found
+```
 
-**Rationale:** Valve unavailability is treated as non-critical because:
-- The valve is a controlled actuator, not a feedback sensor
-- Safe default is to assume valve is closed
-- Zone continues operating even if valve state is unknown
-- User is notified via logs to investigate the issue
+**State Mapping:**
+
+| HA Entity State | ValveState | Heat Request | Valve Command |
+|-----------------|------------|--------------|---------------|
+| `on` | ON | Allowed | STAY_ON |
+| `off` | OFF | Blocked | Evaluate quota |
+| `unknown` | UNKNOWN | Blocked | Re-send intended command |
+| `unavailable` | UNAVAILABLE | Blocked | Re-send intended command |
+| Entity not found | UNAVAILABLE | Blocked | Re-send intended command |
+
+**Behavior Design:**
+- **Heat request blocked**: When valve state is uncertain, boiler heat is NOT requested (conservative - don't fire boiler if we can't confirm valve is open)
+- **Commands re-sent**: When state is UNKNOWN/UNAVAILABLE, the controller re-sends the intended command (turn_on or turn_off) to force synchronization
+- **Warning logged**: User is notified of valve state issues via logs
+
+**Rationale:**
+- Uncertain valve state should not trigger boiler heating (safety)
+- Re-sending commands helps recover from transient communication issues
+- Zone continues evaluating and controlling even if state is uncertain
 
 #### 8.3.5 Controller Status Aggregation
 

@@ -95,8 +95,9 @@ async def test_valve_bad_state_logs_warning(
     ):
         await coordinator.async_refresh()
 
+    # Check for warning log about valve state (either "unavailable" or "unknown")
     assert any(
-        "unavailable" in record.message.lower()
+        ("unavailable" in record.message.lower() or "unknown" in record.message.lower())
         and "switch.zone1_valve" in record.message
         for record in caplog.records
     )

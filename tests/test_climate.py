@@ -305,7 +305,7 @@ async def test_climate_hvac_action_idle(
 
     state = hass.states.get(climate_entity_id)
     assert state is not None
-    # Temperature above setpoint: enabled (HEAT mode) but valve_on=False
+    # Temperature above setpoint: enabled (HEAT mode) but valve_state=ValveState.OFF
     assert state.state == HVACMode.HEAT
     assert state.attributes.get(ATTR_HVAC_ACTION) == HVACAction.IDLE
 
