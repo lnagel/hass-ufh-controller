@@ -902,15 +902,32 @@ hass-ufh-controller/
 │   └── specification.md             # This specification
 │
 ├── tests/
-│   ├── __init__.py
-│   ├── conftest.py                  # Fixtures, mock HA setup
-│   ├── test_pid.py                  # PID controller unit tests
-│   ├── test_zone.py                 # Zone decision logic tests
-│   ├── test_controller.py           # Aggregation, mode tests
-│   ├── test_history.py              # Recorder query tests
-│   ├── test_config_flow.py          # Config flow integration tests
-│   ├── test_climate.py              # Climate entity tests
-│   └── test_coordinator.py          # Full coordinator tests
+│   ├── conftest.py                  # Shared fixtures, mock HA setup
+│   ├── unit/                        # Pure logic tests, no HA dependencies
+│   │   ├── test_pid.py              # PID controller unit tests
+│   │   └── test_history.py          # Recorder query helper tests
+│   ├── integration/                 # Entity platform tests with mocked HA
+│   │   ├── test_controller.py       # Core controller logic tests
+│   │   ├── test_controller_modes.py # Mode evaluation tests
+│   │   ├── test_zone_evaluation.py  # Zone decision logic tests
+│   │   ├── test_zone_flush.py       # Flush circuit behavior tests
+│   │   ├── test_zone_models.py      # Zone data structure tests
+│   │   ├── test_climate.py          # Climate entity tests
+│   │   ├── test_sensor.py           # Sensor entity tests
+│   │   ├── test_binary_sensor.py    # Binary sensor tests
+│   │   ├── test_select.py           # Select entity tests
+│   │   └── test_switch.py           # Switch entity tests
+│   ├── scenarios/                   # End-to-end workflow tests
+│   │   ├── test_coordinator_persistence.py  # State save/restore
+│   │   ├── test_coordinator_failure.py      # Failure recovery
+│   │   ├── test_valve_sync.py               # Valve synchronization
+│   │   └── test_zone_initial_state.py       # Initial startup
+│   └── config/                      # Config flow tests
+│       ├── test_config_flow_user.py     # Initial setup flow
+│       ├── test_config_flow_options.py  # Options flow
+│       ├── test_config_flow_zone.py     # Zone subentry flow
+│       ├── test_init.py                 # Entry setup/unload
+│       └── test_entity_unavailability.py # Conditional entities
 │
 ├── .github/
 │   └── workflows/
@@ -927,7 +944,11 @@ hass-ufh-controller/
 
 ## 10. Testing Strategy
 
-### 10.1 Unit Tests
+Tests are organized into four directories based on scope and dependencies.
+
+### 10.1 Unit Tests (`tests/unit/`)
+
+Pure logic tests with no Home Assistant dependencies.
 
 **PID Controller (`test_pid.py`):**
 - Proportional response to error
@@ -936,43 +957,69 @@ hass-ufh-controller/
 - Output clamping (0-100%)
 - Derivative response (if used)
 
-**Zone Logic (`test_zone.py`):**
+**History Helpers (`test_history.py`):**
+- Observation window alignment
+- State average calculations
+- Recorder query error handling
+
+### 10.2 Integration Tests (`tests/integration/`)
+
+Component tests with mocked Home Assistant entities.
+
+**Zone Logic (`test_zone_evaluation.py`, `test_zone_flush.py`, `test_zone_models.py`):**
 - Decision tree branches (all paths)
 - Window blocking threshold
 - Quota calculations
 - Minimum run time enforcement
 - DHW priority for flush circuits
+- Flush circuit post-DHW behavior
 
-**Controller Logic (`test_controller.py`):**
+**Controller Logic (`test_controller.py`, `test_controller_modes.py`):**
 - Heat request aggregation
 - Mode switching behavior
 - Summer mode transitions
 - Flush mode valve states
 - Cycle mode rotation
+- PID integration pausing
 
-### 10.2 Integration Tests
-
-**Config Flow (`test_config_flow.py`):**
-- Initial setup flow completion
-- Zone addition via options flow
-- Zone editing and deletion
-- Validation errors (duplicate IDs, missing entities)
-- Entity selector filtering
-
-**Entities (`test_climate.py`, etc.):**
+**Entities (`test_climate.py`, `test_sensor.py`, `test_binary_sensor.py`, etc.):**
 - Entity creation on setup
 - State updates from coordinator
 - Climate setpoint changes
 - Mode changes
 - Preset activation
 
-**Coordinator (`test_coordinator.py`):**
-- Full control cycle execution
-- Recorder query mocking
-- State persistence across updates
-- Error handling (unavailable sensors)
+### 10.3 Scenario Tests (`tests/scenarios/`)
 
-### 10.3 Test Fixtures
+End-to-end workflow tests for resilience and state management.
+
+**Coordinator Persistence (`test_coordinator_persistence.py`):**
+- State save on unload
+- State restore on setup
+- PID state preservation across restarts
+
+**Coordinator Failure (`test_coordinator_failure.py`):**
+- Database query failures
+- Zone degradation states
+- Fail-safe timeout behavior
+- Recovery from temporary failures
+
+**Valve Sync (`test_valve_sync.py`):**
+- External interference recovery
+- Unknown/unavailable valve handling
+
+### 10.4 Config Tests (`tests/config/`)
+
+Configuration flow and setup lifecycle tests.
+
+**Config Flow (`test_config_flow_user.py`, `test_config_flow_options.py`, `test_config_flow_zone.py`):**
+- Initial setup flow completion
+- Zone addition via subentry flow
+- Zone editing and deletion
+- Validation errors (duplicate IDs, missing entities)
+- Options flow for timing and entities
+
+### 10.5 Test Fixtures
 
 ```python
 # conftest.py
