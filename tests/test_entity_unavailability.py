@@ -1,11 +1,13 @@
 """Tests for entity unavailability handling in Underfloor Heating Controller."""
 
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
+from sqlalchemy.exc import OperationalError
 
 from custom_components.ufh_controller.const import (
     DEFAULT_PID,
@@ -423,11 +425,11 @@ async def test_heat_request_calculation_with_unavailable_switch(
 # ============================================================================
 
 
-async def test_window_sensor_unknown_not_treated_as_open(
+async def test_window_sensor_unknown_not_treated_as_recently_open(
     hass: HomeAssistant,
     mock_config_entry_with_window_sensor: MockConfigEntry,
 ) -> None:
-    """Test window sensor in unknown state is not treated as open."""
+    """Test window sensor in unknown state defaults to not open."""
     hass.states.async_set("binary_sensor.window1", STATE_UNKNOWN)
     hass.states.async_set("sensor.zone1_temp", "20.5")
 
@@ -438,15 +440,15 @@ async def test_window_sensor_unknown_not_treated_as_open(
     coordinator = mock_config_entry_with_window_sensor.runtime_data.coordinator
     runtime = coordinator.controller.get_zone_runtime("zone1")
     assert runtime is not None
-    # Window should not be treated as currently open when state is unknown
-    assert runtime.state.window_currently_open is False
+    # Without Recorder data (mocked), window_recently_open defaults to False
+    assert runtime.state.window_recently_open is False
 
 
-async def test_window_sensor_unavailable_not_treated_as_open(
+async def test_window_sensor_unavailable_not_treated_as_recently_open(
     hass: HomeAssistant,
     mock_config_entry_with_window_sensor: MockConfigEntry,
 ) -> None:
-    """Test window sensor in unavailable state is not treated as open."""
+    """Test window sensor in unavailable state defaults to not open."""
     hass.states.async_set("binary_sensor.window1", STATE_UNAVAILABLE)
     hass.states.async_set("sensor.zone1_temp", "20.5")
 
@@ -457,15 +459,15 @@ async def test_window_sensor_unavailable_not_treated_as_open(
     coordinator = mock_config_entry_with_window_sensor.runtime_data.coordinator
     runtime = coordinator.controller.get_zone_runtime("zone1")
     assert runtime is not None
-    # Window should not be treated as currently open when unavailable
-    assert runtime.state.window_currently_open is False
+    # Without Recorder data (mocked), window_recently_open defaults to False
+    assert runtime.state.window_recently_open is False
 
 
-async def test_window_sensor_missing_not_treated_as_open(
+async def test_window_sensor_missing_not_treated_as_recently_open(
     hass: HomeAssistant,
     mock_config_entry_with_window_sensor: MockConfigEntry,
 ) -> None:
-    """Test missing window sensor is not treated as open."""
+    """Test missing window sensor with no Recorder data defaults to not open."""
     # Don't set up the window sensor
     hass.states.async_set("sensor.zone1_temp", "20.5")
 
@@ -476,15 +478,15 @@ async def test_window_sensor_missing_not_treated_as_open(
     coordinator = mock_config_entry_with_window_sensor.runtime_data.coordinator
     runtime = coordinator.controller.get_zone_runtime("zone1")
     assert runtime is not None
-    # Window should not be treated as currently open when entity missing
-    assert runtime.state.window_currently_open is False
+    # Without Recorder data (mocked), window_recently_open defaults to False
+    assert runtime.state.window_recently_open is False
 
 
-async def test_window_sensor_on_treated_as_open(
+async def test_window_sensor_on_with_no_recorder_data(
     hass: HomeAssistant,
     mock_config_entry_with_window_sensor: MockConfigEntry,
 ) -> None:
-    """Test window sensor in 'on' state is treated as open."""
+    """Test window sensor 'on' state shows as recently open."""
     hass.states.async_set("binary_sensor.window1", "on")
     hass.states.async_set("sensor.zone1_temp", "20.5")
 
@@ -495,15 +497,16 @@ async def test_window_sensor_on_treated_as_open(
     coordinator = mock_config_entry_with_window_sensor.runtime_data.coordinator
     runtime = coordinator.controller.get_zone_runtime("zone1")
     assert runtime is not None
-    # Window should be treated as open when sensor is on
-    assert runtime.state.window_currently_open is True
+    # With no Recorder history, get_state_average checks current state
+    # Since window is "on", it returns True
+    assert runtime.state.window_recently_open is True
 
 
-async def test_window_sensor_off_not_treated_as_open(
+async def test_window_sensor_off_with_no_recorder_data(
     hass: HomeAssistant,
     mock_config_entry_with_window_sensor: MockConfigEntry,
 ) -> None:
-    """Test window sensor in 'off' state is not treated as open."""
+    """Test window sensor 'off' state without Recorder data (test setup limitation)."""
     hass.states.async_set("binary_sensor.window1", "off")
     hass.states.async_set("sensor.zone1_temp", "20.5")
 
@@ -514,8 +517,125 @@ async def test_window_sensor_off_not_treated_as_open(
     coordinator = mock_config_entry_with_window_sensor.runtime_data.coordinator
     runtime = coordinator.controller.get_zone_runtime("zone1")
     assert runtime is not None
-    # Window should not be treated as open when sensor is off
-    assert runtime.state.window_currently_open is False
+    # Without Recorder data (mocked), window_recently_open defaults to False
+    assert runtime.state.window_recently_open is False
+
+
+async def test_window_sensor_recorder_failure_fallback_window_open(
+    hass: HomeAssistant,
+    mock_config_entry_with_window_sensor: MockConfigEntry,
+) -> None:
+    """Test Recorder query failure falls back to current window state (open)."""
+    # Mock Recorder query to fail
+    with patch(
+        "custom_components.ufh_controller.coordinator.was_any_window_open_recently",
+        side_effect=OperationalError("statement", {}, Exception("DB error")),
+    ):
+        # Set window sensor to "on" (open)
+        hass.states.async_set("binary_sensor.window1", "on")
+        hass.states.async_set("sensor.zone1_temp", "20.5")
+
+        mock_config_entry_with_window_sensor.add_to_hass(hass)
+        await hass.config_entries.async_setup(
+            mock_config_entry_with_window_sensor.entry_id
+        )
+        await hass.async_block_till_done()
+
+        coordinator = mock_config_entry_with_window_sensor.runtime_data.coordinator
+        runtime = coordinator.controller.get_zone_runtime("zone1")
+        assert runtime is not None
+        # Fallback should use current state (open = True)
+        assert runtime.state.window_recently_open is True
+
+
+async def test_window_sensor_recorder_failure_fallback_window_closed(
+    hass: HomeAssistant,
+    mock_config_entry_with_window_sensor: MockConfigEntry,
+) -> None:
+    """Test Recorder query failure falls back to current window state (closed)."""
+    # Mock Recorder query to fail
+    with patch(
+        "custom_components.ufh_controller.coordinator.was_any_window_open_recently",
+        side_effect=OperationalError("statement", {}, Exception("DB error")),
+    ):
+        # Set window sensor to "off" (closed)
+        hass.states.async_set("binary_sensor.window1", "off")
+        hass.states.async_set("sensor.zone1_temp", "20.5")
+
+        mock_config_entry_with_window_sensor.add_to_hass(hass)
+        await hass.config_entries.async_setup(
+            mock_config_entry_with_window_sensor.entry_id
+        )
+        await hass.async_block_till_done()
+
+        coordinator = mock_config_entry_with_window_sensor.runtime_data.coordinator
+        runtime = coordinator.controller.get_zone_runtime("zone1")
+        assert runtime is not None
+        # Fallback should use current state (closed = False)
+        assert runtime.state.window_recently_open is False
+
+
+async def test_window_sensor_recorder_failure_fallback_multiple_sensors(
+    hass: HomeAssistant,
+) -> None:
+    """Test Recorder query failure fallback with multiple window sensors."""
+    # Create config entry with zone containing multiple window sensors
+    config_entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            "name": "Test Controller",
+            "controller_id": "test_ctrl",
+        },
+        subentries_data=[
+            {
+                "data": {
+                    "id": "zone1",
+                    "name": "Zone 1",
+                    "circuit_type": "regular",
+                    "temp_sensor": "sensor.zone1_temp",
+                    "valve_switch": "switch.valve1",
+                    "window_sensors": [
+                        "binary_sensor.window1",
+                        "binary_sensor.window2",
+                    ],
+                    "pid": DEFAULT_PID,
+                    "setpoint": DEFAULT_SETPOINT,
+                    "presets": {
+                        "home": 21.0,
+                        "away": 16.0,
+                        "eco": 19.0,
+                        "comfort": 22.0,
+                        "boost": 25.0,
+                    },
+                },
+                "subentry_id": "subentry_zone1",
+                "subentry_type": SUBENTRY_TYPE_ZONE,
+                "title": "Zone 1",
+                "unique_id": "zone1",
+            }
+        ],
+    )
+
+    # Mock Recorder query to fail
+    with patch(
+        "custom_components.ufh_controller.coordinator.was_any_window_open_recently",
+        side_effect=OperationalError("statement", {}, Exception("DB error")),
+    ):
+        # One window open, one closed
+        hass.states.async_set("binary_sensor.window1", "off")
+        hass.states.async_set("binary_sensor.window2", "on")
+        hass.states.async_set("sensor.zone1_temp", "20.5")
+        hass.states.async_set("switch.valve1", "off")
+
+        config_entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(config_entry.entry_id)
+        await hass.async_block_till_done()
+
+        coordinator = config_entry.runtime_data.coordinator
+        runtime = coordinator.controller.get_zone_runtime("zone1")
+        assert runtime is not None
+        # Fallback should detect that ANY window is open
+        assert runtime.state.window_recently_open is True
 
 
 # ============================================================================

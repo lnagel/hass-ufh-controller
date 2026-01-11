@@ -13,7 +13,7 @@ Most underfloor heating systems either run valves in simple on/off mode (ineffic
 
 - **Precise temperature control** - PID algorithm maintains stable room temperatures without overshooting
 - **Smart valve scheduling** - Coordinates multiple zones to prevent valve rapid-cycling and reduce wear
-- **Energy savings** - Automatically stops heating when windows are open, captures waste heat from hot water cycles
+- **Energy savings** - Pauses PID control when windows are open to let rooms stabilize, captures waste heat from hot water cycles
 - **Full Home Assistant integration** - Climate entities, presets, automations, and dashboards work just like any other HA device
 
 ## Features
@@ -24,7 +24,7 @@ Most underfloor heating systems either run valves in simple on/off mode (ineffic
 - **Minimum run times** - prevents short valve cycles that cause wear and inefficiency
 
 ### Energy Efficiency
-- **Window/door detection** - automatically blocks heating when windows are open
+- **Window/door detection** - pauses PID control when windows are open to let room temperature stabilize
 - **DHW latent heat capture** - flush circuits can use waste heat from hot water heating
 - **Boiler summer mode** - disables heating circuit when not needed
 
@@ -166,7 +166,7 @@ Access via **Settings → Devices & Services → [Controller] → Configure**:
 | Minimum Run Time | 9 min | Shortest allowed valve run |
 | Valve Open Time | 3.5 min | Delay before requesting heat |
 | Closing Warning | 4 min | Stop requesting heat before quota ends |
-| Window Block Time | 10 min | Cumulative open time to block heating |
+| Window Block Time | 10 min | Time after window closes before resuming PID control |
 
 ### PID Tuning
 

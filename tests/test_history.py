@@ -11,7 +11,6 @@ from custom_components.ufh_controller.core.history import (
     get_observation_start,
     get_state_average,
     get_valve_open_window,
-    get_window_open_average,
 )
 
 
@@ -176,100 +175,6 @@ class TestGetStateAverage:
         )
 
         assert result == 0.0
-
-
-class TestGetWindowOpenAverage:
-    """Test cases for get_window_open_average."""
-
-    @pytest.fixture
-    def mock_hass(self) -> MagicMock:
-        """Create a mock HomeAssistant instance."""
-        hass = MagicMock(spec=HomeAssistant)
-        hass.states = MagicMock()
-        return hass
-
-    async def test_no_window_sensors(self, mock_hass: MagicMock) -> None:
-        """Test with empty window sensor list."""
-        start = datetime(2024, 1, 15, 14, 0, 0, tzinfo=UTC)
-        end = datetime(2024, 1, 15, 15, 0, 0, tzinfo=UTC)
-
-        result = await get_window_open_average(mock_hass, [], start, end)
-
-        assert result == 0.0
-
-    async def test_multiple_sensors_max(self, mock_hass: MagicMock) -> None:
-        """Test that max open time is returned from multiple sensors."""
-        start = datetime(2024, 1, 15, 14, 0, 0, tzinfo=UTC)
-        end = datetime(2024, 1, 15, 15, 0, 0, tzinfo=UTC)
-
-        # First sensor: off the whole time
-        state1 = MagicMock()
-        state1.state = "off"
-        state1.last_changed = start
-
-        # Second sensor: on the whole time
-        state2 = MagicMock()
-        state2.state = "on"
-        state2.last_changed = start
-
-        def mock_states_get(entity_id: str) -> MagicMock:
-            if entity_id == "binary_sensor.window1":
-                return state1
-            return state2
-
-        mock_hass.states.get.side_effect = mock_states_get
-
-        with patch(
-            "homeassistant.components.recorder.get_instance"
-        ) as mock_get_instance:
-            mock_recorder = MagicMock()
-
-            def mock_executor_job(func: object, *args: object) -> dict[str, list]:
-                entity_id = args[3]
-                if entity_id == "binary_sensor.window1":
-                    return {"binary_sensor.window1": [state1]}
-                return {"binary_sensor.window2": [state2]}
-
-            mock_recorder.async_add_executor_job = AsyncMock(
-                side_effect=mock_executor_job
-            )
-            mock_get_instance.return_value = mock_recorder
-
-            result = await get_window_open_average(
-                mock_hass,
-                ["binary_sensor.window1", "binary_sensor.window2"],
-                start,
-                end,
-            )
-
-        # Should return 1.0 (max of 0.0 and 1.0)
-        assert result == 1.0
-
-    async def test_raises_exception_when_query_fails(
-        self, mock_hass: MagicMock
-    ) -> None:
-        """Test that get_window_open_average raises exception when a query fails."""
-        start = datetime(2024, 1, 15, 14, 0, 0, tzinfo=UTC)
-        end = datetime(2024, 1, 15, 15, 0, 0, tzinfo=UTC)
-
-        with patch(
-            "homeassistant.components.recorder.get_instance"
-        ) as mock_get_instance:
-            mock_recorder = MagicMock()
-            mock_recorder.async_add_executor_job = AsyncMock(
-                side_effect=OperationalError(
-                    "statement", {}, Exception("DB unavailable")
-                )
-            )
-            mock_get_instance.return_value = mock_recorder
-
-            with pytest.raises(OperationalError):
-                await get_window_open_average(
-                    mock_hass,
-                    ["binary_sensor.window1"],
-                    start,
-                    end,
-                )
 
 
 class TestRecorderQueryFailure:

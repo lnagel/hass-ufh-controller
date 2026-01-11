@@ -173,6 +173,7 @@ DEFAULT_CYCLE_MODE_HOURS = 8
 
 # Zone operation thresholds
 DEFAULT_VALVE_OPEN_THRESHOLD = 0.85  # 85% threshold for considering valve fully open
+DEFAULT_WINDOW_OPEN_THRESHOLD = 0.1  # 10% threshold for window open detection
 
 # UI validation constraints for timing parameters
 UI_TIMING_OBSERVATION_PERIOD = {"min": 1800, "max": 14400, "step": 600}

@@ -10,7 +10,10 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
-from custom_components.ufh_controller.const import DEFAULT_TIMING
+from custom_components.ufh_controller.const import (
+    DEFAULT_TIMING,
+    DEFAULT_WINDOW_OPEN_THRESHOLD,
+)
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -132,37 +135,40 @@ async def get_state_average(
     return total_on_time / total_time
 
 
-async def get_window_open_average(
+async def was_any_window_open_recently(
     hass: HomeAssistant,
     window_sensors: list[str],
-    start: datetime,
-    end: datetime,
-) -> float:
+    now: datetime,
+    lookback_seconds: int,
+) -> bool:
     """
-    Calculate the average "open" time across multiple window sensors.
+    Check if any window was open within the recent lookback period.
 
-    If any window sensor is open, it counts as open time.
+    This is used to determine if PID control should be paused after a window
+    opening event. The lookback includes the time window was open PLUS the
+    configured delay period.
 
     Args:
         hass: Home Assistant instance.
         window_sensors: List of window/door sensor entity IDs.
-        start: Start of the time period.
-        end: End of the time period.
+        now: Current datetime.
+        lookback_seconds: How far back to check for window openings.
 
     Returns:
-        Average open ratio (0.0 to 1.0).
+        True if any window was open within the lookback period.
 
     Raises:
         SQLAlchemyError: If Recorder query fails.
 
     """
     if not window_sensors:
-        return 0.0
+        return False
 
-    # Get average for each sensor and take the max (any open = blocked)
-    max_open = 0.0
+    # Check each sensor for any open time in the recent window
+    start = now - timedelta(seconds=lookback_seconds)
     for sensor_id in window_sensors:
-        avg = await get_state_average(hass, sensor_id, start, end, on_value="on")
-        max_open = max(max_open, avg)
+        avg = await get_state_average(hass, sensor_id, start, now, on_value="on")
+        if avg >= DEFAULT_WINDOW_OPEN_THRESHOLD:
+            return True
 
-    return max_open
+    return False
