@@ -759,6 +759,11 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             service,
             {"entity_id": entity_id},
         )
+        LOGGER.debug(
+            "Switch service '%s' called for %s",
+            service,
+            entity_id,
+        )
 
     def _build_state_dict(self) -> dict[str, Any]:
         """Build state dictionary for entities to consume."""
