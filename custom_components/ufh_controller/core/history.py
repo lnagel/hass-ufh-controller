@@ -10,7 +10,10 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
-from custom_components.ufh_controller.const import DEFAULT_TIMING
+from custom_components.ufh_controller.const import (
+    DEFAULT_TIMING,
+    DEFAULT_WINDOW_OPEN_THRESHOLD,
+)
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -165,7 +168,7 @@ async def was_any_window_open_recently(
     start = now - timedelta(seconds=lookback_seconds)
     for sensor_id in window_sensors:
         avg = await get_state_average(hass, sensor_id, start, now, on_value="on")
-        if avg > 0.0:  # Any open time at all = pause PID
+        if avg >= DEFAULT_WINDOW_OPEN_THRESHOLD:
             return True
 
     return False
