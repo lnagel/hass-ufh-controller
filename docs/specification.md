@@ -212,6 +212,8 @@ class ControllerState:
     period_elapsed: float  # Seconds elapsed in current observation period
     heat_request: bool
     flush_enabled: bool
+    dhw_active: bool  # DHW tank is currently heating
+    flush_until: datetime | None  # Timestamp when post-DHW flush period ends
     zones: dict[str, ZoneState]
 ```
 
@@ -332,8 +334,20 @@ All controller entities belong to a device named after the controller (user-defi
 | switch | `switch.{controller_id}_flush_enabled`     | "{name} Flush Enabled"     | DHW latent heat capture toggle (only when `dhw_active_entity` configured) |
 | sensor | `sensor.{controller_id}_requesting_zones`  | "{name} Requesting Zones"  | Count of zones currently requesting heat |
 | binary_sensor | `binary_sensor.{controller_id}_status` | "{name} Status" | Controller operational status (problem when degraded/fail-safe) |
+| binary_sensor | `binary_sensor.{controller_id}_flush_request` | "{name} Flush Request" | Flush is actively running (only when `dhw_active_entity` configured) |
 
-**Note:** The flush enabled switch is only created when `dhw_active_entity` is configured, as the DHW latent heat capture feature requires DHW state input to function.
+**Note:** The flush enabled switch and flush request sensor are only created when `dhw_active_entity` is configured, as the DHW latent heat capture feature requires DHW state input to function.
+
+**Flush Enabled Behavior:**
+- **Enabled:** Flush-type circuits can turn on during DHW heating AND for a configurable period after DHW ends (`flush_duration`) to capture latent heat (only when no regular circuits are currently running with valve ON).
+- **Disabled:** Flush-type circuits behave like regular circuits — no special DHW priority.
+- **DHW priority for regular zones is independent of this setting.** Regular zones that are OFF cannot turn ON during DHW heating regardless of the flush enabled state. This switch only controls whether flush circuits get special treatment.
+
+**Flush Request Behavior:**
+The flush request sensor indicates when flush circuits are actively capturing heat:
+- **ON:** During DHW heating (when `dhw_active_entity` is on) OR during the post-DHW flush period
+- **OFF:** When neither DHW is active nor within the post-DHW flush period
+- **Requires flush_enabled:** The sensor only reports ON if `flush_enabled` switch is also on
 
 **Select Options for Mode:**
 
@@ -522,11 +536,11 @@ def get_observation_start(now: datetime) -> datetime:
 def evaluate_zone(zone: ZoneState, controller: ControllerState,
                   timing: TimingParams) -> ZoneAction:
 
-    # Flush circuit priority during DHW heating
+    # Flush circuit priority during DHW heating or post-DHW flush period
     if (zone.circuit_type == "flush" and
         controller.flush_enabled and
-        controller.dhw_active and
-        not any_regular_circuits_enabled(controller)):
+        is_flush_requested(controller) and  # True during DHW or post-DHW period
+        not any_regular_circuits_active(controller)):  # No regular valves currently ON
         return ZoneAction.TURN_ON
 
     # Note: Window blocking is handled via PID pause, not valve control
@@ -1240,6 +1254,22 @@ The interval at which the coordinator runs the control loop, updating PID contro
 
 **Why it matters:** Shorter intervals provide more responsive control but increase database load from recorder queries. Longer intervals reduce load but make the system less responsive. 60 seconds is a good balance for residential heating.
 
+#### flush_duration
+
+**Default:** 480 seconds (8 minutes)
+**Range:** 0-1800 seconds (0 to 30 minutes)
+**Config location:** Controller subentry → `data.timing.flush_duration`
+
+The duration to continue flush circuit operation after DHW heating ends.
+
+**How it works:** When DHW heating completes (DHW sensor transitions from ON to OFF) and `flush_enabled` is on, flush circuits continue operating for `flush_duration` seconds to capture residual heat from the DHW tank and pipes. Set to 0 to disable post-DHW flushing (flush circuits will only operate while DHW is actively heating).
+
+**Examples:**
+- With `flush_duration=480s` (8 minutes): After DHW heating stops, flush circuits remain active for 8 more minutes to capture residual heat.
+- With `flush_duration=0s`: Flush circuits only operate while DHW is actively heating, stopping immediately when DHW completes.
+
+**Why it matters:** DHW tanks and pipes retain heat after the heating cycle completes. This residual heat would otherwise be wasted. By continuing flush circuit operation for a period after DHW ends, you can capture this latent heat and distribute it to flush-type zones (typically bathrooms), improving energy efficiency.
+
 ---
 
 ### 13.2 PID Parameters
@@ -1490,7 +1520,7 @@ A binary sensor indicating when the boiler is heating domestic hot water (DHW).
 
 - **Regular circuits already ON**: Continue running (STAY_ON). This allows existing heating to continue circulating water through the floor, maintaining heat distribution even though no new heat is being added.
 - **Regular circuits currently OFF**: Cannot turn ON (STAY_OFF). New heating cycles are blocked until DHW completes.
-- **Flush circuits**: Can capture latent heat if flush mode is enabled and no regular circuits have demand.
+- **Flush circuits**: Can capture latent heat if flush mode is enabled and no regular circuits are currently running (valve ON).
 
 **Example:** `binary_sensor.boiler_tapwater_active` → When DHW heating starts, this turns on. Regular zones that were already heating continue to circulate water, but zones that were off wait until DHW finishes.
 

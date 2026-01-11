@@ -59,13 +59,18 @@ async def async_setup_entry(
     """Set up the binary sensor platform."""
     coordinator = entry.runtime_data.coordinator
 
-    # Add controller-level status sensor
+    # Add controller-level sensors
     controller_subentry_id = get_controller_subentry_id(entry)
     if controller_subentry_id is not None:
-        async_add_entities(
-            [UFHControllerStatusSensor(coordinator, controller_subentry_id)],
-            config_subentry_id=controller_subentry_id,
-        )
+        entities: list[BinarySensorEntity] = [
+            UFHControllerStatusSensor(coordinator, controller_subentry_id)
+        ]
+
+        # Only create flush_request sensor if DHW entity is configured
+        if entry.data.get("dhw_active_entity"):
+            entities.append(UFHFlushRequestSensor(coordinator, controller_subentry_id))
+
+        async_add_entities(entities, config_subentry_id=controller_subentry_id)
 
     # Add zone-level binary sensors for each zone subentry
     for subentry in entry.subentries.values():
@@ -171,3 +176,36 @@ class UFHControllerStatusSensor(UFHControllerEntity, BinarySensorEntity):
             "zones_degraded": self.coordinator.data.get("zones_degraded", 0),
             "zones_fail_safe": self.coordinator.data.get("zones_fail_safe", 0),
         }
+
+
+class UFHFlushRequestSensor(UFHControllerEntity, BinarySensorEntity):
+    """
+    Binary sensor indicating when flush is actively requested.
+
+    This sensor is ON when:
+    - DHW is active AND flush_enabled is ON, OR
+    - Post-DHW flush period is active AND flush_enabled is ON
+    """
+
+    _attr_translation_key = "flush_request"
+    _attr_device_class = BinarySensorDeviceClass.HEAT
+    _attr_name = "Flush Request"
+
+    def __init__(
+        self,
+        coordinator: UFHControllerDataUpdateCoordinator,
+        subentry_id: str,
+    ) -> None:
+        """Initialize the flush request sensor."""
+        super().__init__(coordinator, subentry_id)
+
+        controller_id = coordinator.config_entry.data.get("controller_id", "")
+        self._attr_unique_id = f"{controller_id}_flush_request"
+
+    @property
+    def is_on(self) -> bool:
+        """Return True if flush is currently requested."""
+        # Only return True if flush_enabled is also True
+        if not self.coordinator.controller.state.flush_enabled:
+            return False
+        return self.coordinator.data.get("flush_request", False)

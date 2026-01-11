@@ -43,7 +43,8 @@
           "valve_open_time": "Valve open time",
           "closing_warning_duration": "Closing warning duration",
           "window_block_time": "Window block time",
-          "controller_loop_interval": "Controller loop interval"
+          "controller_loop_interval": "Controller loop interval",
+          "flush_duration": "Flush duration after DHW"
         }
       },
       "zone_entities": {
@@ -99,7 +100,8 @@
             "valve_open_time": "Valve open time",
             "closing_warning_duration": "Closing warning duration",
             "window_block_time": "Window block time",
-            "controller_loop_interval": "Controller loop interval"
+            "controller_loop_interval": "Controller loop interval",
+            "flush_duration": "Flush duration after DHW"
           }
         }
       },
@@ -215,6 +217,12 @@
       },
       "heat_request": {
         "name": "Heat Request"
+      },
+      "status": {
+        "name": "Status"
+      },
+      "flush_request": {
+        "name": "Flush Request"
       }
     },
     "select": {

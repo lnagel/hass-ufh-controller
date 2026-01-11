@@ -241,3 +241,99 @@ async def test_zone_binary_sensor_unavailable_during_fail_safe(
     heat_request_state = hass.states.get("binary_sensor.test_zone_1_heat_request")
     assert heat_request_state is not None
     assert heat_request_state.state == STATE_UNAVAILABLE
+
+
+async def test_flush_request_binary_sensor_created_with_dhw(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Test flush_request binary sensor is created when DHW entity is configured."""
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get("binary_sensor.test_controller_flush_request")
+    assert state is not None
+
+
+async def test_flush_request_not_created_without_dhw(
+    hass: HomeAssistant,
+    mock_config_entry_no_zones: MockConfigEntry,
+) -> None:
+    """Test flush_request sensor is NOT created when DHW entity is not configured."""
+    mock_config_entry_no_zones.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry_no_zones.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get("binary_sensor.test_controller_flush_request")
+    assert state is None
+
+
+async def test_flush_request_off_when_flush_disabled(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_temp_sensor: None,
+) -> None:
+    """Test flush_request is OFF when flush_enabled is False."""
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = mock_config_entry.runtime_data.coordinator
+
+    # Set DHW active but flush NOT enabled
+    hass.states.async_set("binary_sensor.dhw_active", "on")
+    coordinator.controller.state.flush_enabled = False
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    state = hass.states.get("binary_sensor.test_controller_flush_request")
+    assert state is not None
+    assert state.state == "off"
+
+
+async def test_flush_request_on_during_dhw_with_flush_enabled(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_temp_sensor: None,
+) -> None:
+    """Test flush_request is ON when DHW is active and flush_enabled is True."""
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = mock_config_entry.runtime_data.coordinator
+
+    # Set DHW active and flush enabled
+    hass.states.async_set("binary_sensor.dhw_active", "on")
+    coordinator.controller.state.flush_enabled = True
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    state = hass.states.get("binary_sensor.test_controller_flush_request")
+    assert state is not None
+    assert state.state == "on"
+
+
+async def test_flush_request_on_during_post_dhw_period(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_temp_sensor: None,
+) -> None:
+    """Test flush_request is ON during post-DHW flush period."""
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = mock_config_entry.runtime_data.coordinator
+
+    # Set DHW inactive but flush_until in the future
+    hass.states.async_set("binary_sensor.dhw_active", "off")
+    coordinator.controller.state.flush_enabled = True
+    coordinator.controller.state.flush_until = datetime.now(UTC) + timedelta(minutes=5)
+    coordinator.async_set_updated_data(coordinator._build_state_dict())
+    await hass.async_block_till_done()
+
+    state = hass.states.get("binary_sensor.test_controller_flush_request")
+    assert state is not None
+    assert state.state == "on"

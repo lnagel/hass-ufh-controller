@@ -30,6 +30,7 @@ from .const import (
     UI_SETPOINT_MIN,
     UI_TIMING_CLOSING_WARNING,
     UI_TIMING_CONTROLLER_LOOP_INTERVAL,
+    UI_TIMING_FLUSH_DURATION,
     UI_TIMING_MIN_RUN_TIME,
     UI_TIMING_OBSERVATION_PERIOD,
     UI_TIMING_VALVE_OPEN_TIME,
@@ -126,6 +127,20 @@ def get_timing_schema(timing: TimingDefaults | None = None) -> vol.Schema:
                     min=UI_TIMING_CONTROLLER_LOOP_INTERVAL["min"],
                     max=UI_TIMING_CONTROLLER_LOOP_INTERVAL["max"],
                     step=UI_TIMING_CONTROLLER_LOOP_INTERVAL["step"],
+                    unit_of_measurement="s",
+                )
+            ),
+            vol.Required(
+                "flush_duration",
+                default=timing.get(
+                    "flush_duration",
+                    DEFAULT_TIMING["flush_duration"],
+                ),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=UI_TIMING_FLUSH_DURATION["min"],
+                    max=UI_TIMING_FLUSH_DURATION["max"],
+                    step=UI_TIMING_FLUSH_DURATION["step"],
                     unit_of_measurement="s",
                 )
             ),
@@ -644,6 +659,7 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
                 "closing_warning_duration": int(user_input["closing_warning_duration"]),
                 "window_block_time": int(user_input["window_block_time"]),
                 "controller_loop_interval": int(user_input["controller_loop_interval"]),
+                "flush_duration": int(user_input["flush_duration"]),
             }
 
             # Update the controller subentry with new timing
