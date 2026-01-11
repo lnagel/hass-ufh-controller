@@ -63,7 +63,11 @@ custom_components/ufh_controller/
 ├── select.py            # Mode selector entity
 └── switch.py            # Switch entities (flush enabled)
 
-tests/                   # All test files
+tests/                   # Test suite (see Test Organization below)
+│   ├── unit/            # Pure logic tests, no HA dependencies
+│   ├── integration/     # Entity platform tests with mocked HA
+│   ├── scenarios/       # End-to-end workflows and resilience
+│   └── config/          # Config flows and setup lifecycle
 docs/specification.md    # Technical specification document
 ```
 
@@ -103,6 +107,33 @@ Common fixtures are in `tests/conftest.py`:
 - `mock_config_entry` - Config entry with one zone
 - `mock_config_entry_no_zones` - Config entry without zones
 - `mock_recorder` - Mocked Home Assistant recorder
+
+### Test Organization
+
+Tests are organized into four directories based on their scope and dependencies:
+
+**`tests/unit/`** - Pure logic tests
+- Testing a single class/function in isolation
+- No Home Assistant dependencies (no `hass` fixture)
+- Examples: PID controller math, observation window calculations
+
+**`tests/integration/`** - Entity platform tests
+- Testing entity platforms (climate, sensor, binary_sensor, etc.)
+- Testing component interaction with mocked Home Assistant state
+- Requires `hass` fixture and mock entities
+- Examples: climate entity behavior, controller orchestration, zone evaluation
+
+**`tests/scenarios/`** - End-to-end workflow tests
+- Testing realistic user workflows from start to finish
+- Testing resilience (failures, recovery, state persistence)
+- Multi-step operations over time (coordinator updates)
+- Examples: state persistence across restarts, database failure recovery
+
+**`tests/config/`** - Configuration and setup tests
+- Testing config flows (UI configuration)
+- Testing setup/unload lifecycle
+- Testing conditional entity creation based on config
+- Examples: config flow validation, entry setup/unload
 
 ## Code Quality Standards
 
