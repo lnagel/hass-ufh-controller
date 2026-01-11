@@ -11,6 +11,7 @@ from custom_components.ufh_controller.const import (
     DEFAULT_TIMING,
     DOMAIN,
     SUBENTRY_TYPE_ZONE,
+    ValveState,
 )
 
 
@@ -143,7 +144,7 @@ async def test_crash_recovery_mid_update_valve_remains_safe(
     Scenario: HA crashes after evaluate_zones() but before execute_valve_actions()
     Expected: On restart, valves should be recalculated and controlled safely.
 
-    Key insight: evaluate_zones() updates in-memory valve_on state, but the
+    Key insight: evaluate_zones() updates in-memory valve_state, but the
     actual switch service call happens in execute_valve_actions(). If a crash
     occurs between these, the physical valve state may differ from the stored
     state. On restart, the system should recover correctly.
@@ -243,7 +244,7 @@ async def test_crash_recovery_preserves_valve_off_when_duty_cycle_zero(
     assert runtime.state.error is not None
     assert runtime.state.error < 0  # Negative error = above setpoint
     # Valve should be off
-    assert runtime.state.valve_on is False
+    assert runtime.state.valve_state == ValveState.OFF
 
 
 async def test_crash_recovery_no_integral_windup_during_disabled_period(

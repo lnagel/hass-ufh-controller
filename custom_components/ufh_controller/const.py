@@ -1,8 +1,15 @@
 """Constants for Underfloor Heating Controller."""
 
+from __future__ import annotations
+
 from enum import StrEnum
 from logging import Logger, getLogger
-from typing import TypedDict
+from typing import TYPE_CHECKING, TypedDict
+
+from homeassistant.const import STATE_OFF, STATE_ON, STATE_UNAVAILABLE, STATE_UNKNOWN
+
+if TYPE_CHECKING:
+    from homeassistant.core import State
 
 LOGGER: Logger = getLogger(__package__)
 
@@ -53,6 +60,29 @@ class ZoneStatus(StrEnum):
     NORMAL = "normal"  # Zone operating normally with valid temperature readings
     DEGRADED = "degraded"  # Temp sensor unavailable or Recorder query failing
     FAIL_SAFE = "fail_safe"  # No successful update for >1 hour, valve forced closed
+
+
+class ValveState(StrEnum):
+    """Valve entity state values."""
+
+    ON = STATE_ON
+    OFF = STATE_OFF
+    UNKNOWN = STATE_UNKNOWN
+    UNAVAILABLE = STATE_UNAVAILABLE
+
+    @classmethod
+    def from_ha_state(cls, state: State | None) -> ValveState:
+        """Convert Home Assistant entity state to ValveState."""
+        if state is None:
+            return cls.UNAVAILABLE
+        if state.state == STATE_UNAVAILABLE:
+            return cls.UNAVAILABLE
+        if state.state == STATE_ON:
+            return cls.ON
+        if state.state == STATE_OFF:
+            return cls.OFF
+        # Any other state (including STATE_UNKNOWN) -> UNKNOWN
+        return cls.UNKNOWN
 
 
 # Failure handling constants

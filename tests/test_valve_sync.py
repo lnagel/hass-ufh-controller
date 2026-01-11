@@ -1,7 +1,10 @@
 """Test valve state synchronization with external changes."""
 
+import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant, ServiceCall
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -57,3 +60,77 @@ async def test_valve_restored_when_externally_turned_off(
 
     # Valve should be restored
     assert ("turn_on", "switch.zone1_valve") in switch_calls
+
+
+@pytest.mark.parametrize(
+    "valve_state",
+    [STATE_UNAVAILABLE, STATE_UNKNOWN],
+    ids=["unavailable", "unknown"],
+)
+async def test_valve_bad_state_logs_warning(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    caplog: pytest.LogCaptureFixture,
+    valve_state: str,
+) -> None:
+    """Test that a warning is logged when valve entity state is unavailable/unknown."""
+    mock_config_entry.add_to_hass(hass)
+    hass.states.async_set("sensor.zone1_temp", "18.0")
+    hass.states.async_set("switch.zone1_valve", valve_state)
+
+    hass.services.async_register("switch", "turn_on", AsyncMock())
+    hass.services.async_register("switch", "turn_off", AsyncMock())
+
+    coordinator = UFHControllerDataUpdateCoordinator(hass, mock_config_entry)
+
+    mock_recorder = MagicMock()
+    mock_recorder.async_add_executor_job = AsyncMock(return_value={})
+
+    with (
+        patch(
+            "homeassistant.components.recorder.get_instance",
+            return_value=mock_recorder,
+        ),
+        caplog.at_level(logging.WARNING),
+    ):
+        await coordinator.async_refresh()
+
+    # Check for warning log about valve state (either "unavailable" or "unknown")
+    assert any(
+        ("unavailable" in record.message.lower() or "unknown" in record.message.lower())
+        and "switch.zone1_valve" in record.message
+        for record in caplog.records
+    )
+
+
+async def test_valve_not_found_logs_warning(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Test that a warning is logged when valve entity is not found."""
+    mock_config_entry.add_to_hass(hass)
+    hass.states.async_set("sensor.zone1_temp", "18.0")
+    # Do NOT set valve state - entity doesn't exist
+
+    hass.services.async_register("switch", "turn_on", AsyncMock())
+    hass.services.async_register("switch", "turn_off", AsyncMock())
+
+    coordinator = UFHControllerDataUpdateCoordinator(hass, mock_config_entry)
+
+    mock_recorder = MagicMock()
+    mock_recorder.async_add_executor_job = AsyncMock(return_value={})
+
+    with (
+        patch(
+            "homeassistant.components.recorder.get_instance",
+            return_value=mock_recorder,
+        ),
+        caplog.at_level(logging.WARNING),
+    ):
+        await coordinator.async_refresh()
+
+    assert any(
+        "not found" in record.message.lower() and "switch.zone1_valve" in record.message
+        for record in caplog.records
+    )

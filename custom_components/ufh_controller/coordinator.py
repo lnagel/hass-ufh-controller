@@ -22,6 +22,7 @@ from .const import (
     ControllerStatus,
     OperationMode,
     SummerMode,
+    ValveState,
     ZoneStatus,
 )
 from .core import (
@@ -270,7 +271,7 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     runtime.config.valve_switch, turn_on=False
                 )
                 # Update zone state to reflect valve is off
-                runtime.state.valve_on = False
+                runtime.state.valve_state = ValveState.OFF
 
         # Turn off heat request
         await self._execute_heat_request(heat_request=False)
@@ -282,6 +283,11 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "select",
                 "select_option",
                 {"entity_id": summer_entity, "option": SummerMode.AUTO},
+            )
+            LOGGER.debug(
+                "Select service 'select_option' called for %s with option '%s'",
+                summer_entity,
+                SummerMode.AUTO,
             )
 
     async def _async_update_data(self) -> dict[str, Any]:
@@ -420,7 +426,7 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             current_valve_state = self.hass.states.get(runtime.config.valve_switch)
             period_state_avg = (
                 1.0
-                if current_valve_state and current_valve_state.state == "on"
+                if ValveState.from_ha_state(current_valve_state) == ValveState.ON
                 else 0.0
             )
 
@@ -440,7 +446,7 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             current_valve_state = self.hass.states.get(runtime.config.valve_switch)
             open_state_avg = (
                 1.0
-                if current_valve_state and current_valve_state.state == "on"
+                if ValveState.from_ha_state(current_valve_state) == ValveState.ON
                 else 0.0
             )
             LOGGER.warning(
@@ -485,10 +491,22 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # This ensures we detect when external factors change the valve state
         # (e.g., user toggle, automation, device reset)
         current_valve_state = self.hass.states.get(runtime.config.valve_switch)
-        actual_valve_on = (
-            current_valve_state is not None and current_valve_state.state == "on"
-        )
-        runtime.state.valve_on = actual_valve_on
+        runtime.state.valve_state = ValveState.from_ha_state(current_valve_state)
+
+        # Log if valve entity is unavailable or unknown
+        if runtime.state.valve_state == ValveState.UNAVAILABLE:
+            LOGGER.warning(
+                "Valve entity %s unavailable for zone %s (entity %s)",
+                runtime.config.valve_switch,
+                zone_id,
+                "not found" if current_valve_state is None else "unavailable",
+            )
+        elif runtime.state.valve_state == ValveState.UNKNOWN:
+            LOGGER.warning(
+                "Valve entity %s has unknown state for zone %s",
+                runtime.config.valve_switch,
+                zone_id,
+            )
 
         # Track zone-level failure state
         self._update_zone_failure_state(
@@ -648,15 +666,26 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # Zone in fail-safe: force valve closed, ignore normal action
             if runtime.state.zone_status == ZoneStatus.FAIL_SAFE:
                 await self._call_switch_service(valve_entity, turn_on=False)
-                runtime.state.valve_on = False
+                runtime.state.valve_state = ValveState.OFF
                 continue
+
+            # Re-send commands when valve state is uncertain to force sync
+            valve_uncertain = runtime.state.valve_state in (
+                ValveState.UNKNOWN,
+                ValveState.UNAVAILABLE,
+            )
 
             # Normal action execution
             if action == ZoneAction.TURN_ON:
                 await self._call_switch_service(valve_entity, turn_on=True)
             elif action == ZoneAction.TURN_OFF:
                 await self._call_switch_service(valve_entity, turn_on=False)
-            # STAY_ON and STAY_OFF don't require action
+            elif action == ZoneAction.STAY_ON and valve_uncertain:
+                # Re-send turn_on to sync valve state
+                await self._call_switch_service(valve_entity, turn_on=True)
+            elif action == ZoneAction.STAY_OFF and valve_uncertain:
+                # Re-send turn_off to sync valve state
+                await self._call_switch_service(valve_entity, turn_on=False)
 
     async def _execute_heat_request(self, *, heat_request: bool) -> None:
         """Execute heat request by calling switch service if configured."""
@@ -711,6 +740,11 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "select_option",
             {"entity_id": entity_id, "option": summer_mode_value},
         )
+        LOGGER.debug(
+            "Select service 'select_option' called for %s with option '%s'",
+            entity_id,
+            summer_mode_value,
+        )
 
     async def _call_switch_service(
         self,
@@ -734,6 +768,11 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "switch",
             service,
             {"entity_id": entity_id},
+        )
+        LOGGER.debug(
+            "Switch service '%s' called for %s",
+            service,
+            entity_id,
         )
 
     def _build_state_dict(self) -> dict[str, Any]:
@@ -769,7 +808,7 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     > self._controller.config.timing.window_block_time
                 )
                 heat_request = (
-                    state.valve_on
+                    state.valve_state == ValveState.ON
                     and state.open_state_avg >= DEFAULT_VALVE_OPEN_THRESHOLD
                 )
 
@@ -781,7 +820,7 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "p_term": state.p_term,
                     "i_term": state.i_term,
                     "d_term": state.d_term,
-                    "valve_on": state.valve_on,
+                    "valve_state": state.valve_state.value,
                     "enabled": state.enabled,
                     "blocked": blocked,
                     "heat_request": heat_request,

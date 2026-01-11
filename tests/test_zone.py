@@ -2,6 +2,7 @@
 
 import pytest
 
+from custom_components.ufh_controller.const import ValveState
 from custom_components.ufh_controller.core.zone import (
     CircuitType,
     ControllerState,
@@ -56,7 +57,7 @@ class TestEvaluateZoneDisabled:
         self, timing: TimingParams, controller: ControllerState
     ) -> None:
         """Disabled zone with valve off stays off."""
-        zone = ZoneState(zone_id="test", enabled=False, valve_on=False)
+        zone = ZoneState(zone_id="test", enabled=False, valve_state=ValveState.OFF)
         result = evaluate_zone(zone, controller, timing)
         assert result == ZoneAction.STAY_OFF
 
@@ -64,8 +65,23 @@ class TestEvaluateZoneDisabled:
         self, timing: TimingParams, controller: ControllerState
     ) -> None:
         """Disabled zone with valve on turns off."""
-        zone = ZoneState(zone_id="test", enabled=False, valve_on=True)
+        zone = ZoneState(zone_id="test", enabled=False, valve_state=ValveState.ON)
         result = evaluate_zone(zone, controller, timing)
+        assert result == ZoneAction.TURN_OFF
+
+    @pytest.mark.parametrize(
+        "valve_state", [ValveState.UNKNOWN, ValveState.UNAVAILABLE]
+    )
+    def test_disabled_zone_valve_unknown_turns_off(
+        self,
+        timing: TimingParams,
+        controller: ControllerState,
+        valve_state: ValveState,
+    ) -> None:
+        """Disabled zone with unknown/unavailable valve state emits TURN_OFF."""
+        zone = ZoneState(zone_id="test", enabled=False, valve_state=valve_state)
+        result = evaluate_zone(zone, controller, timing)
+        # When valve state is uncertain, actively turn off to ensure safe state
         assert result == ZoneAction.TURN_OFF
 
 
@@ -82,7 +98,7 @@ class TestEvaluateZoneFlushCircuit:
         zone = ZoneState(
             zone_id="bathroom",
             circuit_type=CircuitType.FLUSH,
-            valve_on=False,
+            valve_state=ValveState.OFF,
         )
         controller = ControllerState(
             flush_enabled=True,
@@ -97,7 +113,7 @@ class TestEvaluateZoneFlushCircuit:
         zone = ZoneState(
             zone_id="bathroom",
             circuit_type=CircuitType.FLUSH,
-            valve_on=True,
+            valve_state=ValveState.ON,
         )
         controller = ControllerState(
             flush_enabled=True,
@@ -112,7 +128,7 @@ class TestEvaluateZoneFlushCircuit:
         flush_zone = ZoneState(
             zone_id="bathroom",
             circuit_type=CircuitType.FLUSH,
-            valve_on=False,
+            valve_state=ValveState.OFF,
         )
         regular_zone = ZoneState(
             zone_id="living_room",
@@ -134,7 +150,7 @@ class TestEvaluateZoneFlushCircuit:
         zone = ZoneState(
             zone_id="bathroom",
             circuit_type=CircuitType.FLUSH,
-            valve_on=False,
+            valve_state=ValveState.OFF,
             requested_duration=0.0,
         )
         controller = ControllerState(
@@ -165,7 +181,7 @@ class TestEvaluateZoneWindowBlocking:
         """Window currently open stays off."""
         zone = ZoneState(
             zone_id="test",
-            valve_on=False,
+            valve_state=ValveState.OFF,
             window_currently_open=True,
             requested_duration=1000.0,
         )
@@ -178,7 +194,7 @@ class TestEvaluateZoneWindowBlocking:
         """Window currently open turns off valve."""
         zone = ZoneState(
             zone_id="test",
-            valve_on=True,
+            valve_state=ValveState.ON,
             window_currently_open=True,
             requested_duration=1000.0,
         )
@@ -191,7 +207,7 @@ class TestEvaluateZoneWindowBlocking:
         """Window open duration exceeded threshold stays off."""
         zone = ZoneState(
             zone_id="test",
-            valve_on=False,
+            valve_state=ValveState.OFF,
             window_currently_open=False,
             window_open_seconds=700.0,  # Above 600 second threshold
             requested_duration=1000.0,
@@ -205,7 +221,7 @@ class TestEvaluateZoneWindowBlocking:
         """Window open duration exceeded threshold turns off valve."""
         zone = ZoneState(
             zone_id="test",
-            valve_on=True,
+            valve_state=ValveState.ON,
             window_currently_open=False,
             window_open_seconds=700.0,  # Above 600 second threshold
             requested_duration=1000.0,
@@ -219,7 +235,7 @@ class TestEvaluateZoneWindowBlocking:
         """Window open time below threshold doesn't block."""
         zone = ZoneState(
             zone_id="test",
-            valve_on=False,
+            valve_state=ValveState.OFF,
             window_currently_open=False,
             window_open_seconds=300.0,  # Below 600 second threshold
             requested_duration=1000.0,
@@ -241,7 +257,7 @@ class TestEvaluateZonePeriodEndFreeze:
         """Valve on stays on when near end of observation period."""
         zone = ZoneState(
             zone_id="test",
-            valve_on=True,
+            valve_state=ValveState.ON,
             requested_duration=1000.0,
             used_duration=1000.0,  # Quota met, would normally turn off
         )
@@ -254,7 +270,7 @@ class TestEvaluateZonePeriodEndFreeze:
         """Valve off stays off when near end of observation period."""
         zone = ZoneState(
             zone_id="test",
-            valve_on=False,
+            valve_state=ValveState.OFF,
             requested_duration=1000.0,
             used_duration=0.0,  # Has quota, would normally turn on
         )
@@ -267,7 +283,7 @@ class TestEvaluateZonePeriodEndFreeze:
         """Normal behavior when enough time remaining in period."""
         zone = ZoneState(
             zone_id="test",
-            valve_on=False,
+            valve_state=ValveState.OFF,
             requested_duration=1000.0,
             used_duration=0.0,
         )
@@ -280,7 +296,7 @@ class TestEvaluateZonePeriodEndFreeze:
         """Normal behavior when exactly at min_run_time threshold."""
         zone = ZoneState(
             zone_id="test",
-            valve_on=False,
+            valve_state=ValveState.OFF,
             requested_duration=1000.0,
             used_duration=0.0,
         )
@@ -293,7 +309,7 @@ class TestEvaluateZonePeriodEndFreeze:
         """Freeze behavior when just below threshold."""
         zone = ZoneState(
             zone_id="test",
-            valve_on=False,
+            valve_state=ValveState.OFF,
             requested_duration=1000.0,
             used_duration=0.0,  # Has quota, would normally turn on
         )
@@ -306,7 +322,7 @@ class TestEvaluateZonePeriodEndFreeze:
         """Window blocking should still work even near period end."""
         zone = ZoneState(
             zone_id="test",
-            valve_on=True,
+            valve_state=ValveState.ON,
             window_currently_open=True,  # Window open should turn off
             requested_duration=1000.0,
             used_duration=0.0,
@@ -343,7 +359,7 @@ class TestPeriodTransitionScenario:
         """
         zone = ZoneState(
             zone_id="test",
-            valve_on=False,  # Valve is off
+            valve_state=ValveState.OFF,  # Valve is off
             requested_duration=7200.0,  # 100% duty cycle
             used_duration=6480.0,  # 90% used, 720s remaining quota
         )
@@ -359,7 +375,7 @@ class TestPeriodTransitionScenario:
         """Zone running near period end should stay on (freeze prevents cycling)."""
         zone = ZoneState(
             zone_id="test",
-            valve_on=True,  # Valve is running
+            valve_state=ValveState.ON,  # Valve is running
             requested_duration=7200.0,  # 100% duty cycle
             used_duration=6480.0,  # 90% used
         )
@@ -378,7 +394,7 @@ class TestPeriodTransitionScenario:
         """
         zone = ZoneState(
             zone_id="test",
-            valve_on=False,  # Valve is off after period reset
+            valve_state=ValveState.OFF,  # Valve is off after period reset
             requested_duration=3600.0,  # 50% duty cycle = 3600s quota
             used_duration=30.0,  # Only 30s used in new period
         )
@@ -399,13 +415,13 @@ class TestPeriodTransitionScenario:
         """
         zone1 = ZoneState(
             zone_id="zone1",
-            valve_on=False,
+            valve_state=ValveState.OFF,
             requested_duration=3600.0,  # 50% duty cycle
             used_duration=60.0,  # 1 minute used
         )
         zone2 = ZoneState(
             zone_id="zone2",
-            valve_on=False,
+            valve_state=ValveState.OFF,
             requested_duration=5400.0,  # 75% duty cycle
             used_duration=60.0,  # 1 minute used
         )
@@ -441,7 +457,7 @@ class TestEvaluateZoneQuotaScheduling:
         """Zone with quota remaining turns on."""
         zone = ZoneState(
             zone_id="test",
-            valve_on=False,
+            valve_state=ValveState.OFF,
             requested_duration=1000.0,
             used_duration=0.0,
         )
@@ -454,7 +470,7 @@ class TestEvaluateZoneQuotaScheduling:
         """Zone already on with quota stays on."""
         zone = ZoneState(
             zone_id="test",
-            valve_on=True,
+            valve_state=ValveState.ON,
             requested_duration=1000.0,
             used_duration=500.0,
         )
@@ -467,7 +483,7 @@ class TestEvaluateZoneQuotaScheduling:
         """Zone with quota less than min_run_time stays off."""
         zone = ZoneState(
             zone_id="test",
-            valve_on=False,
+            valve_state=ValveState.OFF,
             requested_duration=1000.0,
             used_duration=700.0,  # Only 300 remaining, less than 540
         )
@@ -480,7 +496,7 @@ class TestEvaluateZoneQuotaScheduling:
         """Zone that met quota turns off."""
         zone = ZoneState(
             zone_id="test",
-            valve_on=True,
+            valve_state=ValveState.ON,
             requested_duration=1000.0,
             used_duration=1000.0,
         )
@@ -493,7 +509,7 @@ class TestEvaluateZoneQuotaScheduling:
         """Zone that met quota stays off."""
         zone = ZoneState(
             zone_id="test",
-            valve_on=False,
+            valve_state=ValveState.OFF,
             requested_duration=1000.0,
             used_duration=1000.0,
         )
@@ -506,12 +522,32 @@ class TestEvaluateZoneQuotaScheduling:
         """Zone with zero quota stays off."""
         zone = ZoneState(
             zone_id="test",
-            valve_on=False,
+            valve_state=ValveState.OFF,
             requested_duration=0.0,
             used_duration=0.0,
         )
         result = evaluate_zone(zone, controller, timing)
         assert result == ZoneAction.STAY_OFF
+
+    @pytest.mark.parametrize(
+        "valve_state", [ValveState.UNKNOWN, ValveState.UNAVAILABLE]
+    )
+    def test_quota_met_unknown_valve_turns_off(
+        self,
+        timing: TimingParams,
+        controller: ControllerState,
+        valve_state: ValveState,
+    ) -> None:
+        """Zone that met quota with unknown valve emits TURN_OFF."""
+        zone = ZoneState(
+            zone_id="test",
+            valve_state=valve_state,
+            requested_duration=1000.0,
+            used_duration=1000.0,
+        )
+        result = evaluate_zone(zone, controller, timing)
+        # When valve state is uncertain, actively turn off
+        assert result == ZoneAction.TURN_OFF
 
 
 class TestEvaluateZoneDHWBlocking:
@@ -527,7 +563,7 @@ class TestEvaluateZoneDHWBlocking:
         zone = ZoneState(
             zone_id="test",
             circuit_type=CircuitType.REGULAR,
-            valve_on=False,
+            valve_state=ValveState.OFF,
             requested_duration=1000.0,
             used_duration=0.0,
         )
@@ -540,7 +576,7 @@ class TestEvaluateZoneDHWBlocking:
         zone = ZoneState(
             zone_id="test",
             circuit_type=CircuitType.REGULAR,
-            valve_on=False,
+            valve_state=ValveState.OFF,
             requested_duration=1000.0,
             used_duration=0.0,
         )
@@ -553,7 +589,7 @@ class TestEvaluateZoneDHWBlocking:
         zone = ZoneState(
             zone_id="test",
             circuit_type=CircuitType.REGULAR,
-            valve_on=True,  # Already running
+            valve_state=ValveState.ON,  # Already running
             requested_duration=1000.0,
             used_duration=100.0,  # Has remaining quota
         )
@@ -569,7 +605,7 @@ class TestEvaluateZoneDHWBlocking:
         zone = ZoneState(
             zone_id="test",
             circuit_type=CircuitType.REGULAR,
-            valve_on=True,  # Currently running
+            valve_state=ValveState.ON,  # Currently running
             requested_duration=1000.0,
             used_duration=1000.0,  # Quota exhausted
         )
@@ -589,7 +625,7 @@ class TestShouldRequestHeat:
 
     def test_valve_off_no_request(self, timing: TimingParams) -> None:
         """Valve off doesn't request heat."""
-        zone = ZoneState(zone_id="test", valve_on=False)
+        zone = ZoneState(zone_id="test", valve_state=ValveState.OFF)
         result = should_request_heat(zone, timing)
         assert result is False
 
@@ -597,7 +633,7 @@ class TestShouldRequestHeat:
         """Disabled zone doesn't request heat."""
         zone = ZoneState(
             zone_id="test",
-            valve_on=True,
+            valve_state=ValveState.ON,
             enabled=False,
             open_state_avg=1.0,
             requested_duration=1000.0,
@@ -609,7 +645,7 @@ class TestShouldRequestHeat:
         """Valve not fully open doesn't request heat."""
         zone = ZoneState(
             zone_id="test",
-            valve_on=True,
+            valve_state=ValveState.ON,
             open_state_avg=0.50,  # Below 85% threshold
             requested_duration=1000.0,
             used_duration=0.0,
@@ -621,7 +657,7 @@ class TestShouldRequestHeat:
         """Valve about to close doesn't request heat."""
         zone = ZoneState(
             zone_id="test",
-            valve_on=True,
+            valve_state=ValveState.ON,
             open_state_avg=1.0,
             requested_duration=1000.0,
             used_duration=900.0,  # Only 100 remaining, less than 240 warning
@@ -633,7 +669,7 @@ class TestShouldRequestHeat:
         """Valve fully open with quota requests heat."""
         zone = ZoneState(
             zone_id="test",
-            valve_on=True,
+            valve_state=ValveState.ON,
             open_state_avg=0.90,  # Above 85% threshold
             requested_duration=1000.0,
             used_duration=0.0,
@@ -658,8 +694,8 @@ class TestAggregateHeatRequest:
     def test_all_zones_off_no_request(self, timing: TimingParams) -> None:
         """All zones off returns no request."""
         zones = {
-            "zone1": ZoneState(zone_id="zone1", valve_on=False),
-            "zone2": ZoneState(zone_id="zone2", valve_on=False),
+            "zone1": ZoneState(zone_id="zone1", valve_state=ValveState.OFF),
+            "zone2": ZoneState(zone_id="zone2", valve_state=ValveState.OFF),
         }
         result = aggregate_heat_request(zones, timing)
         assert result is False
@@ -667,10 +703,10 @@ class TestAggregateHeatRequest:
     def test_one_zone_requesting(self, timing: TimingParams) -> None:
         """One zone requesting returns true."""
         zones = {
-            "zone1": ZoneState(zone_id="zone1", valve_on=False),
+            "zone1": ZoneState(zone_id="zone1", valve_state=ValveState.OFF),
             "zone2": ZoneState(
                 zone_id="zone2",
-                valve_on=True,
+                valve_state=ValveState.ON,
                 open_state_avg=0.90,
                 requested_duration=1000.0,
                 used_duration=0.0,
@@ -684,13 +720,13 @@ class TestAggregateHeatRequest:
         zones = {
             "zone1": ZoneState(
                 zone_id="zone1",
-                valve_on=True,
+                valve_state=ValveState.ON,
                 open_state_avg=0.90,
                 requested_duration=1000.0,
             ),
             "zone2": ZoneState(
                 zone_id="zone2",
-                valve_on=True,
+                valve_state=ValveState.ON,
                 open_state_avg=0.90,
                 requested_duration=1000.0,
             ),
@@ -714,7 +750,7 @@ class TestZoneState:
         assert zone.p_term is None
         assert zone.i_term is None
         assert zone.d_term is None
-        assert zone.valve_on is False
+        assert zone.valve_state == ValveState.UNKNOWN
         assert zone.enabled is True
 
     def test_flush_circuit_type(self) -> None:

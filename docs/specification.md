@@ -779,7 +779,39 @@ The controller NEVER enters fail-safe if at least one zone is operating normally
 | Valve open average | Non-critical | Use current valve entity state |
 | Window open average | Non-critical | Assume windows closed |
 
-#### 8.3.4 Controller Status Aggregation
+#### 8.3.4 Valve Entity Handling
+
+Valve state is tracked using the `ValveState` enum with explicit uncertainty handling:
+
+```python
+class ValveState(StrEnum):
+    ON = "on"           # Valve confirmed open
+    OFF = "off"         # Valve confirmed closed
+    UNKNOWN = "unknown" # State unknown (HA reports unknown)
+    UNAVAILABLE = "unavailable"  # Entity unavailable or not found
+```
+
+**State Mapping:**
+
+| HA Entity State | ValveState | Heat Request | Valve Command |
+|-----------------|------------|--------------|---------------|
+| `on` | ON | Allowed | STAY_ON |
+| `off` | OFF | Blocked | Evaluate quota |
+| `unknown` | UNKNOWN | Blocked | Re-send intended command |
+| `unavailable` | UNAVAILABLE | Blocked | Re-send intended command |
+| Entity not found | UNAVAILABLE | Blocked | Re-send intended command |
+
+**Behavior Design:**
+- **Heat request blocked**: When valve state is uncertain, boiler heat is NOT requested (conservative - don't fire boiler if we can't confirm valve is open)
+- **Commands re-sent**: When state is UNKNOWN/UNAVAILABLE, the controller re-sends the intended command (turn_on or turn_off) to force synchronization
+- **Warning logged**: User is notified of valve state issues via logs
+
+**Rationale:**
+- Uncertain valve state should not trigger boiler heating (safety)
+- Re-sending commands helps recover from transient communication issues
+- Zone continues evaluating and controlling even if state is uncertain
+
+#### 8.3.5 Controller Status Aggregation
 
 The controller status is derived from zone statuses:
 
@@ -801,7 +833,7 @@ The `binary_sensor.{controller_id}_status` entity exposes operational status:
 
 The binary sensor is `on` (problem state) when status is degraded or fail-safe.
 
-#### 8.3.5 Summer Mode Safety
+#### 8.3.6 Summer Mode Safety
 
 When ANY zone is in fail-safe state:
 - Summer mode is forced to "auto" permanently
@@ -809,7 +841,7 @@ When ANY zone is in fail-safe state:
 - Controller cannot override summer mode while any zone is in fail-safe
 - This ensures heating is available via physical fallback mechanisms
 
-#### 8.3.6 Recovery
+#### 8.3.7 Recovery
 
 **Zone Recovery:**
 - When temperature reading and Recorder queries succeed:

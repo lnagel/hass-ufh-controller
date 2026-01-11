@@ -10,6 +10,7 @@ from sqlalchemy.exc import OperationalError
 from custom_components.ufh_controller.const import (
     FAIL_SAFE_TIMEOUT,
     ControllerStatus,
+    ValveState,
     ZoneStatus,
 )
 from custom_components.ufh_controller.coordinator import (
@@ -275,7 +276,7 @@ class TestExecuteFailSafeActions:
         # Check valve state is set to off in zone runtime
         runtime = coordinator.controller.get_zone_runtime("zone1")
         assert runtime is not None
-        assert runtime.state.valve_on is False
+        assert runtime.state.valve_state == ValveState.OFF
 
 
 class TestCriticalFailureDuringUpdate:
