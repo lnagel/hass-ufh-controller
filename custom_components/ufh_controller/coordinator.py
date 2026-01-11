@@ -37,7 +37,7 @@ from .core import (
     get_valve_open_window,
     was_any_window_open_recently,
 )
-from .core.zone import CircuitType
+from .core.zone import CircuitType, is_flush_requested
 
 # Storage constants
 STORAGE_VERSION = 1
@@ -88,6 +88,9 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Controller status (derived from zone statuses)
         self._status: ControllerStatus = ControllerStatus.INITIALIZING
 
+        # Track previous DHW state for transition detection
+        self._prev_dhw_active: bool = False
+
     def _build_controller(self, entry: UFHControllerConfigEntry) -> HeatingController:
         """Build HeatingController from config entry."""
         data = entry.data
@@ -120,6 +123,9 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             ),
             controller_loop_interval=timing_opts.get(
                 "controller_loop_interval", DEFAULT_TIMING["controller_loop_interval"]
+            ),
+            flush_duration=timing_opts.get(
+                "flush_duration", DEFAULT_TIMING["flush_duration"]
             ),
         )
 
@@ -357,13 +363,34 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return self._build_state_dict()
 
     async def _update_dhw_state(self) -> None:
-        """Update DHW active state from entity."""
+        """Update DHW active state from entity and manage post-DHW flush timer."""
         dhw_entity = self._controller.config.dhw_active_entity
         if dhw_entity is None:
             return
 
         state = self.hass.states.get(dhw_entity)
-        self._controller.state.dhw_active = state is not None and state.state == "on"
+        current_dhw_active = state is not None and state.state == "on"
+
+        # Detect DHW OFF transition (was on, now off)
+        if self._prev_dhw_active and not current_dhw_active:
+            # DHW just turned off - start post-flush timer if enabled
+            flush_duration = self._controller.config.timing.flush_duration
+            if flush_duration > 0 and self._controller.state.flush_enabled:
+                self._controller.state.flush_until = datetime.now(UTC) + timedelta(
+                    seconds=flush_duration
+                )
+                LOGGER.debug(
+                    "DHW ended, flush will continue until %s",
+                    self._controller.state.flush_until,
+                )
+
+        # Clear flush_until when DHW starts (will use dhw_active instead)
+        if current_dhw_active and not self._prev_dhw_active:
+            self._controller.state.flush_until = None
+
+        # Update current state
+        self._prev_dhw_active = current_dhw_active
+        self._controller.state.dhw_active = current_dhw_active
 
     def _is_any_window_open(self, window_sensors: list[str]) -> bool:
         """Check if any window sensor is currently in 'on' state."""
@@ -805,6 +832,7 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "controller_status": self._status.value,
             "zones_degraded": zones_degraded,
             "zones_fail_safe": zones_fail_safe,
+            "flush_request": is_flush_requested(self._controller.state),
             "zones": {},
         }
 

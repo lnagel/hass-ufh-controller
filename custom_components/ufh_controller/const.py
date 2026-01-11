@@ -101,6 +101,7 @@ class TimingDefaults(TypedDict):
     closing_warning_duration: int
     window_block_time: int
     controller_loop_interval: int
+    flush_duration: int
 
 
 class PIDDefaults(TypedDict):
@@ -140,6 +141,7 @@ DEFAULT_TIMING: TimingDefaults = {
     "closing_warning_duration": 240,  # 4 minutes
     "window_block_time": 600,  # 10 minutes - block if window open this long
     "controller_loop_interval": 60,  # PID update interval
+    "flush_duration": 480,  # 8 minutes - flush duration after DHW ends
 }
 
 # Default PID controller parameters
@@ -182,6 +184,7 @@ UI_TIMING_VALVE_OPEN_TIME = {"min": 60, "max": 600, "step": 30}
 UI_TIMING_CLOSING_WARNING = {"min": 60, "max": 600, "step": 30}
 UI_TIMING_WINDOW_BLOCK_TIME = {"min": 0, "max": 3600, "step": 60}
 UI_TIMING_CONTROLLER_LOOP_INTERVAL = {"min": 10, "max": 300, "step": 5}
+UI_TIMING_FLUSH_DURATION = {"min": 0, "max": 1800, "step": 60}  # 0-30 minutes
 
 # UI validation constraints for setpoint parameters
 UI_SETPOINT_MIN = {"min": 5.0, "max": 30.0, "step": 0.1}
