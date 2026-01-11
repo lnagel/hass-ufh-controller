@@ -188,7 +188,7 @@ class UFHFlushRequestSensor(UFHControllerEntity, BinarySensorEntity):
     """
 
     _attr_translation_key = "flush_request"
-    _attr_device_class = BinarySensorDeviceClass.RUNNING
+    _attr_device_class = BinarySensorDeviceClass.HEAT
     _attr_name = "Flush Request"
 
     def __init__(
