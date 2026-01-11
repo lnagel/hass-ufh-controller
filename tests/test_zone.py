@@ -973,6 +973,59 @@ class TestEvaluateZoneFlushCircuitPostDHW:
         assert result == ZoneAction.TURN_ON
 
 
+class TestFlushCircuitScenarios:
+    """Scenario tests for flush circuit behavior in real-world situations."""
+
+    @pytest.fixture
+    def timing(self) -> TimingParams:
+        """Create default timing params."""
+        return TimingParams()
+
+    def test_flush_yields_to_regular_heating_during_post_dhw(
+        self, timing: TimingParams
+    ) -> None:
+        """
+        Scenario: Flush circuit yields when regular circuit starts heating.
+
+        Timeline:
+        1. DHW ends, post-DHW flush period starts
+        2. Flush circuit is ON capturing residual heat
+        3. Regular circuit turns ON (valid heat request, allowed since DHW ended)
+        4. Flush circuit should turn OFF - regular heating takes priority
+
+        This is expected behavior: regular heating demand takes priority over
+        capturing residual waste heat. The regular zone has a valid heat request
+        and should not be blocked by flush circuits.
+        """
+        future_time = datetime.now(UTC) + timedelta(minutes=5)
+
+        flush_zone = ZoneState(
+            zone_id="bathroom",
+            circuit_type=CircuitType.FLUSH,
+            valve_state=ValveState.ON,  # Was capturing heat
+            requested_duration=0.0,  # No heating demand of its own
+        )
+        regular_zone = ZoneState(
+            zone_id="living_room",
+            circuit_type=CircuitType.REGULAR,
+            enabled=True,
+            valve_state=ValveState.ON,  # Started heating (valid request)
+            requested_duration=1000.0,
+        )
+        controller = ControllerState(
+            flush_enabled=True,
+            dhw_active=False,  # DHW finished
+            flush_until=future_time,  # But still in post-DHW flush period
+            zones={"bathroom": flush_zone, "living_room": regular_zone},
+        )
+
+        result = evaluate_zone(flush_zone, controller, timing)
+
+        # Flush circuit yields to regular heating - falls back to quota logic
+        # With 0 quota, it turns off
+        assert result == ZoneAction.TURN_OFF
+
+
 class TestControllerStateFlushUntil:
     """Test ControllerState flush_until field."""
 
