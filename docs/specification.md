@@ -551,8 +551,8 @@ def evaluate_zone(zone: ZoneState, controller: ControllerState,
             return ZoneAction.STAY_OFF
 
         if controller.dhw_active and zone.circuit_type == "regular":
-            # DHW priority: block turning ON, but valves already ON
-            # stay on (handled above) to continue circulating water
+            # DHW priority: regular circuits that are OFF cannot turn ON
+            # (valves already ON returned STAY_ON above, continuing water circulation)
             return ZoneAction.STAY_OFF
 
         # Turn on
