@@ -12,7 +12,7 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 
-from .const import SUBENTRY_TYPE_ZONE
+from .const import SUBENTRY_TYPE_ZONE, ZoneStatus
 from .entity import (
     UFHControllerEntity,
     UFHControllerZoneEntity,
@@ -151,10 +151,16 @@ class UFHZoneSensor(UFHControllerZoneEntity, SensorEntity):
         """
         Return True if entity is available.
 
-        Sensors are marked unavailable when they have no valid value.
-        This prevents 'unknown' states from being recorded to history.
+        Sensors are unavailable when zone is INITIALIZING or FAIL_SAFE,
+        or when they have no valid value.
         """
-        return super().available and self.native_value is not None
+        if not super().available:
+            return False
+        zone_data = self.coordinator.data.get("zones", {}).get(self._zone_id, {})
+        zone_status = zone_data.get("zone_status", "initializing")
+        if zone_status in (ZoneStatus.INITIALIZING.value, ZoneStatus.FAIL_SAFE.value):
+            return False
+        return self.native_value is not None
 
 
 class UFHRequestingZonesSensor(UFHControllerEntity, SensorEntity):

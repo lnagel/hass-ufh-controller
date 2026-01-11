@@ -11,7 +11,7 @@ from homeassistant.components.binary_sensor import (
     BinarySensorEntityDescription,
 )
 
-from .const import SUBENTRY_TYPE_ZONE, ControllerStatus
+from .const import SUBENTRY_TYPE_ZONE, ControllerStatus, ZoneStatus
 from .entity import (
     UFHControllerEntity,
     UFHControllerZoneEntity,
@@ -115,6 +115,22 @@ class UFHZoneBinarySensor(UFHControllerZoneEntity, BinarySensorEntity):
         """Return the sensor state."""
         zone_data = self.coordinator.data.get("zones", {}).get(self._zone_id, {})
         return self.entity_description.value_fn(zone_data)
+
+    @property
+    def available(self) -> bool:
+        """
+        Return True if entity is available.
+
+        Binary sensors are unavailable when zone is INITIALIZING or FAIL_SAFE.
+        """
+        if not super().available:
+            return False
+        zone_data = self.coordinator.data.get("zones", {}).get(self._zone_id, {})
+        zone_status = zone_data.get("zone_status", "initializing")
+        return zone_status not in (
+            ZoneStatus.INITIALIZING.value,
+            ZoneStatus.FAIL_SAFE.value,
+        )
 
 
 class UFHControllerStatusSensor(UFHControllerEntity, BinarySensorEntity):
