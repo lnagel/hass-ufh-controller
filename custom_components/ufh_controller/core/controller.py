@@ -218,28 +218,22 @@ class HeatingController:
 
         if current is None:
             # No temperature reading - maintain last duty cycle, pause integration
-            return runtime.state.duty_cycle
+            return runtime.pid.state.duty_cycle if runtime.pid.state else None
 
         # Check if PID should be paused (prevent integral windup)
         if self._should_pause_pid(runtime):
             # Update error for display purposes but don't run PID
-            runtime.state.error = runtime.state.setpoint - current
-            return runtime.state.duty_cycle
+            error = runtime.state.setpoint - current
+            runtime.pid.update_error(error)
+            return runtime.pid.state.duty_cycle if runtime.pid.state else None
 
-        pid_output = runtime.pid.update(
+        pid_state = runtime.pid.update(
             setpoint=runtime.state.setpoint,
             current=current,
             dt=dt,
         )
 
-        # Update zone state with PID output
-        runtime.state.error = pid_output.error
-        runtime.state.p_term = pid_output.p_term
-        runtime.state.i_term = pid_output.i_term
-        runtime.state.d_term = pid_output.d_term
-        runtime.state.duty_cycle = pid_output.duty_cycle
-
-        return pid_output.duty_cycle
+        return pid_state.duty_cycle
 
     def _should_pause_pid(self, runtime: ZoneRuntime) -> bool:
         """
@@ -300,8 +294,9 @@ class HeatingController:
         period = self.config.timing.observation_period
         runtime.state.used_duration = period_state_avg * elapsed_time
         # requested_duration uses full observation period
+        duty_cycle = runtime.pid.state.duty_cycle if runtime.pid.state else 0.0
         runtime.state.requested_duration = calculate_requested_duration(
-            runtime.state.duty_cycle,
+            duty_cycle,
             period,
         )
 

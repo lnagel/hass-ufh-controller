@@ -13,6 +13,7 @@ from custom_components.ufh_controller.const import (
     SUBENTRY_TYPE_ZONE,
     ValveState,
 )
+from custom_components.ufh_controller.core.pid import PIDState
 
 
 async def test_coordinator_saves_state_on_unload(
@@ -44,7 +45,14 @@ async def test_coordinator_loads_stored_state(
         "version": 1,
         "controller_mode": "flush",
         "zones": {
-            "zone1": {"integral": 45.5, "last_error": 0.5},
+            "zone1": {
+                # Full PID state to be restored
+                "error": 2.0,
+                "p_term": 30.0,
+                "i_term": 45.5,
+                "d_term": 1.5,
+                "duty_cycle": 55.0,
+            },
         },
     }
 
@@ -61,10 +69,15 @@ async def test_coordinator_loads_stored_state(
     # Check mode was restored
     assert coordinator.controller.mode == "flush"
 
-    # Check integral was restored
+    # Check full PID state was restored (prevents sensors being unavailable)
     runtime = coordinator.controller.get_zone_runtime("zone1")
     assert runtime is not None
-    assert runtime.pid.state.integral == 45.5
+    assert runtime.pid.state is not None
+    assert runtime.pid.state.error == 2.0
+    assert runtime.pid.state.p_term == 30.0
+    assert runtime.pid.state.i_term == 45.5
+    assert runtime.pid.state.d_term == 1.5
+    assert runtime.pid.state.duty_cycle == 55.0
 
 
 async def test_coordinator_save_state_format(
@@ -82,8 +95,11 @@ async def test_coordinator_save_state_format(
     coordinator.controller.mode = "cycle"
     runtime = coordinator.controller.get_zone_runtime("zone1")
     assert runtime is not None
-    runtime.pid.set_integral(75.0)
-    runtime.pid.set_last_error(1.5)
+
+    # Set PID state that should be persisted
+    runtime.pid.set_state(
+        PIDState(error=1.5, p_term=25.0, i_term=75.0, d_term=0.8, duty_cycle=65.0)
+    )
 
     saved_data = None
 
@@ -101,8 +117,13 @@ async def test_coordinator_save_state_format(
     assert saved_data["controller_mode"] == "cycle"
     assert "zones" in saved_data
     assert "zone1" in saved_data["zones"]
-    assert saved_data["zones"]["zone1"]["integral"] == 75.0
-    assert saved_data["zones"]["zone1"]["last_error"] == 1.5
+
+    # Verify full PID state is saved
+    assert saved_data["zones"]["zone1"]["error"] == 1.5
+    assert saved_data["zones"]["zone1"]["p_term"] == 25.0
+    assert saved_data["zones"]["zone1"]["i_term"] == 75.0
+    assert saved_data["zones"]["zone1"]["d_term"] == 0.8
+    assert saved_data["zones"]["zone1"]["duty_cycle"] == 65.0
 
 
 async def test_coordinator_no_stored_state(
@@ -123,10 +144,10 @@ async def test_coordinator_no_stored_state(
     # Should use default mode
     assert coordinator.controller.mode == "auto"
 
-    # Integral should be 0
+    # PID state should be None (no stored state, no updates yet)
     runtime = coordinator.controller.get_zone_runtime("zone1")
     assert runtime is not None
-    assert runtime.pid.state.integral == 0.0
+    assert runtime.pid.state is None
 
 
 # =============================================================================
@@ -155,8 +176,11 @@ async def test_crash_recovery_mid_update_valve_remains_safe(
         "controller_mode": "auto",
         "zones": {
             "zone1": {
-                "integral": 50.0,  # Significant integral = heating demand
-                "last_error": 1.0,
+                "error": 1.0,
+                "p_term": 50.0,
+                "i_term": 50.0,  # Significant integral = heating demand
+                "d_term": 0.0,
+                "duty_cycle": 100.0,
                 "setpoint": 22.0,
                 "enabled": True,
             },
@@ -182,20 +206,20 @@ async def test_crash_recovery_mid_update_valve_remains_safe(
     # (some increase expected due to PID update with positive error)
     # The key point is that the stored integral was successfully restored
     # and used as the starting point for continued integration
-    assert runtime.pid.state.integral >= 50.0  # Started from stored value
+    assert runtime.pid.state.i_term >= 50.0  # Started from stored value
 
     # The system should recalculate and determine valve action
     # Since temperature (19°C) is below setpoint (22°C) and integral is positive,
     # the controller will produce a positive duty cycle
     # Key safety check: the system doesn't crash and handles the recovery
-    assert runtime.state.duty_cycle is not None
+    assert runtime.pid.state.duty_cycle is not None
     # Duty cycle should be positive given the temperature error
-    assert runtime.state.duty_cycle > 0
+    assert runtime.pid.state.duty_cycle > 0
 
     # Additional safety check: another refresh cycle completes successfully
     await coordinator.async_refresh()
-    assert runtime.state.duty_cycle is not None
-    assert runtime.state.duty_cycle > 0
+    assert runtime.pid.state.duty_cycle is not None
+    assert runtime.pid.state.duty_cycle > 0
 
 
 async def test_crash_recovery_preserves_valve_off_when_duty_cycle_zero(
@@ -214,8 +238,11 @@ async def test_crash_recovery_preserves_valve_off_when_duty_cycle_zero(
         "controller_mode": "auto",
         "zones": {
             "zone1": {
-                "integral": 0.0,
-                "last_error": 0.0,
+                "error": 0.0,
+                "p_term": 0.0,
+                "i_term": 0.0,
+                "d_term": 0.0,
+                "duty_cycle": 0.0,
                 "setpoint": 20.0,
                 "enabled": True,
             },
@@ -241,8 +268,8 @@ async def test_crash_recovery_preserves_valve_off_when_duty_cycle_zero(
     await coordinator.async_refresh()
 
     # Temperature is above setpoint, so no heating demand
-    assert runtime.state.error is not None
-    assert runtime.state.error < 0  # Negative error = above setpoint
+    assert runtime.pid.state is not None
+    assert runtime.pid.state.error < 0  # Negative error = above setpoint
     # Valve should be off
     assert runtime.state.valve_state == ValveState.OFF
 
@@ -262,8 +289,11 @@ async def test_crash_recovery_no_integral_windup_during_disabled_period(
         "controller_mode": "auto",
         "zones": {
             "zone1": {
-                "integral": 25.0,
-                "last_error": 0.5,
+                "error": 0.5,
+                "p_term": 25.0,
+                "i_term": 25.0,
+                "d_term": 0.0,
+                "duty_cycle": 50.0,
                 "setpoint": 22.0,
                 "enabled": False,  # Zone was disabled
             },
@@ -289,14 +319,14 @@ async def test_crash_recovery_no_integral_windup_during_disabled_period(
     assert runtime.state.enabled is False
 
     # Record integral before update
-    integral_before = runtime.pid.state.integral
+    integral_before = runtime.pid.state.i_term
 
     # Trigger multiple updates
     for _ in range(3):
         await coordinator.async_refresh()
 
     # Integral should NOT have increased (PID paused for disabled zones)
-    assert runtime.pid.state.integral == integral_before
+    assert runtime.pid.state.i_term == integral_before
 
 
 async def test_crash_recovery_no_integral_windup_with_window_open(
@@ -346,8 +376,11 @@ async def test_crash_recovery_no_integral_windup_with_window_open(
         "controller_mode": "auto",
         "zones": {
             "zone1": {
-                "integral": 30.0,
-                "last_error": 1.0,
+                "error": 1.0,
+                "p_term": 50.0,
+                "i_term": 30.0,
+                "d_term": 0.0,
+                "duty_cycle": 80.0,
                 "setpoint": 22.0,
                 "enabled": True,
             },
@@ -371,14 +404,14 @@ async def test_crash_recovery_no_integral_windup_with_window_open(
     assert runtime is not None
 
     # Record integral before update
-    integral_before = runtime.pid.state.integral
+    integral_before = runtime.pid.state.i_term
 
     # Trigger multiple updates
     for _ in range(3):
         await coordinator.async_refresh()
 
     # Integral should NOT have increased (PID paused when window open)
-    assert runtime.pid.state.integral == integral_before
+    assert runtime.pid.state.i_term == integral_before
 
     # Clean up
     await hass.config_entries.async_unload(config_entry.entry_id)
@@ -445,8 +478,9 @@ async def test_crash_recovery_state_consistency_after_multiple_restarts(
         await coordinator.async_refresh()
 
     # Capture state after first "session"
-    integral_session1 = runtime.pid.state.integral
+    integral_session1 = runtime.pid.state.i_term
     setpoint_session1 = runtime.state.setpoint
+    pid_state = runtime.pid.state
 
     # Prepare state for "second boot"
     saved_state = {
@@ -454,8 +488,11 @@ async def test_crash_recovery_state_consistency_after_multiple_restarts(
         "controller_mode": coordinator.controller.mode,
         "zones": {
             "zone1": {
-                "integral": integral_session1,
-                "last_error": runtime.pid.state.last_error,
+                "error": pid_state.error,
+                "p_term": pid_state.p_term,
+                "i_term": pid_state.i_term,
+                "d_term": pid_state.d_term,
+                "duty_cycle": pid_state.duty_cycle,
                 "setpoint": setpoint_session1,
                 "enabled": runtime.state.enabled,
             },
@@ -481,7 +518,7 @@ async def test_crash_recovery_state_consistency_after_multiple_restarts(
     # Verify state was restored correctly
     # After the second boot, the integral should be >= the saved value
     # (it may have increased slightly during the first refresh)
-    assert runtime.pid.state.integral >= integral_session1
+    assert runtime.pid.state.i_term >= integral_session1
     assert runtime.state.setpoint == setpoint_session1
 
     # Cleanup
@@ -506,8 +543,11 @@ async def test_crash_recovery_valve_action_sequence_integrity(
         "controller_mode": "auto",
         "zones": {
             "zone1": {
-                "integral": 60.0,  # High demand
-                "last_error": 2.0,
+                "error": 2.0,
+                "p_term": 100.0,
+                "i_term": 60.0,  # High demand
+                "d_term": 0.0,
+                "duty_cycle": 100.0,
                 "setpoint": 22.0,
                 "enabled": True,
             },
@@ -552,7 +592,7 @@ async def test_crash_recovery_valve_action_sequence_integrity(
 
     # Verify the saved integral matches the current state
     # (proving state was saved AFTER the full update completed)
-    assert last_saved["zones"]["zone1"]["integral"] == runtime.pid.state.integral
+    assert last_saved["zones"]["zone1"]["i_term"] == runtime.pid.state.i_term
 
 
 async def test_crash_recovery_mode_preserved_across_restart(
@@ -571,8 +611,11 @@ async def test_crash_recovery_mode_preserved_across_restart(
             "controller_mode": test_mode,
             "zones": {
                 "zone1": {
-                    "integral": 0.0,
-                    "last_error": 0.0,
+                    "error": 0.0,
+                    "p_term": 0.0,
+                    "i_term": 0.0,
+                    "d_term": 0.0,
+                    "duty_cycle": 0.0,
                     "setpoint": 21.0,
                     "enabled": True,
                 },
@@ -637,14 +680,15 @@ async def test_crash_recovery_partial_zone_state_restoration(
         ],
     )
 
-    # Stored state missing some fields
+    # Stored state with only some PID fields (uses defaults for missing)
     stored_data = {
         "version": 1,
         "controller_mode": "auto",
         "zones": {
             "zone1": {
-                "integral": 35.0,
-                # Missing: last_error, setpoint, enabled
+                "i_term": 35.0,
+                "duty_cycle": 35.0,  # Required to trigger restore
+                # Missing: error, p_term, d_term, setpoint, enabled
             },
         },
     }
@@ -665,7 +709,7 @@ async def test_crash_recovery_partial_zone_state_restoration(
 
     # Integral should be restored and then possibly updated by first refresh
     # The key point is it started from the stored value (35.0)
-    assert runtime.pid.state.integral >= 35.0
+    assert runtime.pid.state.i_term >= 35.0
 
     # setpoint should be the default from config
     assert runtime.state.setpoint == 21.0  # DEFAULT_SETPOINT["default"]
@@ -724,14 +768,20 @@ async def test_crash_recovery_stale_zone_in_stored_state(
         "controller_mode": "auto",
         "zones": {
             "zone1": {
-                "integral": 20.0,
-                "last_error": 0.5,
+                "error": 0.5,
+                "p_term": 10.0,
+                "i_term": 20.0,
+                "d_term": 0.0,
+                "duty_cycle": 30.0,
                 "setpoint": 21.0,
                 "enabled": True,
             },
             "zone_deleted": {  # This zone no longer exists
-                "integral": 50.0,
-                "last_error": 1.0,
+                "error": 1.0,
+                "p_term": 50.0,
+                "i_term": 50.0,
+                "d_term": 0.0,
+                "duty_cycle": 100.0,
                 "setpoint": 22.0,
                 "enabled": True,
             },
@@ -757,7 +807,7 @@ async def test_crash_recovery_stale_zone_in_stored_state(
     # (integral may have increased after first refresh)
     runtime = coordinator.controller.get_zone_runtime("zone1")
     assert runtime is not None
-    assert runtime.pid.state.integral >= 20.0  # Started from stored value
+    assert runtime.pid.state.i_term >= 20.0  # Started from stored value
 
     # zone_deleted should not exist
     assert coordinator.controller.get_zone_runtime("zone_deleted") is None
