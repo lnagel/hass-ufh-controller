@@ -42,6 +42,7 @@ Most underfloor heating systems either run valves in simple on/off mode (ineffic
 | **Cycle** | Diagnostic mode - rotates through zones on 8-hour schedule |
 | **All On** | Maximum heating - all valves open |
 | **All Off** | Heating disabled - all valves closed |
+| **Disabled** | Controller inactive, no actions taken |
 
 ### Home Assistant Integration
 - Native climate entities with HVAC modes and presets
@@ -141,9 +142,10 @@ This prevents short boiler cycles and improves efficiency.
 | Entity | Description |
 |--------|-------------|
 | `select.*_mode` | Operation mode selector |
-| `switch.*_flush_enabled` | DHW latent heat capture toggle |
+| `switch.*_flush_enabled` | DHW latent heat capture toggle (only when DHW entity configured) |
 | `sensor.*_requesting_zones` | Count of zones currently heating |
 | `binary_sensor.*_status` | Controller health (problem when degraded) |
+| `binary_sensor.*_flush_request` | Flush is actively running (only when DHW entity configured) |
 
 ### Per Zone
 | Entity | Description |
@@ -151,6 +153,8 @@ This prevents short boiler cycles and improves efficiency.
 | `climate.*` | Main control - temperature, mode, presets |
 | `sensor.*_duty_cycle` | Current heating demand (0-100%) |
 | `sensor.*_pid_error` | Temperature error (setpoint - current) |
+| `sensor.*_pid_proportional` | PID proportional term (Kp × error) |
+| `sensor.*_pid_integral` | PID integral term (Ki × accumulated error) |
 | `binary_sensor.*_blocked` | Whether zone is blocked (window open, etc.) |
 | `binary_sensor.*_heat_request` | Whether zone is contributing to heat demand |
 
@@ -167,6 +171,8 @@ Access via **Settings → Devices & Services → [Controller] → Configure**:
 | Valve Open Time | 3.5 min | Delay before requesting heat |
 | Closing Warning | 4 min | Stop requesting heat before quota ends |
 | Window Block Time | 10 min | Time after window closes before resuming PID control |
+| Controller Loop Interval | 60 sec | How often the control loop runs |
+| Flush Duration | 8 min | Post-DHW flush period for latent heat capture |
 
 ### PID Tuning
 
