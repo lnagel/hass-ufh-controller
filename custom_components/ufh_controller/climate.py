@@ -53,6 +53,7 @@ class UFHZoneClimate(UFHControllerZoneEntity, ClimateEntity):
 
     _attr_hvac_modes: ClassVar[list[HVACMode]] = [HVACMode.HEAT, HVACMode.OFF]
     _attr_icon = "mdi:heating-coil"
+    _attr_name = "Thermostat"
     _attr_temperature_unit = "°C"
     _enable_turn_on_off_backwards_compat = False
 

@@ -24,8 +24,8 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 @pytest.fixture
 def climate_entity_id() -> str:
     """Return the climate entity ID."""
-    # Entity ID is device name + entity name ("Climate")
-    return "climate.test_zone_1_climate"
+    # Entity ID is device name + entity name ("Thermostat")
+    return "climate.test_zone_1_thermostat"
 
 
 async def test_climate_entity_created(
