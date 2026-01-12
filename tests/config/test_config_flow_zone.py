@@ -24,7 +24,6 @@ from custom_components.ufh_controller.const import (
     TimingDefaults,
 )
 
-
 # =============================================================================
 # Zone Subentry Flow Tests
 # =============================================================================
