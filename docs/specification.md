@@ -1075,13 +1075,15 @@ def mock_config_entry() -> MockConfigEntry:
 
 ### 10.4 Coverage Target
 
-- **Minimum**: 80% line coverage (enforced in CI)
-- **Goal**: 90%+ for core/ modules (critical control logic)
-- **Current**: 92.81% overall coverage
+- **Overall Minimum**: 90% line coverage (enforced in pyproject.toml and CI)
+- **Core Modules Target**: 98%+ for core/ modules (critical control logic)
+- **Current**: 92.81% overall coverage (exceeds minimum)
   - `core/controller.py`: 99%
   - `core/history.py`: 100%
   - `core/pid.py`: 100%
   - `core/zone.py`: 98%
+
+Coverage is measured using pytest-cov and reported in XML format to Codecov for tracking.
 
 ---
 
