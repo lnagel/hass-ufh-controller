@@ -84,13 +84,13 @@ When making changes:
 ## Testing Requirements
 
 ### Test Coverage
-- **Overall Minimum: 90% line coverage** (enforced in pyproject.toml and CI)
-- **Core Modules Target: 98%+ for core/ modules** (critical control logic)
-- **Current: 92.81% overall coverage** (exceeds minimum)
+- **Overall**: 90% minimum (enforced in pyproject.toml and CI)
+- **Core Modules**: 100% target, 98% minimum acceptable (critical control logic)
+- **Current**: 92.81% overall coverage (exceeds minimum)
   - `core/controller.py`: 99%
-  - `core/history.py`: 100%
-  - `core/pid.py`: 100%
-  - `core/zone.py`: 98%
+  - `core/history.py`: 100% ✓ (meets target)
+  - `core/pid.py`: 100% ✓ (meets target)
+  - `core/zone.py`: 98% (meets minimum)
 
 Coverage is measured using pytest-cov with XML reports uploaded to Codecov.
 
