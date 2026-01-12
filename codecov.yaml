@@ -1,0 +1,15 @@
+coverage:
+  status:
+    project:
+      default:
+        target: 90%
+        threshold: 0.5%
+      core:
+        target: 98%
+        threshold: 0.5%
+        paths:
+          - custom_components/ufh_controller/core/
+
+comment:
+  layout: "reach, diff, flags, files"
+  behavior: default
