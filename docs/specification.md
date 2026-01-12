@@ -1075,8 +1075,13 @@ def mock_config_entry() -> MockConfigEntry:
 
 ### 10.4 Coverage Target
 
-- **Minimum**: 80% line coverage
-- **Goal**: 90%+ for core/ modules
+- **Minimum**: 80% line coverage (enforced in CI)
+- **Goal**: 90%+ for core/ modules (critical control logic)
+- **Current**: 92.81% overall coverage
+  - `core/controller.py`: 99%
+  - `core/history.py`: 100%
+  - `core/pid.py`: 100%
+  - `core/zone.py`: 98%
 
 ---
 
@@ -1110,10 +1115,14 @@ jobs:
         run: uv sync --all-extras --dev
 
       - name: Run tests with coverage
-        run: uv run pytest --cov=custom_components/ufh_controller --cov-report=xml
+        run: uv run pytest --cov=custom_components/ufh_controller --cov-report=xml --cov-report=term
 
-      - name: Upload coverage
-        uses: codecov/codecov-action@v4
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          fail_ci_if_error: true
 
   lint:
     runs-on: ubuntu-latest

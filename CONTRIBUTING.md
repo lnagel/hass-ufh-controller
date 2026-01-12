@@ -65,6 +65,11 @@ uv run pytest && uv run ruff format . && uv run ruff check . --fix && uv run ty 
 
 - **Minimum 80% line coverage** (enforced in CI)
 - **Goal: 90%+ for core/ modules** (critical control logic)
+- **Current: 92.81% overall coverage** (exceeds both targets)
+  - `core/controller.py`: 99%
+  - `core/history.py`: 100%
+  - `core/pid.py`: 100%
+  - `core/zone.py`: 98%
 
 When fixing bugs:
 1. Write a failing test case first that reproduces the bug
