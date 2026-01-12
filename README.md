@@ -4,6 +4,7 @@
 [![License](https://img.shields.io/github/license/lnagel/hass-ufh-controller?style=flat-square)](LICENSE)
 [![HACS](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=flat-square)](https://hacs.xyz/)
 [![CI](https://img.shields.io/github/actions/workflow/status/lnagel/hass-ufh-controller/checks.yml?branch=main&style=flat-square&label=tests)](https://github.com/lnagel/hass-ufh-controller/actions)
+[![codecov](https://codecov.io/gh/lnagel/hass-ufh-controller/branch/main/graph/badge.svg?token=CODECOV_TOKEN)](https://codecov.io/gh/lnagel/hass-ufh-controller)
 
 A Home Assistant custom integration for intelligent multi-zone underfloor heating control. Uses PID-based temperature regulation with coordinated valve scheduling to keep your home comfortable while minimizing energy waste and valve wear.
 

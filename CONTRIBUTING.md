@@ -63,8 +63,8 @@ uv run pytest && uv run ruff format . && uv run ruff check . --fix && uv run ty 
 
 ## Testing Requirements
 
-- **Minimum 80% line coverage** (enforced in CI)
-- **Goal: 90%+ for core/ modules** (critical control logic)
+- **Overall**: 90% minimum (enforced in pyproject.toml and CI)
+- **Core Modules**: 100% target, 98% minimum acceptable (critical control logic)
 
 When fixing bugs:
 1. Write a failing test case first that reproduces the bug

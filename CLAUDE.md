@@ -84,8 +84,8 @@ When making changes:
 ## Testing Requirements
 
 ### Test Coverage
-- **Minimum 80% line coverage** (enforced in pyproject.toml)
-- **Goal: 90%+ for core/ modules** (critical control logic)
+- **Overall**: 90% minimum (enforced in pyproject.toml and CI)
+- **Core Modules**: 100% target, 98% minimum acceptable (critical control logic)
 
 ### Bug Fixes: Reproduce First
 When fixing bugs:
@@ -234,7 +234,7 @@ uv sync --all-extras
 uv run pytest
 
 # Run tests with coverage
-uv run pytest --cov=custom_components/ufh_controller
+uv run pytest --cov=custom_components/ufh_controller --cov-branch
 
 # Format code
 uv run ruff format .
