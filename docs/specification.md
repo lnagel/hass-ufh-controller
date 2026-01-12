@@ -1110,7 +1110,7 @@ jobs:
         run: uv sync --all-extras --dev
 
       - name: Run tests with coverage
-        run: uv run pytest --cov=custom_components/ufh_controller --cov-report=xml --cov-report=term
+        run: uv run pytest --cov=custom_components/ufh_controller --cov-branch --cov-report=xml --cov-report=term
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5

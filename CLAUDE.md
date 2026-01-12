@@ -234,7 +234,7 @@ uv sync --all-extras
 uv run pytest
 
 # Run tests with coverage
-uv run pytest --cov=custom_components/ufh_controller
+uv run pytest --cov=custom_components/ufh_controller --cov-branch
 
 # Format code
 uv run ruff format .
