@@ -65,11 +65,6 @@ uv run pytest && uv run ruff format . && uv run ruff check . --fix && uv run ty 
 
 - **Overall**: 90% minimum (enforced in pyproject.toml and CI)
 - **Core Modules**: 100% target, 98% minimum acceptable (critical control logic)
-- **Current**: 92.81% overall coverage (exceeds minimum)
-  - `core/controller.py`: 99%
-  - `core/history.py`: 100% ✓ (meets target)
-  - `core/pid.py`: 100% ✓ (meets target)
-  - `core/zone.py`: 98% (meets minimum)
 
 When fixing bugs:
 1. Write a failing test case first that reproduces the bug
