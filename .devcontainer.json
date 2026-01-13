@@ -40,6 +40,8 @@
     "features": {
         "ghcr.io/devcontainers-extra/features/apt-packages:1": {
             "packages": "ffmpeg,libturbojpeg0,libpcap-dev"
-        }
+        },
+        "ghcr.io/jsburckhardt/devcontainer-features/uv:1": {},
+        "ghcr.io/jsburckhardt/devcontainer-features/ruff:1": {}
     }
 }
