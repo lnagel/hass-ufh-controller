@@ -8,7 +8,7 @@ for determining valve actions based on quota-based scheduling.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime
 from enum import StrEnum
 
 from custom_components.ufh_controller.const import (
@@ -101,7 +101,8 @@ class ControllerState:
     heat_request: bool = False
     flush_enabled: bool = False
     dhw_active: bool = False
-    flush_until: datetime | None = None  # Timestamp when post-DHW flush period ends
+    flush_until: datetime | None = None
+    flush_request: bool = False
     zones: dict[str, ZoneState] = field(default_factory=dict)
 
 
@@ -124,30 +125,6 @@ def calculate_requested_duration(
     if duty_cycle is None:
         return 0.0
     return (duty_cycle / 100.0) * observation_period
-
-
-def is_flush_requested(controller: ControllerState) -> bool:
-    """
-    Check if flush is currently requested.
-
-    Flush is active when:
-    1. DHW is currently active, OR
-    2. We're in the post-DHW flush period (flush_until is set and not expired)
-
-    Args:
-        controller: Current controller state.
-
-    Returns:
-        True if flush circuits should activate.
-
-    """
-    if controller.dhw_active:
-        return True
-
-    if controller.flush_until is not None:
-        return datetime.now(UTC) < controller.flush_until
-
-    return False
 
 
 def evaluate_zone(  # noqa: PLR0911
@@ -181,7 +158,7 @@ def evaluate_zone(  # noqa: PLR0911
     if (
         zone.circuit_type == CircuitType.FLUSH
         and controller.flush_enabled
-        and is_flush_requested(controller)
+        and controller.flush_request
         and not _any_regular_circuits_active(controller)
     ):
         return ZoneAction.TURN_ON if not valve_on else ZoneAction.STAY_ON

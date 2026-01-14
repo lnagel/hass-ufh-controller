@@ -78,6 +78,7 @@ class TestEvaluateZoneFlushCircuit:
         controller = ControllerState(
             flush_enabled=True,
             dhw_active=True,
+            flush_request=True,  # DHW active implies flush request
             zones={"bathroom": zone},
         )
         result = evaluate_zone(zone, controller, timing)
@@ -93,6 +94,7 @@ class TestEvaluateZoneFlushCircuit:
         controller = ControllerState(
             flush_enabled=True,
             dhw_active=True,
+            flush_request=True,  # DHW active implies flush request
             zones={"bathroom": zone},
         )
         result = evaluate_zone(zone, controller, timing)
@@ -115,6 +117,7 @@ class TestEvaluateZoneFlushCircuit:
         controller = ControllerState(
             flush_enabled=True,
             dhw_active=True,
+            flush_request=True,  # DHW active implies flush request
             zones={"bathroom": flush_zone, "living_room": regular_zone},
         )
         # Should fall through to normal quota logic (stays off with 0 quota)
@@ -140,6 +143,7 @@ class TestEvaluateZoneFlushCircuit:
         controller = ControllerState(
             flush_enabled=True,
             dhw_active=True,
+            flush_request=True,  # DHW active implies flush request
             zones={"bathroom": flush_zone, "living_room": regular_zone},
         )
         # Flush should turn on - regular valve is OFF
