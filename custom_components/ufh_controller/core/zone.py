@@ -136,18 +136,15 @@ class ZoneRuntime:
         self.state = state
         self.last_update = last_update
 
-    def update_temperature(self, raw_temp: float | None, dt: float) -> None:
+    def update_temperature(self, raw_temp: float, dt: float) -> None:
         """
         Update zone temperature with EMA smoothing.
 
         Args:
-            raw_temp: Raw temperature reading from sensor, or None if unavailable.
+            raw_temp: Raw temperature reading from sensor.
             dt: Time delta since last update in seconds.
 
         """
-        if raw_temp is None:
-            return
-
         self.state.current = apply_ema(
             current=raw_temp,
             previous=self.state.current,
