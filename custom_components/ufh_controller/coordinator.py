@@ -33,7 +33,6 @@ from .core import (
     TimingParams,
     ZoneAction,
     ZoneConfig,
-    apply_ema,
     get_observation_start,
     get_state_average,
     get_valve_open_window,
@@ -361,18 +360,21 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             await self._execute_fail_safe_actions()
             return self._build_state_dict()
 
-        # Evaluate all zones and get actions (zones track their own status)
-        actions = self._controller.evaluate_zones(now=now)
+        # Evaluate all zones and get all actions
+        actions = self._controller.evaluate(now=now)
 
         # Execute valve actions with zone-level isolation
-        await self._execute_valve_actions_with_isolation(actions)
+        await self._execute_valve_actions_with_isolation(actions.valve_actions)
 
-        # Calculate and execute heat request
-        heat_request = self._controller.calculate_heat_request()
-        await self._execute_heat_request(heat_request=heat_request)
+        # Execute heat request if changed
+        if actions.heat_request is not None:
+            await self._execute_heat_request(
+                heat_request=actions.heat_request == ValveState.ON
+            )
 
-        # Update summer mode if configured (with safety check)
-        await self._update_summer_mode(heat_request=heat_request)
+        # Execute summer mode if changed
+        if actions.summer_mode is not None:
+            await self._set_summer_mode(actions.summer_mode)
 
         # Save state after every update for crash resilience
         await self.async_save_state()
@@ -432,20 +434,14 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if runtime is None:
             return  # Zone doesn't exist
 
-        # Read current temperature
+        # Read current temperature and update zone
         temp_state = self.hass.states.get(runtime.config.temp_sensor)
-        current: float | None = None
         temp_unavailable = False
         if temp_state is not None:
             try:
                 raw_temp = float(temp_state.state)
-                # Apply EMA low-pass filter to smooth temperature readings
-                current = apply_ema(
-                    current=raw_temp,
-                    previous=runtime.state.current,
-                    tau=runtime.config.temp_ema_time_constant,
-                    dt=dt,
-                )
+                # Update temperature with EMA smoothing
+                runtime.update_temperature(raw_temp, dt)
             except (ValueError, TypeError):
                 temp_unavailable = True
                 LOGGER.warning(
@@ -457,7 +453,7 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             temp_unavailable = True
 
         # Update PID controller
-        self._controller.update_zone_pid(zone_id, current, dt)
+        runtime.update_pid(dt, self._controller.mode)
 
         # Query historical data from Recorder
         timing = self._controller.config.timing
@@ -540,12 +536,12 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
 
         # Update zone with historical data
-        self._controller.update_zone_historical(
-            zone_id,
+        runtime.update_historical(
             period_state_avg=period_state_avg,
             open_state_avg=open_state_avg,
             window_recently_open=window_recently_open,
             elapsed_time=self._controller.state.period_elapsed,
+            observation_period=timing.observation_period,
         )
 
         # Sync valve state from actual HA entity
@@ -746,6 +742,55 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "Select service 'select_option' called for %s with option '%s'",
             entity_id,
             summer_mode_value,
+        )
+
+    async def _set_summer_mode(self, summer_mode: SummerMode) -> None:
+        """
+        Set boiler summer mode to specified value.
+
+        Safety: If ANY zone is in fail-safe, summer mode is forced to 'auto'
+        to allow physical fallback valves to receive heated water.
+
+        Args:
+            summer_mode: The summer mode value to set.
+
+        """
+        entity_id = self._controller.config.summer_mode_entity
+        if entity_id is None:
+            return
+
+        # Safety check: if any zone is in fail-safe, force summer mode to 'auto'
+        if self._any_zone_in_fail_safe():
+            summer_mode = SummerMode.AUTO
+            LOGGER.debug(
+                "Zone(s) in fail-safe, forcing summer mode to 'auto' for fallbacks"
+            )
+
+        # Check current state
+        current_state = self.hass.states.get(entity_id)
+        if current_state is None:
+            return
+        if current_state.state == summer_mode:
+            return  # Already in correct mode
+
+        # Check if select service is available
+        if not self.hass.services.has_service("select", "select_option"):
+            LOGGER.debug(
+                "Select service 'select_option' not available, skipping call to %s",
+                entity_id,
+            )
+            return
+
+        # Call select service to change mode
+        await self.hass.services.async_call(
+            "select",
+            "select_option",
+            {"entity_id": entity_id, "option": summer_mode},
+        )
+        LOGGER.debug(
+            "Set summer mode for %s to '%s'",
+            entity_id,
+            summer_mode,
         )
 
     async def _call_switch_service(
