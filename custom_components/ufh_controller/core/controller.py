@@ -16,20 +16,34 @@ from custom_components.ufh_controller.const import (
     DEFAULT_SETPOINT,
     DEFAULT_TEMP_EMA_TIME_CONSTANT,
     SummerMode,
+    TimingParams,
     ValveState,
 )
 
 from .pid import PIDController
 from .zone import (
     CircuitType,
-    ControllerState,
-    TimingParams,
     ZoneAction,
     ZoneState,
-    aggregate_heat_request,
     calculate_requested_duration,
     evaluate_zone,
+    should_request_heat,
 )
+
+
+@dataclass
+class ControllerState:
+    """Runtime state for the entire controller."""
+
+    mode: str = "auto"
+    observation_start: datetime = field(default_factory=datetime.now)
+    period_elapsed: float = 0.0  # Seconds elapsed in current observation period
+    heat_request: bool = False
+    flush_enabled: bool = False
+    dhw_active: bool = False
+    flush_until: datetime | None = None
+    flush_request: bool = False
+    zones: dict[str, ZoneState] = field(default_factory=dict)
 
 
 @dataclass
@@ -352,7 +366,12 @@ class HeatingController:
             return self._evaluate_cycle_mode(zone_id, runtime)
 
         # Default: auto mode - use decision tree
-        return evaluate_zone(runtime.state, self._state, self.config.timing)
+        return evaluate_zone(
+            runtime.state,
+            self._state,
+            self.config.timing,
+            any_regular_circuits_active=_any_regular_circuits_active(self._state),
+        )
 
     def _evaluate_cycle_mode(
         self,
@@ -436,3 +455,39 @@ class HeatingController:
     def zone_ids(self) -> list[str]:
         """Get list of all zone IDs."""
         return list(self._zones.keys())
+
+
+def aggregate_heat_request(
+    zones: dict[str, ZoneState],
+    timing: TimingParams,
+) -> bool:
+    """
+    Aggregate heat request from all zones.
+
+    Args:
+        zones: Dictionary of zone states keyed by zone ID.
+        timing: Timing parameters.
+
+    Returns:
+        True if any zone is requesting heat.
+
+    """
+    return any(should_request_heat(zone, timing) for zone in zones.values())
+
+
+def _any_regular_circuits_active(controller: ControllerState) -> bool:
+    """
+    Check if any regular circuits are currently running (valve ON).
+
+    Used for flush circuit priority - flush circuits only run
+    when no regular circuits are actively heating. This allows
+    flush circuits to capture DHW waste heat even when regular
+    zones have heating demand but their valves are OFF due to
+    DHW priority.
+    """
+    return any(
+        zone.circuit_type == CircuitType.REGULAR
+        and zone.enabled
+        and zone.valve_state == ValveState.ON
+        for zone in controller.zones.values()
+    )

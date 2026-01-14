@@ -2,11 +2,10 @@
 
 import pytest
 
-from custom_components.ufh_controller.const import ValveState
+from custom_components.ufh_controller.const import TimingParams, ValveState
+from custom_components.ufh_controller.core.controller import ControllerState
 from custom_components.ufh_controller.core.zone import (
     CircuitType,
-    ControllerState,
-    TimingParams,
     ZoneAction,
     ZoneState,
     calculate_requested_duration,
@@ -69,7 +68,9 @@ class TestPeriodTransitionScenario:
         )
         # 7200 - 7190 = 10 seconds remaining (simulates 13:59:50)
         controller = ControllerState(period_elapsed=7190.0)
-        result = evaluate_zone(zone, controller, timing)
+        result = evaluate_zone(
+            zone, controller, timing, any_regular_circuits_active=False
+        )
         # Freeze active: valve off stays off, even though quota remains
         assert result == ZoneAction.STAY_OFF
 
@@ -85,7 +86,9 @@ class TestPeriodTransitionScenario:
         )
         # Only 10 seconds remaining
         controller = ControllerState(period_elapsed=7190.0)
-        result = evaluate_zone(zone, controller, timing)
+        result = evaluate_zone(
+            zone, controller, timing, any_regular_circuits_active=False
+        )
         # Freeze active: valve on stays on
         assert result == ZoneAction.STAY_ON
 
@@ -104,7 +107,9 @@ class TestPeriodTransitionScenario:
         )
         # Fresh period: only 30 seconds elapsed
         controller = ControllerState(period_elapsed=30.0)
-        result = evaluate_zone(zone, controller, timing)
+        result = evaluate_zone(
+            zone, controller, timing, any_regular_circuits_active=False
+        )
         # Normal quota logic: has plenty of quota, can turn on
         assert result == ZoneAction.TURN_ON
 
@@ -134,8 +139,12 @@ class TestPeriodTransitionScenario:
             zones={"zone1": zone1, "zone2": zone2},
         )
 
-        result1 = evaluate_zone(zone1, controller, timing)
-        result2 = evaluate_zone(zone2, controller, timing)
+        result1 = evaluate_zone(
+            zone1, controller, timing, any_regular_circuits_active=False
+        )
+        result2 = evaluate_zone(
+            zone2, controller, timing, any_regular_circuits_active=False
+        )
 
         # Both zones can turn on - this is intentional
         assert result1 == ZoneAction.TURN_ON

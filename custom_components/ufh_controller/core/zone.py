@@ -7,17 +7,22 @@ for determining valve actions based on quota-based scheduling.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import datetime
+from dataclasses import dataclass
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from custom_components.ufh_controller.const import (
     DEFAULT_SETPOINT,
-    DEFAULT_TIMING,
     DEFAULT_VALVE_OPEN_THRESHOLD,
+    TimingParams,
     ValveState,
     ZoneStatus,
 )
+
+if TYPE_CHECKING:
+    from datetime import datetime
+
+    from .controller import ControllerState
 
 
 class CircuitType(StrEnum):
@@ -34,23 +39,6 @@ class ZoneAction(StrEnum):
     TURN_OFF = "turn_off"
     STAY_ON = "stay_on"
     STAY_OFF = "stay_off"
-
-
-@dataclass
-class TimingParams:
-    """
-    Timing parameters for zone scheduling.
-
-    All durations are in seconds.
-    """
-
-    observation_period: int = DEFAULT_TIMING["observation_period"]
-    min_run_time: int = DEFAULT_TIMING["min_run_time"]
-    valve_open_time: int = DEFAULT_TIMING["valve_open_time"]
-    closing_warning_duration: int = DEFAULT_TIMING["closing_warning_duration"]
-    window_block_time: int = DEFAULT_TIMING["window_block_time"]
-    controller_loop_interval: int = DEFAULT_TIMING["controller_loop_interval"]
-    flush_duration: int = DEFAULT_TIMING["flush_duration"]
 
 
 @dataclass
@@ -91,21 +79,6 @@ class ZoneState:
     consecutive_failures: int = 0
 
 
-@dataclass
-class ControllerState:
-    """Runtime state for the entire controller."""
-
-    mode: str = "auto"
-    observation_start: datetime = field(default_factory=datetime.now)
-    period_elapsed: float = 0.0  # Seconds elapsed in current observation period
-    heat_request: bool = False
-    flush_enabled: bool = False
-    dhw_active: bool = False
-    flush_until: datetime | None = None
-    flush_request: bool = False
-    zones: dict[str, ZoneState] = field(default_factory=dict)
-
-
 def calculate_requested_duration(
     duty_cycle: float | None,
     observation_period: int,
@@ -131,6 +104,8 @@ def evaluate_zone(  # noqa: PLR0911
     zone: ZoneState,
     controller: ControllerState,
     timing: TimingParams,
+    *,
+    any_regular_circuits_active: bool,
 ) -> ZoneAction:
     """
     Evaluate zone state and determine valve action.
@@ -142,6 +117,7 @@ def evaluate_zone(  # noqa: PLR0911
         zone: Current zone state.
         controller: Current controller state.
         timing: Timing parameters.
+        any_regular_circuits_active: Whether any regular circuits have valves ON.
 
     Returns:
         The action to take on the zone valve.
@@ -159,7 +135,7 @@ def evaluate_zone(  # noqa: PLR0911
         zone.circuit_type == CircuitType.FLUSH
         and controller.flush_enabled
         and controller.flush_request
-        and not _any_regular_circuits_active(controller)
+        and not any_regular_circuits_active
     ):
         return ZoneAction.TURN_ON if not valve_on else ZoneAction.STAY_ON
 
@@ -228,39 +204,3 @@ def should_request_heat(
     # Don't request if zone is about to close
     remaining_quota = zone.requested_duration - zone.used_duration
     return remaining_quota >= timing.closing_warning_duration
-
-
-def aggregate_heat_request(
-    zones: dict[str, ZoneState],
-    timing: TimingParams,
-) -> bool:
-    """
-    Aggregate heat request from all zones.
-
-    Args:
-        zones: Dictionary of zone states keyed by zone ID.
-        timing: Timing parameters.
-
-    Returns:
-        True if any zone is requesting heat.
-
-    """
-    return any(should_request_heat(zone, timing) for zone in zones.values())
-
-
-def _any_regular_circuits_active(controller: ControllerState) -> bool:
-    """
-    Check if any regular circuits are currently running (valve ON).
-
-    Used for flush circuit priority - flush circuits only run
-    when no regular circuits are actively heating. This allows
-    flush circuits to capture DHW waste heat even when regular
-    zones have heating demand but their valves are OFF due to
-    DHW priority.
-    """
-    return any(
-        zone.circuit_type == CircuitType.REGULAR
-        and zone.enabled
-        and zone.valve_state == ValveState.ON
-        for zone in controller.zones.values()
-    )

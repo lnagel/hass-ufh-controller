@@ -4,11 +4,10 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from custom_components.ufh_controller.const import ValveState
+from custom_components.ufh_controller.const import TimingParams, ValveState
+from custom_components.ufh_controller.core.controller import ControllerState
 from custom_components.ufh_controller.core.zone import (
     CircuitType,
-    ControllerState,
-    TimingParams,
     ZoneAction,
     ZoneState,
     evaluate_zone,
@@ -35,7 +34,9 @@ class TestEvaluateZoneFlushCircuitPostDHW:
             flush_request=True,  # In post-DHW flush period
             zones={"bathroom": zone},
         )
-        result = evaluate_zone(zone, controller, timing)
+        result = evaluate_zone(
+            zone, controller, timing, any_regular_circuits_active=False
+        )
         assert result == ZoneAction.TURN_ON
 
     def test_flush_during_post_dhw_stays_on(self, timing: TimingParams) -> None:
@@ -50,7 +51,9 @@ class TestEvaluateZoneFlushCircuitPostDHW:
             flush_request=True,  # In post-DHW flush period
             zones={"bathroom": zone},
         )
-        result = evaluate_zone(zone, controller, timing)
+        result = evaluate_zone(
+            zone, controller, timing, any_regular_circuits_active=False
+        )
         assert result == ZoneAction.STAY_ON
 
     def test_flush_after_post_dhw_period_expired(self, timing: TimingParams) -> None:
@@ -66,7 +69,9 @@ class TestEvaluateZoneFlushCircuitPostDHW:
             flush_request=False,  # Post-DHW period expired
             zones={"bathroom": zone},
         )
-        result = evaluate_zone(zone, controller, timing)
+        result = evaluate_zone(
+            zone, controller, timing, any_regular_circuits_active=False
+        )
         # Should follow normal logic (stays off with no quota)
         assert result == ZoneAction.STAY_OFF
 
@@ -91,7 +96,9 @@ class TestEvaluateZoneFlushCircuitPostDHW:
             flush_request=True,  # In post-DHW flush period
             zones={"bathroom": flush_zone, "living_room": regular_zone},
         )
-        result = evaluate_zone(flush_zone, controller, timing)
+        result = evaluate_zone(
+            flush_zone, controller, timing, any_regular_circuits_active=True
+        )
         # Should fall through to normal quota logic (stays off with 0 quota)
         assert result == ZoneAction.STAY_OFF
 
@@ -116,7 +123,9 @@ class TestEvaluateZoneFlushCircuitPostDHW:
             flush_request=True,  # In post-DHW flush period
             zones={"bathroom": flush_zone, "living_room": regular_zone},
         )
-        result = evaluate_zone(flush_zone, controller, timing)
+        result = evaluate_zone(
+            flush_zone, controller, timing, any_regular_circuits_active=False
+        )
         # Flush should turn on - regular valve is OFF
         assert result == ZoneAction.TURN_ON
 
@@ -164,7 +173,9 @@ class TestFlushCircuitScenarios:
             zones={"bathroom": flush_zone, "living_room": regular_zone},
         )
 
-        result = evaluate_zone(flush_zone, controller, timing)
+        result = evaluate_zone(
+            flush_zone, controller, timing, any_regular_circuits_active=True
+        )
 
         # Flush circuit yields to regular heating - falls back to quota logic
         # With 0 quota, it turns off
