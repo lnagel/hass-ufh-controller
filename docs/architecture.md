@@ -35,18 +35,21 @@ This document describes the layered architecture of the UFH Controller and the r
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                         ZONE                                            │
-│  (ZoneRuntime)                                                          │
+│  (ZoneRuntime + pure functions)                                         │
 │                                                                         │
 │  Responsibility: Single Zone Control                                    │
 │                                                                         │
+│  ZoneRuntime (mutable state holder):                                    │
 │  - Own its config, state, and PID controller                            │
 │  - update_temperature(raw_temp, dt) - apply EMA smoothing               │
 │  - update_pid(dt, mode) - update PID controller                         │
 │  - update_historical(period_avg, open_avg, window_open, elapsed)        │
 │  - update_failure_state(now, temp_unavailable, recorder_failure)        │
-│  - evaluate(controller_state, timing) → ZoneAction                      │
-│  - should_request_heat(timing) → bool                                   │
-│  - Properties: setpoint, enabled (with validation/clamping)             │
+│  - set_setpoint(), set_enabled() - property setters with validation     │
+│                                                                         │
+│  Pure functions (called by controller):                                 │
+│  - evaluate_zone(runtime, controller_state, timing) → ZoneAction        │
+│  - should_request_heat(runtime, timing) → bool                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -121,15 +124,15 @@ This design enables:
 
 ### Zone Update Stages
 
-Zone updates happen in distinct stages, each with a clear purpose:
+Zone updates happen in distinct stages. The first four are called by the coordinator to update zone state; the fifth is called by the controller during `evaluate()`:
 
-| Stage | Method | Purpose |
-|-------|--------|---------|
-| 1. Temperature | `update_temperature()` | Apply EMA smoothing to raw sensor reading |
-| 2. PID | `update_pid()` | Calculate duty cycle (paused when blocked) |
-| 3. Historical | `update_historical()` | Update averages and calculate quota usage |
-| 4. Failure | `update_failure_state()` | Track zone health status |
-| 5. Evaluate | `evaluate()` | Determine valve action |
+| Stage | Function | Called By | Purpose |
+|-------|----------|-----------|---------|
+| 1. Temperature | `zone.update_temperature()` | Coordinator | Apply EMA smoothing to raw sensor reading |
+| 2. PID | `zone.update_pid()` | Coordinator | Calculate duty cycle (paused when blocked) |
+| 3. Historical | `zone.update_historical()` | Coordinator | Update averages and calculate quota usage |
+| 4. Failure | `zone.update_failure_state()` | Coordinator | Track zone health status |
+| 5. Evaluate | `evaluate_zone()` | Controller | Determine valve action (pure function) |
 
 ## Component Responsibilities
 
@@ -157,18 +160,22 @@ The controller should **not** contain single-zone logic. If a method takes `zone
 
 The controller should **not** execute actions. It returns `ControllerActions` and the coordinator executes them.
 
-### Zone (ZoneRuntime)
+### Zone (ZoneRuntime + Pure Functions)
 
-The zone manages **single-zone** state and decisions:
+The zone layer manages **single-zone** state and decisions, split into two parts:
 
+**ZoneRuntime** (mutable state holder):
 - **State Ownership**: Temperature, setpoint, valve state, PID state
-- **Temperature Processing**: EMA smoothing
-- **PID Control**: Update PID controller, handle pause conditions
-- **Historical Tracking**: Used duration, requested duration
-- **Failure Isolation**: Track zone-specific failures independently
-- **Evaluation**: Determine valve action based on quota and state
+- **Temperature Processing**: EMA smoothing via `update_temperature()`
+- **PID Control**: Update PID controller via `update_pid()`, handle pause conditions
+- **Historical Tracking**: Used duration, requested duration via `update_historical()`
+- **Failure Isolation**: Track zone-specific failures via `update_failure_state()`
 
-Zones are **self-contained**. They receive inputs and produce outputs without knowing about other zones or Home Assistant.
+**Pure Functions** (side-effect free, called by controller):
+- **`evaluate_zone()`**: Determine valve action based on quota and state
+- **`should_request_heat()`**: Determine if zone should request heat from boiler
+
+This separation ensures decision logic is testable without mocking state updates. Zones are **self-contained** - they receive inputs and produce outputs without knowing about other zones or Home Assistant.
 
 ## Design Principles
 
@@ -182,13 +189,15 @@ Each layer has one job:
 ### 2. Dependency Direction
 
 Dependencies flow downward:
-- Coordinator depends on Controller
-- Controller depends on Zone
-- Zone depends on nothing (pure logic)
+- Coordinator depends on Controller, Zone, Recorder (HA-specific)
+- Controller depends on Zone (ZoneRuntime + pure functions)
+- Zone depends on PID, EMA (pure utilities)
+- PID, EMA, History depend on nothing (stdlib only)
 
 ### 3. Testability
 
-- **Zone**: Unit testable without HA or mocks
+- **PID, EMA, History**: Unit testable, no dependencies
+- **Zone (pure functions)**: Unit testable without HA or mocks
 - **Controller**: Unit testable without HA or mocks
 - **Coordinator**: Integration testable with mocked HA
 
@@ -227,3 +236,30 @@ Each mode function:
 | flush | all open | OFF | summer | Circulation only |
 | cycle | rotate by hour | OFF | summer | One zone at a time |
 | auto | quota-based | zone-based | zone-based | Normal PID control |
+
+## Pure Utility Modules
+
+The `core/` directory contains additional pure modules with no HA dependencies:
+
+### PIDController (pid.py)
+
+PID controller implementation:
+- **State**: `PIDState` frozen dataclass holds error, P/I/D terms, duty cycle
+- **`update()`**: Computes new state and stores internally, returns `PIDState`
+- **Anti-windup**: Prevents integral term from growing unbounded
+- **`set_state()`/`reset()`**: For persistence and initialization
+- **Testable**: Pure math, no I/O or HA dependencies
+
+### EMA (ema.py)
+
+Exponential Moving Average filter:
+- **Stateless function**: `calculate_ema(current, previous, alpha)`
+- **Used by**: ZoneRuntime for temperature smoothing
+- **Testable**: Pure math
+
+### History (history.py)
+
+Observation period calculations:
+- **`get_observation_start()`**: Calculate 2-hour window start time
+- **`calculate_period_elapsed()`**: Seconds since window start
+- **Testable**: Pure datetime calculations
