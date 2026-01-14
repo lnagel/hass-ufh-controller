@@ -92,10 +92,6 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Track previous DHW state for transition detection
         self._prev_dhw_active: bool = False
 
-        # Track previous states for change detection
-        self._prev_heat_request: bool = False
-        self._prev_summer_mode: SummerMode = SummerMode.SUMMER
-
     def _build_controller(self, entry: UFHControllerConfigEntry) -> HeatingController:
         """Build HeatingController from config entry."""
         data = entry.data
@@ -373,21 +369,15 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Execute valve actions with zone-level isolation
         await self._execute_valve_actions_with_isolation(actions.valve_actions)
 
-        # Execute heat request if changed
-        if (
-            actions.heat_request is not None
-            and actions.heat_request != self._prev_heat_request
-        ):
+        # Execute heat request and summer mode
+        if actions.heat_request is not None:
             await self._execute_heat_request(heat_request=actions.heat_request)
-            self._prev_heat_request = actions.heat_request
 
-        # Execute summer mode if changed
-        if (
-            actions.summer_mode is not None
-            and actions.summer_mode != self._prev_summer_mode
-        ):
-            await self._set_summer_mode(actions.summer_mode)
-            self._prev_summer_mode = actions.summer_mode
+            # Derive and update summer mode from heat_request
+            summer_mode = (
+                SummerMode.WINTER if actions.heat_request else SummerMode.SUMMER
+            )
+            await self._set_summer_mode(summer_mode)
 
         # Save state after every update for crash resilience
         await self.async_save_state()
@@ -735,6 +725,14 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         entity_id = self._controller.config.heat_request_entity
         if entity_id is None:
             return
+
+        # Check current entity state - only update if different
+        current_state = self.hass.states.get(entity_id)
+        if current_state is not None:
+            current_on = current_state.state == "on"
+            if current_on == heat_request:
+                return  # Already in correct state
+
         await self._call_switch_service(entity_id, turn_on=heat_request)
 
     async def _set_summer_mode(self, summer_mode: SummerMode) -> None:

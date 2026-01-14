@@ -63,14 +63,12 @@ class ControllerActions:
     All actions computed by the controller for execution.
 
     The coordinator executes these actions via Home Assistant services.
-    Optional fields (heat_request, summer_mode) are None when no change is needed
-    (e.g., disabled mode). The coordinator compares non-None values against
-    previous state to determine if service calls are needed.
+    heat_request is None when no change is needed (e.g., disabled mode).
+    The coordinator derives summer_mode from heat_request.
     """
 
     valve_actions: dict[str, ZoneAction]
     heat_request: bool | None = None  # True/False, or None if no change
-    summer_mode: SummerMode | None = None  # winter/summer/auto, or None if no change
     flush_request: bool = False  # Whether flush circuits should activate
 
 
@@ -232,7 +230,7 @@ class HeatingController:
         """
         All-on mode - all valves open, boiler fires.
 
-        Permanently heating: heat_request=True, summer_mode=WINTER.
+        Permanently heating: heat_request=True.
         """
         valve_actions = {
             zid: (
@@ -245,14 +243,13 @@ class HeatingController:
         return ControllerActions(
             valve_actions=valve_actions,
             heat_request=True,
-            summer_mode=SummerMode.WINTER,
         )
 
     def _evaluate_all_off_mode(self) -> ControllerActions:
         """
         All-off mode - all valves closed, no heating.
 
-        Permanently not heating: heat_request=False, summer_mode=SUMMER.
+        Permanently not heating: heat_request=False.
         """
         valve_actions = {
             zid: (
@@ -265,14 +262,13 @@ class HeatingController:
         return ControllerActions(
             valve_actions=valve_actions,
             heat_request=False,
-            summer_mode=SummerMode.SUMMER,
         )
 
     def _evaluate_flush_mode(self) -> ControllerActions:
         """
         Flush mode - all valves open, circulation only (no boiler firing).
 
-        Permanently not heating: heat_request=False, summer_mode=SUMMER.
+        Permanently not heating: heat_request=False.
         """
         valve_actions = {
             zid: (
@@ -285,7 +281,6 @@ class HeatingController:
         return ControllerActions(
             valve_actions=valve_actions,
             heat_request=False,
-            summer_mode=SummerMode.SUMMER,
         )
 
     def _evaluate_cycle_mode(self, now: datetime) -> ControllerActions:
@@ -296,7 +291,7 @@ class HeatingController:
         Hour 0: all closed (rest hour)
         Hours 1-7: zones open sequentially
 
-        Permanently not heating: heat_request=False, summer_mode=SUMMER.
+        Permanently not heating: heat_request=False.
         """
         cycle_hour = now.hour % DEFAULT_CYCLE_MODE_HOURS
         zone_ids = list(self._zones.keys())
@@ -325,7 +320,6 @@ class HeatingController:
         return ControllerActions(
             valve_actions=valve_actions,
             heat_request=False,
-            summer_mode=SummerMode.SUMMER,
         )
 
     def _evaluate_auto_mode(self, now: datetime) -> ControllerActions:
@@ -370,12 +364,10 @@ class HeatingController:
         heat_request = any(
             rt.should_request_heat(self.config.timing) for rt in self._zones.values()
         )
-        summer_mode = SummerMode.WINTER if heat_request else SummerMode.SUMMER
 
         return ControllerActions(
             valve_actions=valve_actions,
             heat_request=heat_request,
-            summer_mode=summer_mode,
             flush_request=flush_request,
         )
 
@@ -384,7 +376,7 @@ class HeatingController:
         Evaluate all zones and determine valve actions.
 
         This method is maintained for backwards compatibility. It returns
-        only valve actions (not heat_request or summer_mode).
+        only valve actions (not heat_request).
 
         For full evaluation with all actions, use evaluate() instead.
 
