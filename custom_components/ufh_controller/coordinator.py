@@ -692,58 +692,6 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return
         await self._call_switch_service(entity_id, turn_on=heat_request)
 
-    async def _update_summer_mode(self, *, heat_request: bool) -> None:
-        """
-        Update boiler summer mode if configured.
-
-        Safety: If ANY zone is in fail-safe, summer mode is forced to 'auto'
-        to allow physical fallback valves to receive heated water.
-        """
-        entity_id = self._controller.config.summer_mode_entity
-        if entity_id is None:
-            return
-
-        # Safety check: if any zone is in fail-safe, force summer mode to 'auto'
-        if self._any_zone_in_fail_safe():
-            summer_mode_value = SummerMode.AUTO
-            LOGGER.debug(
-                "Zone(s) in fail-safe, forcing summer mode to 'auto' for fallbacks"
-            )
-        else:
-            summer_mode_value = self._controller.get_summer_mode_value(
-                heat_request=heat_request
-            )
-            if summer_mode_value is None:
-                return
-
-        # Check current state
-        current_state = self.hass.states.get(entity_id)
-        if current_state is None:
-            # Entity doesn't exist yet, can't update
-            return
-        if current_state.state == summer_mode_value:
-            return  # Already in correct mode
-
-        # Check if select service is available
-        if not self.hass.services.has_service("select", "select_option"):
-            LOGGER.debug(
-                "Select service 'select_option' not available, skipping call to %s",
-                entity_id,
-            )
-            return
-
-        # Call select service to change mode
-        await self.hass.services.async_call(
-            "select",
-            "select_option",
-            {"entity_id": entity_id, "option": summer_mode_value},
-        )
-        LOGGER.debug(
-            "Select service 'select_option' called for %s with option '%s'",
-            entity_id,
-            summer_mode_value,
-        )
-
     async def _set_summer_mode(self, summer_mode: SummerMode) -> None:
         """
         Set boiler summer mode to specified value.
