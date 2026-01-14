@@ -16,6 +16,7 @@ from custom_components.ufh_controller.const import (
     DEFAULT_SETPOINT,
     DEFAULT_TEMP_EMA_TIME_CONSTANT,
     DEFAULT_VALVE_OPEN_THRESHOLD,
+    OperationMode,
     TimingParams,
     ValveState,
     ZoneStatus,
@@ -166,7 +167,7 @@ class ZoneRuntime:
             dt=dt,
         )
 
-    def update_pid(self, dt: float, controller_mode: str) -> float | None:
+    def update_pid(self, dt: float, controller_mode: OperationMode) -> float | None:
         """
         Update the PID controller for this zone.
 
@@ -199,7 +200,7 @@ class ZoneRuntime:
 
         return pid_state.duty_cycle if pid_state else None
 
-    def _should_pause_pid(self, controller_mode: str) -> bool:
+    def _should_pause_pid(self, controller_mode: OperationMode) -> bool:
         """
         Check if PID integration should be paused.
 
@@ -211,7 +212,7 @@ class ZoneRuntime:
 
         """
         # Only auto mode uses PID-based control
-        if controller_mode != "auto":
+        if controller_mode != OperationMode.AUTO:
             return True
 
         # Disabled zones shouldn't accumulate integral

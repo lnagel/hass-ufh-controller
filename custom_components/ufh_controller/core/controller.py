@@ -12,6 +12,7 @@ from datetime import datetime
 
 from custom_components.ufh_controller.const import (
     DEFAULT_CYCLE_MODE_HOURS,
+    OperationMode,
     SummerMode,
     TimingParams,
     ValveState,
@@ -31,7 +32,7 @@ from .zone import (
 class ControllerState:
     """Runtime state for the entire controller."""
 
-    mode: str = "auto"
+    mode: OperationMode = OperationMode.AUTO
     observation_start: datetime = field(default_factory=datetime.now)
     period_elapsed: float = 0.0  # Seconds elapsed in current observation period
     heat_request: bool = False
@@ -130,7 +131,7 @@ class HeatingController:
 
         """
         self.config = config
-        self._state = ControllerState(mode="auto")
+        self._state = ControllerState(mode=OperationMode.AUTO)
         self._zones: dict[str, ZoneRuntime] = {}
 
         # Track previous states for change detection
@@ -161,14 +162,14 @@ class HeatingController:
         return self._state
 
     @property
-    def mode(self) -> str:
+    def mode(self) -> OperationMode:
         """Get the current operation mode."""
         return self._state.mode
 
     @mode.setter
-    def mode(self, value: str) -> None:
+    def mode(self, value: str | OperationMode) -> None:
         """Set the operation mode."""
-        self._state.mode = value
+        self._state.mode = OperationMode(value)
 
     def get_zone_state(self, zone_id: str) -> ZoneState | None:
         """Get the state of a specific zone."""
@@ -506,15 +507,15 @@ class HeatingController:
 
         """
         mode = self._state.mode
-        if mode == "disabled":
+        if mode == OperationMode.DISABLED:
             return self._evaluate_disabled_mode()
-        if mode == "all_on":
+        if mode == OperationMode.ALL_ON:
             return self._evaluate_all_on_mode()
-        if mode == "all_off":
+        if mode == OperationMode.ALL_OFF:
             return self._evaluate_all_off_mode()
-        if mode == "flush":
+        if mode == OperationMode.FLUSH:
             return self._evaluate_flush_mode()
-        if mode == "cycle":
+        if mode == OperationMode.CYCLE:
             return self._evaluate_cycle_mode(now)
         # Default: auto mode
         return self._evaluate_auto_mode(now)
@@ -527,15 +528,15 @@ class HeatingController:
             True if any zone is requesting heat.
 
         """
-        if self._state.mode == "disabled":
+        if self._state.mode == OperationMode.DISABLED:
             return False
 
-        if self._state.mode == "all_off":
+        if self._state.mode == OperationMode.ALL_OFF:
             return False
 
-        if self._state.mode in ("all_on", "flush"):
+        if self._state.mode in (OperationMode.ALL_ON, OperationMode.FLUSH):
             # These modes control heat differently
-            return self._state.mode == "all_on"
+            return self._state.mode == OperationMode.ALL_ON
 
         # Auto and cycle modes use zone-based logic
         return any(
@@ -560,13 +561,13 @@ class HeatingController:
 
         mode = self._state.mode
 
-        if mode == "disabled":
+        if mode == OperationMode.DISABLED:
             return None
 
-        if mode in ("flush", "all_off"):
+        if mode in (OperationMode.FLUSH, OperationMode.ALL_OFF):
             return SummerMode.SUMMER
 
-        if mode == "all_on":
+        if mode == OperationMode.ALL_ON:
             return SummerMode.WINTER
 
         # Auto and cycle modes depend on heat request
