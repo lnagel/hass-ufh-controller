@@ -18,6 +18,7 @@ from custom_components.ufh_controller.core.zone import (
     CircuitType,
     ZoneAction,
 )
+from tests.conftest import setup_zone_historical, setup_zone_pid
 
 
 @pytest.fixture
@@ -51,8 +52,9 @@ class TestEvaluateZonesAutoMode:
         controller = HeatingController(basic_config)
 
         # Set up zone with duty cycle and unused quota
-        controller.update_zone_pid("living_room", 20.0, 60.0)
-        controller.update_zone_historical(
+        setup_zone_pid(controller, "living_room", 20.0, 60.0)
+        setup_zone_historical(
+            controller,
             "living_room",
             period_state_avg=0.0,  # No usage yet
             open_state_avg=0.0,
