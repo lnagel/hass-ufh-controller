@@ -9,9 +9,11 @@ from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant, ServiceCall
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.ufh_controller.const import ValveState
 from custom_components.ufh_controller.coordinator import (
     UFHControllerDataUpdateCoordinator,
 )
+from custom_components.ufh_controller.core.zone import ZoneAction
 
 
 async def test_valve_restored_when_externally_turned_off(
@@ -72,6 +74,186 @@ async def test_valve_restored_when_externally_turned_off(
 
     # Valve should be restored
     assert ("turn_on", "switch.zone1_valve") in switch_calls
+    switch_calls.clear()
+
+    # Simulate service call success - HA state reflects valve is now ON
+    hass.states.async_set("switch.zone1_valve", "on")
+
+    # Third refresh: valve ON, zone still needs heat → STAY_ON (no service call)
+    freezer.tick(60)
+    with patch(
+        "homeassistant.components.recorder.get_instance",
+        return_value=mock_recorder,
+    ):
+        await coordinator.async_refresh()
+
+    # No service call - valve already in correct state
+    assert len(switch_calls) == 0
+    # Verify valve_state is tracked as ON
+    runtime = coordinator._controller.get_zone_runtime("zone1")
+    assert runtime is not None
+    assert runtime.state.valve_state == ValveState.ON
+
+
+async def test_stay_off_updates_valve_state(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """Test that STAY_OFF action updates valve_state to OFF."""
+    freezer.move_to("2026-01-14 02:00:00+00:00")
+
+    mock_config_entry.add_to_hass(hass)
+    # Temperature above setpoint (21.0) - zone doesn't need heat
+    hass.states.async_set("sensor.zone1_temp", "25.0")
+    hass.states.async_set("switch.zone1_valve", "off")
+
+    switch_calls: list[tuple[str, str]] = []
+
+    async def track_switch_call(call: ServiceCall) -> None:
+        switch_calls.append((call.service, call.data.get("entity_id", "")))
+
+    hass.services.async_register("switch", "turn_on", track_switch_call)
+    hass.services.async_register("switch", "turn_off", track_switch_call)
+
+    coordinator = UFHControllerDataUpdateCoordinator(hass, mock_config_entry)
+
+    mock_recorder = MagicMock()
+    mock_recorder.async_add_executor_job = AsyncMock(return_value={})
+
+    with patch(
+        "homeassistant.components.recorder.get_instance",
+        return_value=mock_recorder,
+    ):
+        # First refresh: valve OFF, zone doesn't need heat → STAY_OFF
+        await coordinator.async_refresh()
+
+    # No service call - valve already in correct state
+    assert len(switch_calls) == 0
+    # Verify valve_state is tracked as OFF
+    runtime = coordinator._controller.get_zone_runtime("zone1")
+    assert runtime is not None
+    assert runtime.state.valve_state == ValveState.OFF
+
+
+@pytest.mark.parametrize(
+    "initial_valve_state",
+    [ValveState.UNAVAILABLE, ValveState.UNKNOWN, ValveState.OFF],
+    ids=["unavailable", "unknown", "off"],
+)
+async def test_stay_on_resyncs_when_valve_not_on(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+    initial_valve_state: ValveState,
+) -> None:
+    """
+    Test STAY_ON re-sends turn_on when valve_state is not ON.
+
+    If _execute_valve_actions_with_isolation receives STAY_ON but internal
+    valve_state is not ON (uncertain or OFF), the valve should be turned on.
+    """
+    freezer.move_to("2026-01-14 02:00:00+00:00")
+
+    mock_config_entry.add_to_hass(hass)
+    hass.states.async_set("sensor.zone1_temp", "18.0")
+    hass.states.async_set("switch.zone1_valve", "off")
+
+    switch_calls: list[tuple[str, str]] = []
+
+    async def track_switch_call(call: ServiceCall) -> None:
+        switch_calls.append((call.service, call.data.get("entity_id", "")))
+
+    hass.services.async_register("switch", "turn_on", track_switch_call)
+    hass.services.async_register("switch", "turn_off", track_switch_call)
+
+    coordinator = UFHControllerDataUpdateCoordinator(hass, mock_config_entry)
+
+    mock_recorder = MagicMock()
+    mock_recorder.async_add_executor_job = AsyncMock(return_value={})
+
+    # First refresh to initialize the coordinator
+    with patch(
+        "homeassistant.components.recorder.get_instance",
+        return_value=mock_recorder,
+    ):
+        await coordinator.async_refresh()
+
+    switch_calls.clear()
+
+    # Set valve_state and call _execute_valve_actions_with_isolation with STAY_ON
+    runtime = coordinator._controller.get_zone_runtime("zone1")
+    assert runtime is not None
+    runtime.state.valve_state = initial_valve_state
+
+    await coordinator._execute_valve_actions_with_isolation(
+        {"zone1": ZoneAction.STAY_ON}
+    )
+
+    # Service call made to sync valve state
+    assert ("turn_on", "switch.zone1_valve") in switch_calls
+    # Verify valve_state is now tracked as ON
+    assert runtime.state.valve_state == ValveState.ON
+
+
+@pytest.mark.parametrize(
+    "initial_valve_state",
+    [ValveState.UNAVAILABLE, ValveState.UNKNOWN, ValveState.ON],
+    ids=["unavailable", "unknown", "on"],
+)
+async def test_stay_off_resyncs_when_valve_not_off(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+    initial_valve_state: ValveState,
+) -> None:
+    """
+    Test STAY_OFF re-sends turn_off when valve_state is not OFF.
+
+    If _execute_valve_actions_with_isolation receives STAY_OFF but internal
+    valve_state is not OFF (uncertain or ON), the valve should be turned off.
+    """
+    freezer.move_to("2026-01-14 02:00:00+00:00")
+
+    mock_config_entry.add_to_hass(hass)
+    hass.states.async_set("sensor.zone1_temp", "25.0")
+    hass.states.async_set("switch.zone1_valve", "on")
+
+    switch_calls: list[tuple[str, str]] = []
+
+    async def track_switch_call(call: ServiceCall) -> None:
+        switch_calls.append((call.service, call.data.get("entity_id", "")))
+
+    hass.services.async_register("switch", "turn_on", track_switch_call)
+    hass.services.async_register("switch", "turn_off", track_switch_call)
+
+    coordinator = UFHControllerDataUpdateCoordinator(hass, mock_config_entry)
+
+    mock_recorder = MagicMock()
+    mock_recorder.async_add_executor_job = AsyncMock(return_value={})
+
+    # First refresh to initialize the coordinator
+    with patch(
+        "homeassistant.components.recorder.get_instance",
+        return_value=mock_recorder,
+    ):
+        await coordinator.async_refresh()
+
+    switch_calls.clear()
+
+    # Set valve_state and call _execute_valve_actions_with_isolation with STAY_OFF
+    runtime = coordinator._controller.get_zone_runtime("zone1")
+    assert runtime is not None
+    runtime.state.valve_state = initial_valve_state
+
+    await coordinator._execute_valve_actions_with_isolation(
+        {"zone1": ZoneAction.STAY_OFF}
+    )
+
+    # Service call made to sync valve state
+    assert ("turn_off", "switch.zone1_valve") in switch_calls
+    # Verify valve_state is now tracked as OFF
+    assert runtime.state.valve_state == ValveState.OFF
 
 
 @pytest.mark.parametrize(
@@ -83,9 +265,11 @@ async def test_valve_bad_state_logs_warning(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
     caplog: pytest.LogCaptureFixture,
+    freezer: FrozenDateTimeFactory,
     valve_state: str,
 ) -> None:
     """Test that a warning is logged when valve entity state is unavailable/unknown."""
+    freezer.move_to("2026-01-14 02:00:00+00:00")
     mock_config_entry.add_to_hass(hass)
     hass.states.async_set("sensor.zone1_temp", "18.0")
     hass.states.async_set("switch.zone1_valve", valve_state)
@@ -119,8 +303,10 @@ async def test_valve_not_found_logs_warning(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
     caplog: pytest.LogCaptureFixture,
+    freezer: FrozenDateTimeFactory,
 ) -> None:
     """Test that a warning is logged when valve entity is not found."""
+    freezer.move_to("2026-01-14 02:00:00+00:00")
     mock_config_entry.add_to_hass(hass)
     hass.states.async_set("sensor.zone1_temp", "18.0")
     # Do NOT set valve state - entity doesn't exist

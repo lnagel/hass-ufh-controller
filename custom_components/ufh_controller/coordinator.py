@@ -730,12 +730,6 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 runtime.state.valve_state = ValveState.OFF
                 continue
 
-            # Re-send commands when valve state is uncertain to force sync
-            valve_uncertain = runtime.state.valve_state in (
-                ValveState.UNKNOWN,
-                ValveState.UNAVAILABLE,
-            )
-
             # Normal action execution
             if action == ZoneAction.TURN_ON:
                 await self._call_switch_service(valve_entity, turn_on=True)
@@ -744,13 +738,11 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 await self._call_switch_service(valve_entity, turn_on=False)
                 runtime.state.valve_state = ValveState.OFF
             elif action == ZoneAction.STAY_ON:
-                if valve_uncertain:
-                    # Re-send turn_on to sync valve state
+                if runtime.state.valve_state != ValveState.ON:
                     await self._call_switch_service(valve_entity, turn_on=True)
                 runtime.state.valve_state = ValveState.ON
             elif action == ZoneAction.STAY_OFF:
-                if valve_uncertain:
-                    # Re-send turn_off to sync valve state
+                if runtime.state.valve_state != ValveState.OFF:
                     await self._call_switch_service(valve_entity, turn_on=False)
                 runtime.state.valve_state = ValveState.OFF
 
