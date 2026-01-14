@@ -1,5 +1,7 @@
 """Test heating controller core logic."""
 
+from datetime import UTC, datetime
+
 import pytest
 
 from custom_components.ufh_controller.const import (
@@ -561,7 +563,7 @@ class TestUpdateZoneHistorical:
             elapsed_time=1800.0,
         )
 
-        actions = controller.evaluate_zones()
+        actions = controller.evaluate_zones(now=datetime.now(UTC))
 
         # Zone should turn on because it still has quota remaining:
         # With 100% duty cycle: requested_duration is 7200s, used_duration is 1440s,

@@ -362,7 +362,7 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return self._build_state_dict()
 
         # Evaluate all zones and get actions (zones track their own status)
-        actions = self._controller.evaluate_zones()
+        actions = self._controller.evaluate_zones(now=now)
 
         # Execute valve actions with zone-level isolation
         await self._execute_valve_actions_with_isolation(actions)
@@ -408,13 +408,6 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Update current state
         self._prev_dhw_active = current_dhw_active
         self._controller.state.dhw_active = current_dhw_active
-
-        # Compute flush_request: True when DHW active OR in post-DHW flush period
-        now = datetime.now(UTC)
-        self._controller.state.flush_request = current_dhw_active or (
-            self._controller.state.flush_until is not None
-            and now < self._controller.state.flush_until
-        )
 
     def _is_any_window_open(self, window_sensors: list[str]) -> bool:
         """Check if any window sensor is currently in 'on' state."""
@@ -746,14 +739,20 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # Normal action execution
             if action == ZoneAction.TURN_ON:
                 await self._call_switch_service(valve_entity, turn_on=True)
+                runtime.state.valve_state = ValveState.ON
             elif action == ZoneAction.TURN_OFF:
                 await self._call_switch_service(valve_entity, turn_on=False)
-            elif action == ZoneAction.STAY_ON and valve_uncertain:
-                # Re-send turn_on to sync valve state
-                await self._call_switch_service(valve_entity, turn_on=True)
-            elif action == ZoneAction.STAY_OFF and valve_uncertain:
-                # Re-send turn_off to sync valve state
-                await self._call_switch_service(valve_entity, turn_on=False)
+                runtime.state.valve_state = ValveState.OFF
+            elif action == ZoneAction.STAY_ON:
+                if valve_uncertain:
+                    # Re-send turn_on to sync valve state
+                    await self._call_switch_service(valve_entity, turn_on=True)
+                runtime.state.valve_state = ValveState.ON
+            elif action == ZoneAction.STAY_OFF:
+                if valve_uncertain:
+                    # Re-send turn_off to sync valve state
+                    await self._call_switch_service(valve_entity, turn_on=False)
+                runtime.state.valve_state = ValveState.OFF
 
     async def _execute_heat_request(self, *, heat_request: bool) -> None:
         """Execute heat request by calling switch service if configured."""

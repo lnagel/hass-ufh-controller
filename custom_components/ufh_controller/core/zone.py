@@ -104,8 +104,6 @@ def evaluate_zone(  # noqa: PLR0911
     zone: ZoneState,
     controller: ControllerState,
     timing: TimingParams,
-    *,
-    any_regular_circuits_active: bool,
 ) -> ZoneAction:
     """
     Evaluate zone state and determine valve action.
@@ -117,7 +115,6 @@ def evaluate_zone(  # noqa: PLR0911
         zone: Current zone state.
         controller: Current controller state.
         timing: Timing parameters.
-        any_regular_circuits_active: Whether any regular circuits have valves ON.
 
     Returns:
         The action to take on the zone valve.
@@ -130,12 +127,11 @@ def evaluate_zone(  # noqa: PLR0911
     if not zone.enabled:
         return ZoneAction.STAY_OFF if valve_off else ZoneAction.TURN_OFF
 
-    # Flush circuit priority during DHW heating or post-DHW flush period
+    # Flush circuit activation
     if (
         zone.circuit_type == CircuitType.FLUSH
         and controller.flush_enabled
         and controller.flush_request
-        and not any_regular_circuits_active
     ):
         return ZoneAction.TURN_ON if not valve_on else ZoneAction.STAY_ON
 

@@ -34,9 +34,7 @@ class TestEvaluateZoneDisabled:
     ) -> None:
         """Disabled zone with valve off stays off."""
         zone = ZoneState(zone_id="test", enabled=False, valve_state=ValveState.OFF)
-        result = evaluate_zone(
-            zone, controller, timing, any_regular_circuits_active=False
-        )
+        result = evaluate_zone(zone, controller, timing)
         assert result == ZoneAction.STAY_OFF
 
     def test_disabled_zone_valve_on(
@@ -44,9 +42,7 @@ class TestEvaluateZoneDisabled:
     ) -> None:
         """Disabled zone with valve on turns off."""
         zone = ZoneState(zone_id="test", enabled=False, valve_state=ValveState.ON)
-        result = evaluate_zone(
-            zone, controller, timing, any_regular_circuits_active=False
-        )
+        result = evaluate_zone(zone, controller, timing)
         assert result == ZoneAction.TURN_OFF
 
     @pytest.mark.parametrize(
@@ -60,9 +56,7 @@ class TestEvaluateZoneDisabled:
     ) -> None:
         """Disabled zone with unknown/unavailable valve state emits TURN_OFF."""
         zone = ZoneState(zone_id="test", enabled=False, valve_state=valve_state)
-        result = evaluate_zone(
-            zone, controller, timing, any_regular_circuits_active=False
-        )
+        result = evaluate_zone(zone, controller, timing)
         # When valve state is uncertain, actively turn off to ensure safe state
         assert result == ZoneAction.TURN_OFF
 
@@ -88,9 +82,7 @@ class TestEvaluateZoneFlushCircuit:
             flush_request=True,  # DHW active implies flush request
             zones={"bathroom": zone},
         )
-        result = evaluate_zone(
-            zone, controller, timing, any_regular_circuits_active=False
-        )
+        result = evaluate_zone(zone, controller, timing)
         assert result == ZoneAction.TURN_ON
 
     def test_flush_during_dhw_stays_on(self, timing: TimingParams) -> None:
@@ -106,9 +98,7 @@ class TestEvaluateZoneFlushCircuit:
             flush_request=True,  # DHW active implies flush request
             zones={"bathroom": zone},
         )
-        result = evaluate_zone(
-            zone, controller, timing, any_regular_circuits_active=False
-        )
+        result = evaluate_zone(zone, controller, timing)
         assert result == ZoneAction.STAY_ON
 
     def test_flush_blocked_by_regular_valve_on(self, timing: TimingParams) -> None:
@@ -128,13 +118,11 @@ class TestEvaluateZoneFlushCircuit:
         controller = ControllerState(
             flush_enabled=True,
             dhw_active=True,
-            flush_request=True,  # DHW active implies flush request
+            flush_request=False,
             zones={"bathroom": flush_zone, "living_room": regular_zone},
         )
         # Should fall through to normal quota logic (stays off with 0 quota)
-        result = evaluate_zone(
-            flush_zone, controller, timing, any_regular_circuits_active=True
-        )
+        result = evaluate_zone(flush_zone, controller, timing)
         assert result == ZoneAction.STAY_OFF
 
     def test_flush_not_blocked_by_regular_demand_only(
@@ -160,9 +148,7 @@ class TestEvaluateZoneFlushCircuit:
             zones={"bathroom": flush_zone, "living_room": regular_zone},
         )
         # Flush should turn on - regular valve is OFF
-        result = evaluate_zone(
-            flush_zone, controller, timing, any_regular_circuits_active=False
-        )
+        result = evaluate_zone(flush_zone, controller, timing)
         assert result == ZoneAction.TURN_ON
 
     def test_flush_disabled_no_priority(self, timing: TimingParams) -> None:
@@ -178,9 +164,7 @@ class TestEvaluateZoneFlushCircuit:
             dhw_active=True,
             zones={"bathroom": zone},
         )
-        result = evaluate_zone(
-            zone, controller, timing, any_regular_circuits_active=False
-        )
+        result = evaluate_zone(zone, controller, timing)
         assert result == ZoneAction.STAY_OFF
 
 
@@ -208,9 +192,7 @@ class TestEvaluateZoneWindowBlocking:
             requested_duration=1000.0,
             used_duration=0.0,  # Has quota
         )
-        result = evaluate_zone(
-            zone, controller, timing, any_regular_circuits_active=False
-        )
+        result = evaluate_zone(zone, controller, timing)
         # Valve should turn on based on quota, not blocked by window
         assert result == ZoneAction.TURN_ON
 
@@ -225,9 +207,7 @@ class TestEvaluateZoneWindowBlocking:
             requested_duration=1000.0,
             used_duration=500.0,  # Still has quota
         )
-        result = evaluate_zone(
-            zone, controller, timing, any_regular_circuits_active=False
-        )
+        result = evaluate_zone(zone, controller, timing)
         # Valve should stay on based on quota
         assert result == ZoneAction.STAY_ON
 
@@ -242,9 +222,7 @@ class TestEvaluateZoneWindowBlocking:
             requested_duration=1000.0,
             used_duration=1000.0,  # Quota met
         )
-        result = evaluate_zone(
-            zone, controller, timing, any_regular_circuits_active=False
-        )
+        result = evaluate_zone(zone, controller, timing)
         # Valve should turn off because quota is met, not because of window
         assert result == ZoneAction.TURN_OFF
 
@@ -259,9 +237,7 @@ class TestEvaluateZoneWindowBlocking:
             requested_duration=1000.0,
             used_duration=0.0,
         )
-        result = evaluate_zone(
-            zone, controller, timing, any_regular_circuits_active=False
-        )
+        result = evaluate_zone(zone, controller, timing)
         assert result == ZoneAction.TURN_ON
 
 
@@ -283,9 +259,7 @@ class TestEvaluateZonePeriodEndFreeze:
         )
         # 7200 - 7000 = 200 seconds remaining, less than 540 min_run_time
         controller = ControllerState(period_elapsed=7000.0)
-        result = evaluate_zone(
-            zone, controller, timing, any_regular_circuits_active=False
-        )
+        result = evaluate_zone(zone, controller, timing)
         assert result == ZoneAction.STAY_ON
 
     def test_near_period_end_valve_off_stays_off(self, timing: TimingParams) -> None:
@@ -298,9 +272,7 @@ class TestEvaluateZonePeriodEndFreeze:
         )
         # 7200 - 7000 = 200 seconds remaining, less than 540 min_run_time
         controller = ControllerState(period_elapsed=7000.0)
-        result = evaluate_zone(
-            zone, controller, timing, any_regular_circuits_active=False
-        )
+        result = evaluate_zone(zone, controller, timing)
         assert result == ZoneAction.STAY_OFF
 
     def test_enough_time_remaining_normal_behavior(self, timing: TimingParams) -> None:
@@ -313,9 +285,7 @@ class TestEvaluateZonePeriodEndFreeze:
         )
         # 7200 - 6000 = 1200 seconds remaining, more than 540 min_run_time
         controller = ControllerState(period_elapsed=6000.0)
-        result = evaluate_zone(
-            zone, controller, timing, any_regular_circuits_active=False
-        )
+        result = evaluate_zone(zone, controller, timing)
         assert result == ZoneAction.TURN_ON
 
     def test_exactly_at_threshold_normal_behavior(self, timing: TimingParams) -> None:
@@ -328,9 +298,7 @@ class TestEvaluateZonePeriodEndFreeze:
         )
         # 7200 - 6660 = 540 seconds remaining, exactly min_run_time
         controller = ControllerState(period_elapsed=6660.0)
-        result = evaluate_zone(
-            zone, controller, timing, any_regular_circuits_active=False
-        )
+        result = evaluate_zone(zone, controller, timing)
         assert result == ZoneAction.TURN_ON
 
     def test_one_second_below_threshold_freezes(self, timing: TimingParams) -> None:
@@ -343,9 +311,7 @@ class TestEvaluateZonePeriodEndFreeze:
         )
         # 7200 - 6661 = 539 seconds remaining, just below 540 min_run_time
         controller = ControllerState(period_elapsed=6661.0)
-        result = evaluate_zone(
-            zone, controller, timing, any_regular_circuits_active=False
-        )
+        result = evaluate_zone(zone, controller, timing)
         assert result == ZoneAction.STAY_OFF
 
     def test_period_freeze_with_window_recently_open(
@@ -361,9 +327,7 @@ class TestEvaluateZonePeriodEndFreeze:
         )
         # Near end of period - period freeze takes effect
         controller = ControllerState(period_elapsed=7000.0)
-        result = evaluate_zone(
-            zone, controller, timing, any_regular_circuits_active=False
-        )
+        result = evaluate_zone(zone, controller, timing)
         # Period freeze applies - valve stays on to avoid cycling
         assert result == ZoneAction.STAY_ON
 
@@ -391,9 +355,7 @@ class TestEvaluateZoneQuotaScheduling:
             requested_duration=1000.0,
             used_duration=0.0,
         )
-        result = evaluate_zone(
-            zone, controller, timing, any_regular_circuits_active=False
-        )
+        result = evaluate_zone(zone, controller, timing)
         assert result == ZoneAction.TURN_ON
 
     def test_quota_remaining_stays_on(
@@ -406,9 +368,7 @@ class TestEvaluateZoneQuotaScheduling:
             requested_duration=1000.0,
             used_duration=500.0,
         )
-        result = evaluate_zone(
-            zone, controller, timing, any_regular_circuits_active=False
-        )
+        result = evaluate_zone(zone, controller, timing)
         assert result == ZoneAction.STAY_ON
 
     def test_quota_too_small_stays_off(
@@ -421,9 +381,7 @@ class TestEvaluateZoneQuotaScheduling:
             requested_duration=1000.0,
             used_duration=700.0,  # Only 300 remaining, less than 540
         )
-        result = evaluate_zone(
-            zone, controller, timing, any_regular_circuits_active=False
-        )
+        result = evaluate_zone(zone, controller, timing)
         assert result == ZoneAction.STAY_OFF
 
     def test_quota_met_turns_off(
@@ -436,9 +394,7 @@ class TestEvaluateZoneQuotaScheduling:
             requested_duration=1000.0,
             used_duration=1000.0,
         )
-        result = evaluate_zone(
-            zone, controller, timing, any_regular_circuits_active=False
-        )
+        result = evaluate_zone(zone, controller, timing)
         assert result == ZoneAction.TURN_OFF
 
     def test_quota_met_stays_off(
@@ -451,9 +407,7 @@ class TestEvaluateZoneQuotaScheduling:
             requested_duration=1000.0,
             used_duration=1000.0,
         )
-        result = evaluate_zone(
-            zone, controller, timing, any_regular_circuits_active=False
-        )
+        result = evaluate_zone(zone, controller, timing)
         assert result == ZoneAction.STAY_OFF
 
     def test_zero_quota_stays_off(
@@ -466,9 +420,7 @@ class TestEvaluateZoneQuotaScheduling:
             requested_duration=0.0,
             used_duration=0.0,
         )
-        result = evaluate_zone(
-            zone, controller, timing, any_regular_circuits_active=False
-        )
+        result = evaluate_zone(zone, controller, timing)
         assert result == ZoneAction.STAY_OFF
 
     @pytest.mark.parametrize(
@@ -487,9 +439,7 @@ class TestEvaluateZoneQuotaScheduling:
             requested_duration=1000.0,
             used_duration=1000.0,
         )
-        result = evaluate_zone(
-            zone, controller, timing, any_regular_circuits_active=False
-        )
+        result = evaluate_zone(zone, controller, timing)
         # When valve state is uncertain, actively turn off
         assert result == ZoneAction.TURN_OFF
 
@@ -512,9 +462,7 @@ class TestEvaluateZoneDHWBlocking:
             used_duration=0.0,
         )
         controller = ControllerState(dhw_active=True)
-        result = evaluate_zone(
-            zone, controller, timing, any_regular_circuits_active=False
-        )
+        result = evaluate_zone(zone, controller, timing)
         assert result == ZoneAction.STAY_OFF
 
     def test_regular_runs_without_dhw(self, timing: TimingParams) -> None:
@@ -527,9 +475,7 @@ class TestEvaluateZoneDHWBlocking:
             used_duration=0.0,
         )
         controller = ControllerState(dhw_active=False)
-        result = evaluate_zone(
-            zone, controller, timing, any_regular_circuits_active=False
-        )
+        result = evaluate_zone(zone, controller, timing)
         assert result == ZoneAction.TURN_ON
 
     def test_regular_stays_on_during_dhw(self, timing: TimingParams) -> None:
@@ -542,9 +488,7 @@ class TestEvaluateZoneDHWBlocking:
             used_duration=100.0,  # Has remaining quota
         )
         controller = ControllerState(dhw_active=True)
-        result = evaluate_zone(
-            zone, controller, timing, any_regular_circuits_active=False
-        )
+        result = evaluate_zone(zone, controller, timing)
         # Valve should stay on to continue circulating water through the floor
         assert result == ZoneAction.STAY_ON
 
@@ -560,9 +504,7 @@ class TestEvaluateZoneDHWBlocking:
             used_duration=1000.0,  # Quota exhausted
         )
         controller = ControllerState(dhw_active=True)
-        result = evaluate_zone(
-            zone, controller, timing, any_regular_circuits_active=False
-        )
+        result = evaluate_zone(zone, controller, timing)
         # Valve should turn off - quota exhaustion takes precedence
         assert result == ZoneAction.TURN_OFF
 
