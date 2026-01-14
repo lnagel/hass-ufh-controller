@@ -12,6 +12,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from .const import (
     DEFAULT_PID,
     DEFAULT_SETPOINT,
+    DEFAULT_TEMP_EMA_TIME_CONSTANT,
     DEFAULT_TIMING,
     DEFAULT_VALVE_OPEN_THRESHOLD,
     DOMAIN,
@@ -160,6 +161,9 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     integral_max=pid_opts.get(
                         "integral_max", DEFAULT_PID["integral_max"]
                     ),
+                    temp_ema_time_constant=zone_data.get(
+                        "temp_ema_time_constant", DEFAULT_TEMP_EMA_TIME_CONSTANT
+                    ),
                 )
             )
 
@@ -241,6 +245,10 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if "preset_mode" in zone_state:
             self._zone_presets[zone_id] = zone_state["preset_mode"]
 
+        # Restore temperature (EMA value) for smooth continuity across restarts
+        if "temperature" in zone_state:
+            runtime.state.current = zone_state["temperature"]
+
     async def async_save_state(self) -> None:
         """Save current state to storage."""
         zones_data: dict[str, dict[str, Any]] = {}
@@ -263,6 +271,9 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 preset_mode = self._zone_presets.get(zone_id)
                 if preset_mode is not None:
                     zone_data["preset_mode"] = preset_mode
+                # Save temperature (EMA value) for smooth continuity across restarts
+                if runtime.state.current is not None:
+                    zone_data["temperature"] = runtime.state.current
                 zones_data[zone_id] = zone_data
 
         data = {
@@ -405,6 +416,40 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 return True
         return False
 
+    def _apply_ema_filter(
+        self,
+        runtime: Any,  # ZoneRuntime
+        raw_temp: float,
+        dt: float,
+    ) -> float:
+        """
+        Apply Exponential Moving Average filter to temperature reading.
+
+        EMA formula: ema = alpha * raw + (1 - alpha) * previous_ema
+        Where alpha = dt / (tau + dt), tau is the time constant.
+
+        Args:
+            runtime: Zone runtime data containing config and state.
+            raw_temp: Raw temperature reading from sensor.
+            dt: Time delta since last update in seconds.
+
+        Returns:
+            Filtered temperature value.
+
+        """
+        tau = runtime.config.temp_ema_time_constant
+        previous_ema = runtime.state.current
+
+        # No filtering if time constant is 0 or no previous value
+        if tau <= 0 or previous_ema is None:
+            return raw_temp
+
+        # Calculate smoothing factor
+        alpha = dt / (tau + dt)
+
+        # Apply EMA filter
+        return alpha * raw_temp + (1 - alpha) * previous_ema
+
     async def _update_zone(
         self,
         zone_id: str,
@@ -426,7 +471,9 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         temp_unavailable = False
         if temp_state is not None:
             try:
-                current = float(temp_state.state)
+                raw_temp = float(temp_state.state)
+                # Apply EMA low-pass filter to smooth temperature readings
+                current = self._apply_ema_filter(runtime, raw_temp, dt)
             except (ValueError, TypeError):
                 temp_unavailable = True
                 LOGGER.warning(

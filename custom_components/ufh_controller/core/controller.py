@@ -14,6 +14,7 @@ from custom_components.ufh_controller.const import (
     DEFAULT_CYCLE_MODE_HOURS,
     DEFAULT_PID,
     DEFAULT_SETPOINT,
+    DEFAULT_TEMP_EMA_TIME_CONSTANT,
     SummerMode,
     ValveState,
 )
@@ -49,6 +50,7 @@ class ZoneConfig:
     kd: float = DEFAULT_PID["kd"]
     integral_min: float = DEFAULT_PID["integral_min"]
     integral_max: float = DEFAULT_PID["integral_max"]
+    temp_ema_time_constant: int = DEFAULT_TEMP_EMA_TIME_CONSTANT
 
 
 @dataclass

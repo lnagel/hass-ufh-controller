@@ -19,6 +19,7 @@ from .const import (
     DEFAULT_PID,
     DEFAULT_PRESETS,
     DEFAULT_SETPOINT,
+    DEFAULT_TEMP_EMA_TIME_CONSTANT,
     DEFAULT_TIMING,
     DOMAIN,
     LOGGER,
@@ -28,6 +29,7 @@ from .const import (
     UI_SETPOINT_DEFAULT,
     UI_SETPOINT_MAX,
     UI_SETPOINT_MIN,
+    UI_TEMP_EMA_TIME_CONSTANT,
     UI_TIMING_CLOSING_WARNING,
     UI_TIMING_CONTROLLER_LOOP_INTERVAL,
     UI_TIMING_FLUSH_DURATION,
@@ -241,6 +243,19 @@ def get_zone_schema(
                     mode=selector.NumberSelectorMode.BOX,
                 )
             ),
+            vol.Optional(
+                "temp_ema_time_constant",
+                default=defaults.get(
+                    "temp_ema_time_constant", DEFAULT_TEMP_EMA_TIME_CONSTANT
+                ),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=UI_TEMP_EMA_TIME_CONSTANT["min"],
+                    max=UI_TEMP_EMA_TIME_CONSTANT["max"],
+                    step=UI_TEMP_EMA_TIME_CONSTANT["step"],
+                    unit_of_measurement="s",
+                )
+            ),
         }
     )
 
@@ -348,6 +363,19 @@ def get_zone_temperature_schema(
             ): selector.NumberSelector(
                 selector.NumberSelectorConfig(
                     mode=selector.NumberSelectorMode.BOX,
+                )
+            ),
+            vol.Optional(
+                "temp_ema_time_constant",
+                default=defaults.get(
+                    "temp_ema_time_constant", DEFAULT_TEMP_EMA_TIME_CONSTANT
+                ),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=UI_TEMP_EMA_TIME_CONSTANT["min"],
+                    max=UI_TEMP_EMA_TIME_CONSTANT["max"],
+                    step=UI_TEMP_EMA_TIME_CONSTANT["step"],
+                    unit_of_measurement="s",
                 )
             ),
         }
@@ -472,6 +500,9 @@ def build_zone_data(user_input: dict[str, Any]) -> dict[str, Any]:
             "integral_min": DEFAULT_PID["integral_min"],
             "integral_max": DEFAULT_PID["integral_max"],
         },
+        "temp_ema_time_constant": user_input.get(
+            "temp_ema_time_constant", DEFAULT_TEMP_EMA_TIME_CONSTANT
+        ),
         "presets": dict(DEFAULT_PRESETS),
     }
 
@@ -786,6 +817,9 @@ class ZoneSubentryFlowHandler(ConfigSubentryFlow):
                     "integral_min": DEFAULT_PID["integral_min"],
                     "integral_max": DEFAULT_PID["integral_max"],
                 },
+                "temp_ema_time_constant": user_input.get(
+                    "temp_ema_time_constant", DEFAULT_TEMP_EMA_TIME_CONSTANT
+                ),
             }
             LOGGER.debug("Updating zone temperature control: %s", new_data["id"])
             return self.async_update_and_abort(

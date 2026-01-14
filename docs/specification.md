@@ -167,6 +167,7 @@ ConfigEntry.subentries = {
                 "integral_min": 0.0,
                 "integral_max": 100.0
             },
+            "temp_ema_time_constant": 600,  # seconds (10 minutes) - EMA filter
             "presets": {
                 "home": 21.0,
                 "away": 16.0,
@@ -269,6 +270,7 @@ Zones are managed as **config subentries**. Users interact with zones through:
 | kp | float | No | PID proportional gain (default: 50.0) |
 | ki | float | No | PID integral gain (default: 0.05) |
 | kd | float | No | PID derivative gain (default: 0.0) |
+| temp_ema_time_constant | number (s) | No | Temperature EMA filter time constant (default: 600s / 10 min) |
 
 **Reconfiguring a Zone:**
 - Navigate to: Settings → Devices & Services → Devices → [Zone Device] → "Configure" (cogwheel)
@@ -1366,6 +1368,40 @@ The integral gain determines how past temperature errors accumulate to eliminate
 
 **Special note:** The integral is stored in percentage units (not raw error-seconds), so changing `ki` doesn't immediately affect the accumulated contribution—only future accumulation rates change.
 
+---
+
+### 13.3 Temperature Smoothing
+
+#### temp_ema_time_constant (EMA Filter Time Constant)
+
+**Default:** 600 seconds (10 minutes)
+**Range:** 0-1800 seconds (0 to 30 minutes)
+**Config location:** Zone subentry → `data.temp_ema_time_constant`
+
+The time constant for the Exponential Moving Average (EMA) filter applied to temperature sensor readings. This low-pass filter smooths out sensor noise and rapid fluctuations before the temperature is used in PID calculations and displayed in the climate entity.
+
+**How it works:** The EMA filter applies the formula: `filtered = α × raw + (1 - α) × previous_filtered`, where the smoothing factor `α = dt / (τ + dt)`. Here, `τ` is the time constant and `dt` is the time since the last reading (typically 60 seconds). Higher time constants result in more smoothing (slower response to changes), while lower values allow faster response but less noise filtering.
+
+**Examples:**
+- With `temp_ema_time_constant=600s` (10 minutes) and `dt=60s`:
+  - `α = 60 / (600 + 60) = 0.091`
+  - Each new reading contributes about 9% to the filtered value
+  - A sudden 1°C sensor spike would only raise the filtered temperature by ~0.09°C
+- With `temp_ema_time_constant=0s`: No filtering applied, raw sensor values are used directly
+- With `temp_ema_time_constant=300s` (5 minutes):
+  - `α = 60 / (300 + 60) = 0.167`
+  - Faster response, less smoothing than the default
+
+**Restart behavior:** The filtered temperature value is persisted across Home Assistant restarts. On startup, the EMA continues from its previous value, ensuring smooth operation without step changes or re-initialization artifacts.
+
+**Why it matters:** Temperature sensors (especially wireless ones like Zigbee) can produce noisy readings due to measurement variance, RF interference, or environmental factors. Without filtering, this noise propagates to the PID controller, causing unnecessary valve cycling and wear. The EMA filter provides a clean, stable temperature signal while maintaining responsiveness to actual temperature changes.
+
+**Tip:** Start with the default 600s (10 minutes). If the system feels sluggish, reduce to 300s. If you see excessive valve cycling, increase to 900s or higher.
+
+---
+
+### 13.4 PID Parameters (continued)
+
 #### kd (Derivative Gain)
 
 **Default:** 0.0
@@ -1623,6 +1659,8 @@ DEFAULT_PID = {
     "integral_min": 0.0,
     "integral_max": 100.0,
 }
+
+DEFAULT_TEMP_EMA_TIME_CONSTANT = 600  # 10 minutes
 
 DEFAULT_SETPOINT = {
     "min": 16.0,

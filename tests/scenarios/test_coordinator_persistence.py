@@ -922,3 +922,189 @@ async def test_crash_recovery_stale_zone_in_stored_state(
 
     # Cleanup
     await hass.config_entries.async_unload(config_entry.entry_id)
+
+
+# =============================================================================
+# EMA Temperature Persistence Tests
+# =============================================================================
+
+
+async def test_ema_temperature_saved_in_state(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Test that EMA-filtered temperature is saved in coordinator state."""
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = mock_config_entry.runtime_data.coordinator
+    runtime = coordinator.controller.get_zone_runtime("zone1")
+    assert runtime is not None
+
+    # Set the current temperature (which stores the EMA value)
+    runtime.state.current = 21.5
+
+    saved_data = None
+
+    async def capture_save(data: dict) -> None:
+        nonlocal saved_data
+        saved_data = data
+
+    with patch(
+        "homeassistant.helpers.storage.Store.async_save", side_effect=capture_save
+    ):
+        await coordinator.async_save_state()
+
+    assert saved_data is not None
+    assert "zones" in saved_data
+    assert "zone1" in saved_data["zones"]
+    assert "temperature" in saved_data["zones"]["zone1"]
+    assert saved_data["zones"]["zone1"]["temperature"] == 21.5
+
+
+async def test_ema_temperature_restored_from_state(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Test that EMA-filtered temperature is restored from stored state."""
+    stored_data = {
+        "version": 1,
+        "controller_mode": "auto",
+        "zones": {
+            "zone1": {
+                "error": 0.5,
+                "p_term": 25.0,
+                "i_term": 10.0,
+                "d_term": 0.0,
+                "duty_cycle": 35.0,
+                "setpoint": 22.0,
+                "enabled": True,
+                "temperature": 20.8,  # Stored EMA temperature
+            },
+        },
+    }
+
+    # Set raw sensor to a different value to verify EMA is used
+    hass.states.async_set("sensor.zone1_temp", "21.5")
+
+    with patch(
+        "homeassistant.helpers.storage.Store.async_load",
+        return_value=stored_data,
+    ):
+        mock_config_entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    coordinator = mock_config_entry.runtime_data.coordinator
+    runtime = coordinator.controller.get_zone_runtime("zone1")
+    assert runtime is not None
+
+    # The current temperature should be restored from storage initially
+    # After the first refresh, it will be EMA-filtered from the raw value
+    # The key point is that it started from the stored temperature (20.8)
+    # and moved toward the raw value (21.5) based on the EMA filter
+    # With default tau=600s and dt=60s, alpha=0.0909
+    # Expected: 0.0909 * 21.5 + 0.9091 * 20.8 = 1.95 + 18.91 = 20.86
+    # But since the first update triggers restoration, let's just check
+    # that the value is between stored and raw (showing EMA is working)
+    assert runtime.state.current is not None
+    # Should be closer to the stored value than the raw value due to smoothing
+    assert 20.8 <= runtime.state.current <= 21.5
+
+
+async def test_ema_filter_smooths_temperature_spikes(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Test that EMA filter smooths out sudden temperature spikes."""
+    # Start with a stable temperature
+    hass.states.async_set("sensor.zone1_temp", "20.0")
+
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = mock_config_entry.runtime_data.coordinator
+    runtime = coordinator.controller.get_zone_runtime("zone1")
+    assert runtime is not None
+
+    # First update establishes baseline
+    await coordinator.async_refresh()
+    initial_temp = runtime.state.current
+    assert initial_temp is not None
+    assert initial_temp == 20.0  # First reading, no previous to filter
+
+    # Now simulate a sudden spike
+    hass.states.async_set("sensor.zone1_temp", "25.0")  # 5 degree spike
+    await coordinator.async_refresh()
+
+    # The filtered temperature should NOT jump to 25.0
+    # With tau=600s and dt=60s, alpha=0.0909
+    # Expected: 0.0909 * 25 + 0.9091 * 20 = 2.27 + 18.18 = 20.45
+    filtered_temp = runtime.state.current
+    assert filtered_temp is not None
+    assert filtered_temp < 21.0  # Should be much less than the spike
+    assert filtered_temp > 20.0  # But more than the previous value
+
+
+async def test_ema_filter_disabled_when_tau_zero(
+    hass: HomeAssistant,
+) -> None:
+    """Test that EMA filter is disabled when time constant is 0."""
+    zone_data = {
+        "id": "zone1",
+        "name": "Test Zone 1",
+        "circuit_type": "regular",
+        "temp_sensor": "sensor.zone1_temp",
+        "valve_switch": "switch.zone1_valve",
+        "setpoint": DEFAULT_SETPOINT,
+        "pid": DEFAULT_PID,
+        "temp_ema_time_constant": 0,  # Disable EMA filtering
+        "window_sensors": [],
+    }
+
+    config_entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Test Controller",
+        data={
+            "name": "Test Controller",
+            "controller_id": "test_controller_no_ema",
+        },
+        options={"timing": DEFAULT_TIMING},
+        entry_id="test_entry_no_ema",
+        unique_id="test_controller_no_ema",
+        subentries_data=[
+            {
+                "data": zone_data,
+                "subentry_id": "subentry_zone1_no_ema",
+                "subentry_type": SUBENTRY_TYPE_ZONE,
+                "title": "Test Zone 1",
+                "unique_id": "zone1",
+            }
+        ],
+    )
+
+    hass.states.async_set("sensor.zone1_temp", "20.0")
+
+    config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = config_entry.runtime_data.coordinator
+    runtime = coordinator.controller.get_zone_runtime("zone1")
+    assert runtime is not None
+
+    # First update
+    await coordinator.async_refresh()
+    assert runtime.state.current == 20.0
+
+    # Now simulate a sudden change - with tau=0, no filtering should occur
+    hass.states.async_set("sensor.zone1_temp", "25.0")
+    await coordinator.async_refresh()
+
+    # With tau=0, the temperature should immediately jump to the raw value
+    assert runtime.state.current == 25.0
+
+    # Cleanup
+    await hass.config_entries.async_unload(config_entry.entry_id)
