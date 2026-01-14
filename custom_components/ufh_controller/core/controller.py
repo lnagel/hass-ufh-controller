@@ -505,10 +505,6 @@ class HeatingController:
             ControllerActions with valve actions and optional state changes.
 
         """
-        # Build current controller state for decision logic
-        self._state.zones = {zid: zr.state for zid, zr in self._zones.items()}
-
-        # Dispatch to mode-specific evaluation
         mode = self._state.mode
         if mode == "disabled":
             return self._evaluate_disabled_mode()
