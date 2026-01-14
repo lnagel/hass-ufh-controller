@@ -337,7 +337,34 @@ class HeatingController:
 
         Returns raw computed values; the coordinator handles change detection.
         """
-        valve_actions, flush_request = self._evaluate_auto_valves(now)
+        valve_actions: dict[str, ZoneAction] = {}
+
+        # Phase 1: Evaluate regular zones first using quota-based scheduling
+        for zone_id, runtime in self._zones.items():
+            if runtime.config.circuit_type == CircuitType.REGULAR:
+                valve_actions[zone_id] = runtime.evaluate(
+                    self._state, self.config.timing
+                )
+
+        # Phase 2: Compute flush_request based on regular zone actions
+        any_regular_on = any(
+            action in {ZoneAction.TURN_ON, ZoneAction.STAY_ON}
+            for action in valve_actions.values()
+        )
+        flush_request = compute_flush_request(
+            flush_enabled=self._state.flush_enabled,
+            dhw_active=self._state.dhw_active,
+            flush_until=self._state.flush_until,
+            any_regular_on=any_regular_on,
+            now=now,
+        )
+
+        # Phase 3: Evaluate flush zones with explicit flush_request parameter
+        for zone_id, runtime in self._zones.items():
+            if runtime.config.circuit_type == CircuitType.FLUSH:
+                valve_actions[zone_id] = runtime.evaluate(
+                    self._state, self.config.timing, flush_request=flush_request
+                )
 
         # Calculate heat request from zone outputs
         heat_request = any(
@@ -371,52 +398,6 @@ class HeatingController:
         # Delegate to evaluate() and extract valve actions
         actions = self.evaluate(now=now)
         return actions.valve_actions
-
-    def _evaluate_auto_valves(
-        self, now: datetime
-    ) -> tuple[dict[str, ZoneAction], bool]:
-        """
-        Evaluate all zones in auto mode using quota-based scheduling.
-
-        Evaluates regular zones first, then computes flush_request,
-        then evaluates flush zones. This ensures flush circuits only
-        activate when no regular circuits are running.
-
-        Args:
-            now: Current time for flush timer comparison.
-
-        Returns:
-            Tuple of (valve_actions dict, flush_request bool).
-
-        """
-        actions: dict[str, ZoneAction] = {}
-
-        # Phase 1: Evaluate regular zones first using quota-based scheduling
-        for zone_id, runtime in self._zones.items():
-            if runtime.config.circuit_type == CircuitType.REGULAR:
-                actions[zone_id] = runtime.evaluate(self._state, self.config.timing)
-
-        # Phase 2: Compute flush_request based on regular zone actions
-        any_regular_on = any(
-            action in {ZoneAction.TURN_ON, ZoneAction.STAY_ON}
-            for action in actions.values()
-        )
-        flush_request = compute_flush_request(
-            flush_enabled=self._state.flush_enabled,
-            dhw_active=self._state.dhw_active,
-            flush_until=self._state.flush_until,
-            any_regular_on=any_regular_on,
-            now=now,
-        )
-
-        # Phase 3: Evaluate flush zones with explicit flush_request parameter
-        for zone_id, runtime in self._zones.items():
-            if runtime.config.circuit_type == CircuitType.FLUSH:
-                actions[zone_id] = runtime.evaluate(
-                    self._state, self.config.timing, flush_request=flush_request
-                )
-
-        return actions, flush_request
 
     def evaluate(self, *, now: datetime) -> ControllerActions:
         """
