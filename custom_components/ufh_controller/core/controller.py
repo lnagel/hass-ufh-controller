@@ -438,21 +438,3 @@ class HeatingController:
     def zone_ids(self) -> list[str]:
         """Get list of all zone IDs."""
         return list(self._zones.keys())
-
-
-def aggregate_heat_request(
-    zones: dict[str, ZoneState],
-    timing: TimingParams,
-) -> bool:
-    """
-    Aggregate heat request from all zones.
-
-    Args:
-        zones: Dictionary of zone states keyed by zone ID.
-        timing: Timing parameters.
-
-    Returns:
-        True if any zone is requesting heat.
-
-    """
-    return any(should_request_heat(zone, timing) for zone in zones.values())

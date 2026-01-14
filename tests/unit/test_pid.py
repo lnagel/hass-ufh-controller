@@ -11,25 +11,23 @@ from custom_components.ufh_controller.core.pid import (
 class TestPIDController:
     """Test cases for PIDController."""
 
-    def test_proportional_response(self) -> None:
-        """Test that proportional term responds to error."""
+    def test_proportional_large_error_clamped(self) -> None:
+        """Positive error (setpoint > current) gives positive output, clamped to 100."""
         pid = PIDController(kp=50.0, ki=0.0, kd=0.0)
-
-        # Positive error (setpoint > current) should give positive output
         result = pid.update(setpoint=22.0, current=20.0, dt=60.0)
         assert result.duty_cycle == 100.0  # 50 * 2 = 100, clamped
         assert result.p_term == 100.0
 
-        pid.reset()
-
-        # Smaller error
+    def test_proportional_small_error(self) -> None:
+        """Smaller error gives proportional output without clamping."""
+        pid = PIDController(kp=50.0, ki=0.0, kd=0.0)
         result = pid.update(setpoint=21.0, current=20.0, dt=60.0)
         assert result.duty_cycle == 50.0  # 50 * 1 = 50
         assert result.p_term == 50.0
 
-        pid.reset()
-
-        # Negative error (setpoint < current) should give 0 (clamped)
+    def test_proportional_negative_error_clamped(self) -> None:
+        """Negative error (setpoint < current) gives 0 (clamped)."""
+        pid = PIDController(kp=50.0, ki=0.0, kd=0.0)
         result = pid.update(setpoint=20.0, current=22.0, dt=60.0)
         assert result.duty_cycle == 0.0  # 50 * -2 = -100, clamped to 0
         assert result.p_term == -100.0
@@ -111,18 +109,6 @@ class TestPIDController:
         # d_term = 10 * (2 - 1) / 60 = 0.167
         assert result3.d_term == pytest.approx(10.0 / 60.0, rel=0.01)
         assert result3.duty_cycle == pytest.approx(10.0 / 60.0, rel=0.01)
-
-    def test_reset(self) -> None:
-        """Test that reset clears the PID state."""
-        pid = PIDController(kp=50.0, ki=0.1, kd=1.0)
-
-        pid.update(setpoint=22.0, current=20.0, dt=60.0)
-        assert pid.state is not None
-        assert pid.state.i_term != 0.0
-        assert pid.state.error != 0.0
-
-        pid.reset()
-        assert pid.state is None
 
     def test_set_state(self) -> None:
         """Test that set_state sets the full PID state."""

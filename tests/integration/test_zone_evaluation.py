@@ -3,10 +3,7 @@
 import pytest
 
 from custom_components.ufh_controller.const import TimingParams, ValveState
-from custom_components.ufh_controller.core.controller import (
-    ControllerState,
-    aggregate_heat_request,
-)
+from custom_components.ufh_controller.core.controller import ControllerState
 from custom_components.ufh_controller.core.zone import (
     CircuitType,
     ZoneAction,
@@ -565,61 +562,4 @@ class TestShouldRequestHeat:
             used_duration=0.0,
         )
         result = should_request_heat(zone, timing)
-        assert result is True
-
-
-class TestAggregateHeatRequest:
-    """Test cases for aggregate_heat_request."""
-
-    @pytest.fixture
-    def timing(self) -> TimingParams:
-        """Create timing params."""
-        return TimingParams()
-
-    def test_no_zones_no_request(self, timing: TimingParams) -> None:
-        """Empty zones dict returns no request."""
-        result = aggregate_heat_request({}, timing)
-        assert result is False
-
-    def test_all_zones_off_no_request(self, timing: TimingParams) -> None:
-        """All zones off returns no request."""
-        zones = {
-            "zone1": ZoneState(zone_id="zone1", valve_state=ValveState.OFF),
-            "zone2": ZoneState(zone_id="zone2", valve_state=ValveState.OFF),
-        }
-        result = aggregate_heat_request(zones, timing)
-        assert result is False
-
-    def test_one_zone_requesting(self, timing: TimingParams) -> None:
-        """One zone requesting returns true."""
-        zones = {
-            "zone1": ZoneState(zone_id="zone1", valve_state=ValveState.OFF),
-            "zone2": ZoneState(
-                zone_id="zone2",
-                valve_state=ValveState.ON,
-                open_state_avg=0.90,
-                requested_duration=1000.0,
-                used_duration=0.0,
-            ),
-        }
-        result = aggregate_heat_request(zones, timing)
-        assert result is True
-
-    def test_multiple_zones_requesting(self, timing: TimingParams) -> None:
-        """Multiple zones requesting returns true."""
-        zones = {
-            "zone1": ZoneState(
-                zone_id="zone1",
-                valve_state=ValveState.ON,
-                open_state_avg=0.90,
-                requested_duration=1000.0,
-            ),
-            "zone2": ZoneState(
-                zone_id="zone2",
-                valve_state=ValveState.ON,
-                open_state_avg=0.90,
-                requested_duration=1000.0,
-            ),
-        }
-        result = aggregate_heat_request(zones, timing)
         assert result is True

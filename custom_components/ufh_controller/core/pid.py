@@ -100,10 +100,6 @@ class PIDController:
         )
         return self._state
 
-    def reset(self) -> None:
-        """Reset the PID controller state."""
-        self._state = None
-
     def set_state(self, state: PIDState) -> None:
         """
         Set the PID state directly (for state restoration).

@@ -7,7 +7,6 @@ from .controller import (
     ControllerConfig,
     ControllerState,
     HeatingController,
-    aggregate_heat_request,
 )
 from .ema import apply_ema
 from .history import (
@@ -41,7 +40,6 @@ __all__ = [
     "ZoneRuntime",
     "ZoneState",
     "ZoneStatusTransition",
-    "aggregate_heat_request",
     "apply_ema",
     "calculate_requested_duration",
     "evaluate_zone",
