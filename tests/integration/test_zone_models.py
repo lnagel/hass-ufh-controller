@@ -16,6 +16,11 @@ from custom_components.ufh_controller.core.zone import (
 class TestCalculateRequestedDuration:
     """Test cases for calculate_requested_duration."""
 
+    def test_none_duty_cycle(self) -> None:
+        """Test None duty cycle returns zero duration."""
+        result = calculate_requested_duration(None, 7200)
+        assert result == 0.0
+
     def test_zero_duty_cycle(self) -> None:
         """Test zero duty cycle returns zero duration."""
         result = calculate_requested_duration(0.0, 7200)

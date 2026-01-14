@@ -306,8 +306,6 @@ class HeatingController:
                 valve_actions[zid] = (
                     ZoneAction.TURN_OFF if valve_on else ZoneAction.STAY_OFF
                 )
-            elif not zone_ids:
-                valve_actions[zid] = ZoneAction.STAY_OFF
             else:
                 active_index = (cycle_hour - 1) % len(zone_ids)
                 if zid == zone_ids[active_index]:
