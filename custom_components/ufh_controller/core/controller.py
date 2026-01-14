@@ -25,6 +25,8 @@ from .zone import (
     ZoneConfig,
     ZoneRuntime,
     ZoneState,
+    evaluate_zone,
+    should_request_heat,
 )
 
 
@@ -336,8 +338,8 @@ class HeatingController:
         # Phase 1: Evaluate regular zones first using quota-based scheduling
         for zone_id, runtime in self._zones.items():
             if runtime.config.circuit_type == CircuitType.REGULAR:
-                valve_actions[zone_id] = runtime.evaluate(
-                    self._state, self.config.timing
+                valve_actions[zone_id] = evaluate_zone(
+                    runtime.state, self._state, self.config.timing
                 )
 
         # Phase 2: Compute flush_request based on regular zone actions
@@ -356,13 +358,17 @@ class HeatingController:
         # Phase 3: Evaluate flush zones with explicit flush_request parameter
         for zone_id, runtime in self._zones.items():
             if runtime.config.circuit_type == CircuitType.FLUSH:
-                valve_actions[zone_id] = runtime.evaluate(
-                    self._state, self.config.timing, flush_request=flush_request
+                valve_actions[zone_id] = evaluate_zone(
+                    runtime.state,
+                    self._state,
+                    self.config.timing,
+                    flush_request=flush_request,
                 )
 
         # Calculate heat request from zone outputs
         heat_request = any(
-            rt.should_request_heat(self.config.timing) for rt in self._zones.values()
+            should_request_heat(rt.state, self.config.timing)
+            for rt in self._zones.values()
         )
 
         return ControllerActions(
@@ -439,7 +445,7 @@ class HeatingController:
 
         # Auto and cycle modes use zone-based logic
         return any(
-            runtime.should_request_heat(self.config.timing)
+            should_request_heat(runtime.state, self.config.timing)
             for runtime in self._zones.values()
         )
 
@@ -485,9 +491,6 @@ def aggregate_heat_request(
     """
     Aggregate heat request from all zones.
 
-    Note: This function is kept for backwards compatibility.
-    Prefer using ZoneRuntime.should_request_heat() method directly.
-
     Args:
         zones: Dictionary of zone states keyed by zone ID.
         timing: Timing parameters.
@@ -496,6 +499,4 @@ def aggregate_heat_request(
         True if any zone is requesting heat.
 
     """
-    from .zone import should_request_heat  # noqa: PLC0415
-
     return any(should_request_heat(zone, timing) for zone in zones.values())
