@@ -33,7 +33,6 @@ class TestEvaluateZoneFlushCircuitPostDHW:
             flush_enabled=True,
             zones={"bathroom": zone},
         )
-        # flush_request passed explicitly (computed by controller, not from state)
         result = evaluate_zone(zone, controller, timing, flush_request=True)
         assert result == ZoneAction.TURN_ON
 
@@ -48,7 +47,6 @@ class TestEvaluateZoneFlushCircuitPostDHW:
             flush_enabled=True,
             zones={"bathroom": zone},
         )
-        # flush_request passed explicitly (computed by controller, not from state)
         result = evaluate_zone(zone, controller, timing, flush_request=True)
         assert result == ZoneAction.STAY_ON
 
@@ -114,8 +112,6 @@ class TestEvaluateZoneFlushCircuitPostDHW:
             flush_enabled=True,
             zones={"bathroom": flush_zone, "living_room": regular_zone},
         )
-        # Flush should turn on - regular valve is OFF
-        # flush_request passed explicitly (computed by controller, not from state)
         result = evaluate_zone(flush_zone, controller, timing, flush_request=True)
         assert result == ZoneAction.TURN_ON
 
