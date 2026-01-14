@@ -347,6 +347,104 @@ class ZoneRuntime:
         elapsed = (now - self.state.last_successful_update).total_seconds()
         return elapsed > fail_safe_timeout
 
+    def evaluate(  # noqa: PLR0911
+        self,
+        controller_state: ControllerState,
+        timing: TimingParams,
+    ) -> ZoneAction:
+        """
+        Evaluate zone state and determine valve action.
+
+        Implements quota-based scheduling and flush circuit priority.
+        Note: Window blocking is handled via PID pause, not valve control.
+
+        Args:
+            controller_state: Current controller state.
+            timing: Timing parameters.
+
+        Returns:
+            The action to take on the zone valve.
+
+        """
+        valve_on = self.state.valve_state == ValveState.ON
+        valve_off = self.state.valve_state == ValveState.OFF
+
+        # Zone disabled - always off
+        if not self.state.enabled:
+            return ZoneAction.STAY_OFF if valve_off else ZoneAction.TURN_OFF
+
+        # Flush circuit activation
+        if (
+            self.state.circuit_type == CircuitType.FLUSH
+            and controller_state.flush_enabled
+            and controller_state.flush_request
+        ):
+            return ZoneAction.TURN_ON if not valve_on else ZoneAction.STAY_ON
+
+        # Near end of observation period - freeze valve positions to avoid cycling
+        # If time remaining is less than min_run_time, a state change would be too brief
+        time_remaining = timing.observation_period - controller_state.period_elapsed
+        if time_remaining < timing.min_run_time:
+            if valve_on:
+                return ZoneAction.STAY_ON
+            return ZoneAction.STAY_OFF if valve_off else ZoneAction.TURN_OFF
+
+        # Quota-based scheduling
+        if self.state.used_duration < self.state.requested_duration:
+            # Zone still needs heating this period
+
+            if valve_on:
+                # Already on - stay on (re-send to prevent relay timeout)
+                return ZoneAction.STAY_ON
+
+            remaining_quota = self.state.requested_duration - self.state.used_duration
+            if remaining_quota < timing.min_run_time:
+                # Not enough quota left to justify turning on
+                return ZoneAction.STAY_OFF if valve_off else ZoneAction.TURN_OFF
+
+            if (
+                controller_state.dhw_active
+                and self.state.circuit_type == CircuitType.REGULAR
+            ):
+                # Wait for DHW heating to finish
+                return ZoneAction.STAY_OFF if valve_off else ZoneAction.TURN_OFF
+
+            # Turn on
+            return ZoneAction.TURN_ON
+
+        # Zone has met its quota
+        return ZoneAction.STAY_OFF if valve_off else ZoneAction.TURN_OFF
+
+    def should_request_heat(self, timing: TimingParams) -> bool:
+        """
+        Determine if this zone should contribute to heat request.
+
+        Heat is only requested when the valve is confirmed open and has been
+        open long enough to be fully open. When valve state is unknown or
+        unavailable, heat is NOT requested (conservative approach).
+
+        Args:
+            timing: Timing parameters.
+
+        Returns:
+            True if zone should request heat from boiler.
+
+        """
+        # Only request heat when valve state is confirmed ON
+        if self.state.valve_state != ValveState.ON:
+            return False
+
+        if not self.state.enabled:
+            return False
+
+        # Wait for valve to fully open
+        if self.state.open_state_avg < DEFAULT_VALVE_OPEN_THRESHOLD:
+            return False
+
+        # Don't request if zone is about to close
+        remaining_quota = self.state.requested_duration - self.state.used_duration
+        return remaining_quota >= timing.closing_warning_duration
+
 
 def calculate_requested_duration(
     duty_cycle: float | None,

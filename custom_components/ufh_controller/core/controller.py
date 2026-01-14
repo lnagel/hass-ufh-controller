@@ -24,8 +24,6 @@ from .zone import (
     ZoneConfig,
     ZoneRuntime,
     ZoneState,
-    evaluate_zone,
-    should_request_heat,
 )
 
 
@@ -338,8 +336,8 @@ class HeatingController:
         if mode == "cycle":
             return self._evaluate_cycle_mode(zone_id, runtime)
 
-        # Default: auto mode - use decision tree
-        return evaluate_zone(runtime.state, self._state, self.config.timing)
+        # Default: auto mode - delegate to zone
+        return runtime.evaluate(self._state, self.config.timing)
 
     def _evaluate_cycle_mode(
         self,
@@ -387,8 +385,10 @@ class HeatingController:
             return self._state.mode == "all_on"
 
         # Auto and cycle modes use zone-based logic
-        zone_states = {zid: zr.state for zid, zr in self._zones.items()}
-        return aggregate_heat_request(zone_states, self.config.timing)
+        return any(
+            runtime.should_request_heat(self.config.timing)
+            for runtime in self._zones.values()
+        )
 
     def get_summer_mode_value(self, *, heat_request: bool) -> str | None:
         """
@@ -432,6 +432,9 @@ def aggregate_heat_request(
     """
     Aggregate heat request from all zones.
 
+    Note: This function is kept for backwards compatibility.
+    Prefer using ZoneRuntime.should_request_heat() method directly.
+
     Args:
         zones: Dictionary of zone states keyed by zone ID.
         timing: Timing parameters.
@@ -440,4 +443,6 @@ def aggregate_heat_request(
         True if any zone is requesting heat.
 
     """
+    from .zone import should_request_heat  # noqa: PLC0415
+
     return any(should_request_heat(zone, timing) for zone in zones.values())
