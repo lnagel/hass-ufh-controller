@@ -7,12 +7,14 @@ for determining valve actions based on quota-based scheduling.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from custom_components.ufh_controller.const import (
+    DEFAULT_PID,
     DEFAULT_SETPOINT,
+    DEFAULT_TEMP_EMA_TIME_CONSTANT,
     DEFAULT_VALVE_OPEN_THRESHOLD,
     TimingParams,
     ValveState,
@@ -23,6 +25,7 @@ if TYPE_CHECKING:
     from datetime import datetime
 
     from .controller import ControllerState
+    from .pid import PIDController
 
 
 class CircuitType(StrEnum):
@@ -77,6 +80,37 @@ class ZoneState:
     zone_status: ZoneStatus = ZoneStatus.INITIALIZING
     last_successful_update: datetime | None = None
     consecutive_failures: int = 0
+
+
+@dataclass
+class ZoneConfig:
+    """Configuration for a single zone."""
+
+    zone_id: str
+    name: str
+    temp_sensor: str
+    valve_switch: str
+    circuit_type: CircuitType = CircuitType.REGULAR
+    window_sensors: list[str] = field(default_factory=list)
+    setpoint_min: float = DEFAULT_SETPOINT["min"]
+    setpoint_max: float = DEFAULT_SETPOINT["max"]
+    setpoint_default: float = DEFAULT_SETPOINT["default"]
+    kp: float = DEFAULT_PID["kp"]
+    ki: float = DEFAULT_PID["ki"]
+    kd: float = DEFAULT_PID["kd"]
+    integral_min: float = DEFAULT_PID["integral_min"]
+    integral_max: float = DEFAULT_PID["integral_max"]
+    temp_ema_time_constant: int = DEFAULT_TEMP_EMA_TIME_CONSTANT
+
+
+@dataclass
+class ZoneRuntime:
+    """Runtime data for a zone including PID controller and state."""
+
+    config: ZoneConfig
+    pid: PIDController
+    state: ZoneState
+    last_update: datetime | None = None
 
 
 def calculate_requested_duration(

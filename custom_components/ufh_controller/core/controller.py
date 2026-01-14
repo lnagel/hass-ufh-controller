@@ -12,9 +12,6 @@ from datetime import UTC, datetime
 
 from custom_components.ufh_controller.const import (
     DEFAULT_CYCLE_MODE_HOURS,
-    DEFAULT_PID,
-    DEFAULT_SETPOINT,
-    DEFAULT_TEMP_EMA_TIME_CONSTANT,
     SummerMode,
     TimingParams,
     ValveState,
@@ -24,6 +21,8 @@ from .pid import PIDController
 from .zone import (
     CircuitType,
     ZoneAction,
+    ZoneConfig,
+    ZoneRuntime,
     ZoneState,
     calculate_requested_duration,
     evaluate_zone,
@@ -47,27 +46,6 @@ class ControllerState:
 
 
 @dataclass
-class ZoneConfig:
-    """Configuration for a single zone."""
-
-    zone_id: str
-    name: str
-    temp_sensor: str
-    valve_switch: str
-    circuit_type: CircuitType = CircuitType.REGULAR
-    window_sensors: list[str] = field(default_factory=list)
-    setpoint_min: float = DEFAULT_SETPOINT["min"]
-    setpoint_max: float = DEFAULT_SETPOINT["max"]
-    setpoint_default: float = DEFAULT_SETPOINT["default"]
-    kp: float = DEFAULT_PID["kp"]
-    ki: float = DEFAULT_PID["ki"]
-    kd: float = DEFAULT_PID["kd"]
-    integral_min: float = DEFAULT_PID["integral_min"]
-    integral_max: float = DEFAULT_PID["integral_max"]
-    temp_ema_time_constant: int = DEFAULT_TEMP_EMA_TIME_CONSTANT
-
-
-@dataclass
 class ControllerConfig:
     """Configuration for the heating controller."""
 
@@ -79,16 +57,6 @@ class ControllerConfig:
     summer_mode_entity: str | None = None
     timing: TimingParams = field(default_factory=TimingParams)
     zones: list[ZoneConfig] = field(default_factory=list)
-
-
-@dataclass
-class ZoneRuntime:
-    """Runtime data for a zone including PID controller and state."""
-
-    config: ZoneConfig
-    pid: PIDController
-    state: ZoneState
-    last_update: datetime | None = None
 
 
 def compute_flush_request(

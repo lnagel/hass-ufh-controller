@@ -6,8 +6,6 @@ from .controller import (
     ControllerConfig,
     ControllerState,
     HeatingController,
-    ZoneConfig,
-    ZoneRuntime,
     aggregate_heat_request,
 )
 from .ema import apply_ema
@@ -21,6 +19,8 @@ from .pid import PIDController, PIDState
 from .zone import (
     CircuitType,
     ZoneAction,
+    ZoneConfig,
+    ZoneRuntime,
     ZoneState,
     calculate_requested_duration,
     evaluate_zone,
