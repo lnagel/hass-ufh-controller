@@ -55,7 +55,7 @@ class PIDController:
         """Return the current PID state."""
         return self._state
 
-    def update(self, setpoint: float, current: float, dt: float) -> PIDState:
+    def update(self, setpoint: float, current: float, dt: float) -> PIDState | None:
         """
         Calculate duty cycle from temperature error.
 
@@ -65,13 +65,11 @@ class PIDController:
             dt: Time delta in seconds since last update.
 
         Returns:
-            PIDState with all terms and clamped output (0.0 to 100.0).
+            PIDState with all terms and clamped output (0.0 to 100.0),
+            or None if dt <= 0 and no prior state exists.
 
         """
         if dt <= 0:
-            self._state = PIDState(
-                error=0.0, p_term=0.0, i_term=0.0, d_term=0.0, duty_cycle=0.0
-            )
             return self._state
 
         error = setpoint - current

@@ -186,7 +186,7 @@ class ZoneRuntime:
             dt=dt,
         )
 
-        return pid_state.duty_cycle
+        return pid_state.duty_cycle if pid_state else None
 
     def _should_pause_pid(self, controller_mode: str) -> bool:
         """
