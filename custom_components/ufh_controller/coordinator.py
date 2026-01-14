@@ -371,6 +371,7 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # Execute heat request and summer mode
         if actions.heat_request is not None:
+            self._controller.state.heat_request = actions.heat_request
             await self._execute_heat_request(heat_request=actions.heat_request)
 
             # Derive and update summer mode from heat_request
@@ -828,7 +829,7 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         result: dict[str, Any] = {
             "mode": self._controller.mode,
-            "heat_request": self._controller.calculate_heat_request(),
+            "heat_request": self._controller.state.heat_request,
             "observation_start": self._controller.state.observation_start,
             "controller_status": self._status.value,
             "zones_degraded": zones_degraded,

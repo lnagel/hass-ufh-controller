@@ -576,37 +576,42 @@ class TestUpdateZoneHistorical:
         assert actions["living_room"] == ZoneAction.TURN_ON
 
 
-class TestCalculateHeatRequest:
-    """Test calculate_heat_request method."""
+class TestHeatRequestFromEvaluate:
+    """Test heat_request values returned by evaluate()."""
 
-    def test_disabled_mode_no_request(self, basic_config: ControllerConfig) -> None:
-        """Test disabled mode returns no heat request."""
+    def test_disabled_mode_no_action(self, basic_config: ControllerConfig) -> None:
+        """Test disabled mode returns no heat request action (None)."""
         controller = HeatingController(basic_config)
         controller.mode = "disabled"
-        assert controller.calculate_heat_request() is False
+        actions = controller.evaluate(now=datetime.now(UTC))
+        # Disabled mode takes no action on heat_request
+        assert actions.heat_request is None
 
     def test_all_off_mode_no_request(self, basic_config: ControllerConfig) -> None:
-        """Test all_off mode returns no heat request."""
+        """Test all_off mode returns heat_request=False."""
         controller = HeatingController(basic_config)
         controller.mode = "all_off"
-        assert controller.calculate_heat_request() is False
+        actions = controller.evaluate(now=datetime.now(UTC))
+        assert actions.heat_request is False
 
     def test_all_on_mode_requests_heat(self, basic_config: ControllerConfig) -> None:
-        """Test all_on mode requests heat."""
+        """Test all_on mode returns heat_request=True."""
         controller = HeatingController(basic_config)
         controller.mode = "all_on"
-        assert controller.calculate_heat_request() is True
+        actions = controller.evaluate(now=datetime.now(UTC))
+        assert actions.heat_request is True
 
     def test_flush_mode_no_heat_request(self, basic_config: ControllerConfig) -> None:
-        """Test flush mode doesn't request heat."""
+        """Test flush mode returns heat_request=False."""
         controller = HeatingController(basic_config)
         controller.mode = "flush"
-        assert controller.calculate_heat_request() is False
+        actions = controller.evaluate(now=datetime.now(UTC))
+        assert actions.heat_request is False
 
     def test_auto_mode_with_valve_open_and_ready(
         self, basic_config: ControllerConfig
     ) -> None:
-        """Test auto mode requests heat when valve is open and ready."""
+        """Test auto mode returns heat_request=True when valve is open and ready."""
         controller = HeatingController(basic_config)
 
         # Set up zone with valve on and fully open
@@ -626,7 +631,8 @@ class TestCalculateHeatRequest:
         runtime.state.requested_duration = 3600.0  # 1 hour
         runtime.state.used_duration = 0.0
 
-        assert controller.calculate_heat_request() is True
+        actions = controller.evaluate(now=datetime.now(UTC))
+        assert actions.heat_request is True
 
 
 class TestGetSummerModeValue:

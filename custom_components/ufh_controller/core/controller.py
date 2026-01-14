@@ -425,30 +425,6 @@ class HeatingController:
         # Default: auto mode
         return self._evaluate_auto_mode(now)
 
-    def calculate_heat_request(self) -> bool:
-        """
-        Calculate aggregate heat request from all zones.
-
-        Returns:
-            True if any zone is requesting heat.
-
-        """
-        if self._state.mode == OperationMode.DISABLED:
-            return False
-
-        if self._state.mode == OperationMode.ALL_OFF:
-            return False
-
-        if self._state.mode in (OperationMode.ALL_ON, OperationMode.FLUSH):
-            # These modes control heat differently
-            return self._state.mode == OperationMode.ALL_ON
-
-        # Auto and cycle modes use zone-based logic
-        return any(
-            should_request_heat(runtime.state, self.config.timing)
-            for runtime in self._zones.values()
-        )
-
     def get_summer_mode_value(self, *, heat_request: bool) -> str | None:
         """
         Determine the summer mode value for the boiler.
