@@ -2,15 +2,15 @@
 
 
 def apply_ema(
-    raw_temp: float,
-    previous_ema: float | None,
+    current: float,
+    previous: float | None,
     tau: int,
     dt: float,
 ) -> float:
     """
     Apply Exponential Moving Average filter to temperature reading.
 
-    EMA formula: filtered = alpha * raw + (1 - alpha) * previous
+    EMA formula: filtered = alpha * current + (1 - alpha) * previous
     Where alpha = dt / (tau + dt), and tau is the time constant.
 
     The time constant tau determines how quickly the filter responds to changes:
@@ -19,8 +19,8 @@ def apply_ema(
     - tau = 0 disables filtering entirely
 
     Args:
-        raw_temp: Raw temperature reading from sensor.
-        previous_ema: Previous EMA value (None on first reading).
+        current: Current raw temperature reading from sensor.
+        previous: Previous EMA value (None on first reading).
         tau: Time constant in seconds (0 disables filtering).
         dt: Time delta since last update in seconds.
 
@@ -29,11 +29,11 @@ def apply_ema(
 
     """
     # No filtering if time constant is 0 or no previous value
-    if tau <= 0 or previous_ema is None:
-        return raw_temp
+    if tau <= 0 or previous is None:
+        return current
 
     # Calculate smoothing factor alpha
     alpha = dt / (tau + dt)
 
     # Apply EMA filter
-    return alpha * raw_temp + (1 - alpha) * previous_ema
+    return alpha * current + (1 - alpha) * previous

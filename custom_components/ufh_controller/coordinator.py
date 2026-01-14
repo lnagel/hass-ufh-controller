@@ -425,8 +425,8 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     ) -> float:
         """Apply EMA filter using the core function."""
         return apply_ema(
-            raw_temp=raw_temp,
-            previous_ema=runtime.state.current,
+            current=raw_temp,
+            previous=runtime.state.current,
             tau=runtime.config.temp_ema_time_constant,
             dt=dt,
         )
