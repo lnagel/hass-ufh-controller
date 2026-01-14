@@ -2,124 +2,70 @@
 
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
 from custom_components.ufh_controller.core.controller import compute_flush_request
 
+# flush_until states: None, "future" (active), "expired"
+FLUSH_UNTIL_FUTURE = "future"
+FLUSH_UNTIL_EXPIRED = "expired"
 
-class TestComputeFlushRequest:
-    """Test cases for compute_flush_request."""
 
-    def test_disabled_returns_false(self) -> None:
-        """When flush_enabled is False, always returns False."""
-        now = datetime.now(UTC)
-        assert (
-            compute_flush_request(
-                flush_enabled=False,
-                dhw_active=True,
-                flush_until=None,
-                any_regular_on=False,
-                now=now,
-            )
-            is False
-        )
+@pytest.mark.parametrize(
+    ("flush_enabled", "dhw_active", "flush_until", "any_regular_on", "expected"),
+    [
+        # flush_enabled=False always returns False
+        (False, True, None, False, False),
+        (False, True, FLUSH_UNTIL_FUTURE, False, False),
+        # No DHW activity (not active, no timer) returns False
+        (True, False, None, False, False),
+        # DHW active + no regular ON = True
+        (True, True, None, False, True),
+        # DHW active + regular ON = False
+        (True, True, None, True, False),
+        # Post-DHW period (timer active) + no regular ON = True
+        (True, False, FLUSH_UNTIL_FUTURE, False, True),
+        # Post-DHW period + regular ON = False
+        (True, False, FLUSH_UNTIL_FUTURE, True, False),
+        # Post-DHW period expired = False
+        (True, False, FLUSH_UNTIL_EXPIRED, False, False),
+        # DHW active overrides expired timer
+        (True, True, FLUSH_UNTIL_EXPIRED, False, True),
+    ],
+    ids=[
+        "disabled_returns_false",
+        "disabled_with_timer_returns_false",
+        "no_dhw_activity_returns_false",
+        "dhw_active_no_regular_returns_true",
+        "dhw_active_regular_on_returns_false",
+        "post_dhw_no_regular_returns_true",
+        "post_dhw_regular_on_returns_false",
+        "post_dhw_expired_returns_false",
+        "dhw_active_overrides_expired_timer",
+    ],
+)
+def test_compute_flush_request(
+    flush_enabled: bool,
+    dhw_active: bool,
+    flush_until: str | None,
+    any_regular_on: bool,
+    expected: bool,
+) -> None:
+    """Test compute_flush_request with various input combinations."""
+    now = datetime.now(UTC)
 
-    def test_no_dhw_activity_returns_false(self) -> None:
-        """When no DHW activity (active or recent), returns False."""
-        now = datetime.now(UTC)
-        assert (
-            compute_flush_request(
-                flush_enabled=True,
-                dhw_active=False,
-                flush_until=None,
-                any_regular_on=False,
-                now=now,
-            )
-            is False
-        )
+    # Convert flush_until marker to actual datetime
+    flush_until_dt: datetime | None = None
+    if flush_until == FLUSH_UNTIL_FUTURE:
+        flush_until_dt = now + timedelta(minutes=5)
+    elif flush_until == FLUSH_UNTIL_EXPIRED:
+        flush_until_dt = now - timedelta(minutes=1)
 
-    def test_dhw_active_no_regular_on_returns_true(self) -> None:
-        """DHW active + no regular circuits = flush request."""
-        now = datetime.now(UTC)
-        assert (
-            compute_flush_request(
-                flush_enabled=True,
-                dhw_active=True,
-                flush_until=None,
-                any_regular_on=False,
-                now=now,
-            )
-            is True
-        )
-
-    def test_dhw_active_regular_on_returns_false(self) -> None:
-        """DHW active but regular circuits ON = no flush request."""
-        now = datetime.now(UTC)
-        assert (
-            compute_flush_request(
-                flush_enabled=True,
-                dhw_active=True,
-                flush_until=None,
-                any_regular_on=True,
-                now=now,
-            )
-            is False
-        )
-
-    def test_post_dhw_period_no_regular_on_returns_true(self) -> None:
-        """In post-DHW period + no regular circuits = flush request."""
-        now = datetime.now(UTC)
-        flush_until = now + timedelta(minutes=5)
-        assert (
-            compute_flush_request(
-                flush_enabled=True,
-                dhw_active=False,
-                flush_until=flush_until,
-                any_regular_on=False,
-                now=now,
-            )
-            is True
-        )
-
-    def test_post_dhw_period_regular_on_returns_false(self) -> None:
-        """In post-DHW period but regular circuits ON = no flush request."""
-        now = datetime.now(UTC)
-        flush_until = now + timedelta(minutes=5)
-        assert (
-            compute_flush_request(
-                flush_enabled=True,
-                dhw_active=False,
-                flush_until=flush_until,
-                any_regular_on=True,
-                now=now,
-            )
-            is False
-        )
-
-    def test_post_dhw_period_expired_returns_false(self) -> None:
-        """Post-DHW period expired = no flush request."""
-        now = datetime.now(UTC)
-        flush_until = now - timedelta(minutes=1)  # Expired
-        assert (
-            compute_flush_request(
-                flush_enabled=True,
-                dhw_active=False,
-                flush_until=flush_until,
-                any_regular_on=False,
-                now=now,
-            )
-            is False
-        )
-
-    def test_dhw_active_overrides_expired_flush_until(self) -> None:
-        """DHW active takes precedence even if flush_until is expired."""
-        now = datetime.now(UTC)
-        flush_until = now - timedelta(minutes=1)  # Expired
-        assert (
-            compute_flush_request(
-                flush_enabled=True,
-                dhw_active=True,  # Still active
-                flush_until=flush_until,
-                any_regular_on=False,
-                now=now,
-            )
-            is True
-        )
+    result = compute_flush_request(
+        flush_enabled=flush_enabled,
+        dhw_active=dhw_active,
+        flush_until=flush_until_dt,
+        any_regular_on=any_regular_on,
+        now=now,
+    )
+    assert result is expected

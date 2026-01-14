@@ -73,6 +73,7 @@ max-complexity = 25
     "SLF001", # Allow private member access in tests
     "EM101", # Allow string literals in exceptions
     "TRY003", # Allow long exception messages
+    "FBT001", # Allow boolean positional args (pytest parametrize)
 ]
 
 [tool.coverage.run]
