@@ -16,6 +16,7 @@ from custom_components.ufh_controller.const import (
     DEFAULT_SETPOINT,
     DEFAULT_TEMP_EMA_TIME_CONSTANT,
     DEFAULT_VALVE_OPEN_THRESHOLD,
+    LOGGER,
     TimingParams,
     ValveState,
     ZoneStatus,
@@ -264,6 +265,87 @@ class ZoneRuntime:
 
         """
         self.state.enabled = enabled
+
+    def update_failure_state(
+        self,
+        now: datetime,
+        *,
+        temp_unavailable: bool,
+        recorder_failure: bool,
+        fail_safe_timeout: int,
+    ) -> None:
+        """
+        Update zone failure tracking state.
+
+        Tracks consecutive failures and transitions zone status between
+        INITIALIZING, NORMAL, DEGRADED, and FAIL_SAFE states.
+
+        Args:
+            now: Current timestamp.
+            temp_unavailable: Whether temperature reading is unavailable.
+            recorder_failure: Whether Recorder query failed.
+            fail_safe_timeout: Seconds before entering fail-safe mode.
+
+        """
+        if temp_unavailable or recorder_failure:
+            # Zone has a failure - increment counter and check for fail-safe
+            self.state.consecutive_failures += 1
+
+            # Check for zone-level fail-safe
+            if self._should_fail_safe(now, fail_safe_timeout):
+                if self.state.zone_status != ZoneStatus.FAIL_SAFE:
+                    self.state.zone_status = ZoneStatus.FAIL_SAFE
+                    LOGGER.error(
+                        "Zone %s entering fail-safe mode after %d seconds of failures",
+                        self.state.zone_id,
+                        fail_safe_timeout,
+                    )
+            elif self.state.zone_status == ZoneStatus.NORMAL:
+                # Only transition to DEGRADED if we were previously NORMAL
+                self.state.zone_status = ZoneStatus.DEGRADED
+                LOGGER.warning(
+                    "Zone %s entering degraded mode: temp_unavailable=%s, "
+                    "recorder_failure=%s",
+                    self.state.zone_id,
+                    temp_unavailable,
+                    recorder_failure,
+                )
+            # If zone is still INITIALIZING, keep it that way - don't report
+            # problems before we've had a successful update
+        else:
+            # Zone succeeded - reset failure tracking
+            if self.state.zone_status not in (
+                ZoneStatus.NORMAL,
+                ZoneStatus.INITIALIZING,
+            ):
+                LOGGER.info(
+                    "Zone %s recovered from %s mode",
+                    self.state.zone_id,
+                    self.state.zone_status.value,
+                )
+            self.state.zone_status = ZoneStatus.NORMAL
+            self.state.last_successful_update = now
+            self.state.consecutive_failures = 0
+
+    def _should_fail_safe(self, now: datetime, fail_safe_timeout: int) -> bool:
+        """
+        Check if zone should enter fail-safe mode.
+
+        Args:
+            now: Current timestamp.
+            fail_safe_timeout: Seconds before entering fail-safe mode.
+
+        Returns:
+            True if zone should enter fail-safe.
+
+        """
+        if self.state.last_successful_update is None:
+            # First failure - start tracking
+            self.state.last_successful_update = now
+            return False
+
+        elapsed = (now - self.state.last_successful_update).total_seconds()
+        return elapsed > fail_safe_timeout
 
 
 def calculate_requested_duration(

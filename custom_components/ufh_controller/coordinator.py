@@ -570,69 +570,12 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
 
         # Track zone-level failure state
-        self._update_zone_failure_state(
-            runtime,
+        runtime.update_failure_state(
             now,
             temp_unavailable=temp_unavailable,
             recorder_failure=recorder_failure,
+            fail_safe_timeout=FAIL_SAFE_TIMEOUT,
         )
-
-    def _update_zone_failure_state(
-        self,
-        runtime: Any,  # ZoneRuntime
-        now: datetime,
-        *,
-        temp_unavailable: bool,
-        recorder_failure: bool,
-    ) -> None:
-        """Update zone failure tracking state."""
-        state = runtime.state
-
-        if temp_unavailable or recorder_failure:
-            # Zone has a failure - increment counter and check for fail-safe
-            state.consecutive_failures += 1
-
-            # Check for zone-level fail-safe (1 hour timeout)
-            if self._should_zone_fail_safe(state, now):
-                if state.zone_status != ZoneStatus.FAIL_SAFE:
-                    state.zone_status = ZoneStatus.FAIL_SAFE
-                    LOGGER.error(
-                        "Zone %s entering fail-safe mode after 1 hour of failures",
-                        state.zone_id,
-                    )
-            elif state.zone_status == ZoneStatus.NORMAL:
-                # Only transition to DEGRADED if we were previously NORMAL
-                state.zone_status = ZoneStatus.DEGRADED
-                LOGGER.warning(
-                    "Zone %s entering degraded mode: temp_unavailable=%s, "
-                    "recorder_failure=%s",
-                    state.zone_id,
-                    temp_unavailable,
-                    recorder_failure,
-                )
-            # If zone is still INITIALIZING, keep it that way - don't report
-            # problems before we've had a successful update
-        else:
-            # Zone succeeded - reset failure tracking
-            if state.zone_status not in (ZoneStatus.NORMAL, ZoneStatus.INITIALIZING):
-                LOGGER.info(
-                    "Zone %s recovered from %s mode",
-                    state.zone_id,
-                    state.zone_status.value,
-                )
-            state.zone_status = ZoneStatus.NORMAL
-            state.last_successful_update = now
-            state.consecutive_failures = 0
-
-    def _should_zone_fail_safe(self, state: Any, now: datetime) -> bool:
-        """Check if a zone should enter fail-safe mode."""
-        if state.last_successful_update is None:
-            # First failure - start tracking
-            state.last_successful_update = now
-            return False
-
-        elapsed = (now - state.last_successful_update).total_seconds()
-        return elapsed > FAIL_SAFE_TIMEOUT
 
     def _update_controller_status_from_zones(self) -> None:
         """Update controller status based on zone statuses."""
