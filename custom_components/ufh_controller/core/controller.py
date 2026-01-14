@@ -24,7 +24,6 @@ from .zone import (
     ZoneConfig,
     ZoneRuntime,
     ZoneState,
-    calculate_requested_duration,
     evaluate_zone,
     should_request_heat,
 )
@@ -180,12 +179,7 @@ class HeatingController:
         if runtime is None:
             return False
 
-        # Clamp setpoint to configured limits
-        clamped = max(
-            runtime.config.setpoint_min,
-            min(runtime.config.setpoint_max, setpoint),
-        )
-        runtime.state.setpoint = clamped
+        runtime.set_setpoint(setpoint)
         return True
 
     def set_zone_enabled(self, zone_id: str, *, enabled: bool) -> bool:
@@ -203,7 +197,7 @@ class HeatingController:
         runtime = self._zones.get(zone_id)
         if runtime is None:
             return False
-        runtime.state.enabled = enabled
+        runtime.set_enabled(enabled=enabled)
         return True
 
     def update_zone_pid(
@@ -215,22 +209,16 @@ class HeatingController:
         """
         Update the PID controller for a zone.
 
-        PID integration is paused (no update called) when:
-        - Temperature reading is unavailable
-        - Controller mode is not 'auto' (PID only meaningful in auto mode)
-        - Zone is disabled
-        - Window was open recently (within blocking period + delay)
-
-        This prevents integral windup during blocked periods while allowing
-        the valve to remain open at the last calculated duty cycle.
+        Note: This is a thin delegator. The actual PID logic is in ZoneRuntime.
+        This method exists for backwards compatibility with coordinator.
 
         Args:
             zone_id: Zone identifier.
-            current: Current temperature reading, or None if unavailable.
+            current: Current temperature reading (EMA-smoothed), or None.
             dt: Time delta since last update in seconds.
 
         Returns:
-            The new duty cycle (0-100), None if not yet calculated, or 0 if zone
+            The duty cycle (0-100), None if not yet calculated, or 0 if zone
             not found.
 
         """
@@ -238,50 +226,11 @@ class HeatingController:
         if runtime is None:
             return 0.0
 
+        # Set current temperature (coordinator has already applied EMA)
         runtime.state.current = current
 
-        if current is None:
-            # No temperature reading - maintain last duty cycle, pause integration
-            return runtime.pid.state.duty_cycle if runtime.pid.state else None
-
-        # Check if PID should be paused (prevent integral windup)
-        if self._should_pause_pid(runtime):
-            return runtime.pid.state.duty_cycle if runtime.pid.state else None
-
-        pid_state = runtime.pid.update(
-            setpoint=runtime.state.setpoint,
-            current=current,
-            dt=dt,
-        )
-
-        return pid_state.duty_cycle
-
-    def _should_pause_pid(self, runtime: ZoneRuntime) -> bool:
-        """
-        Check if PID integration should be paused for a zone.
-
-        PID is paused when:
-        - Controller mode is not 'auto' (other modes don't use PID control)
-        - Zone is disabled
-        - Window was open recently (within blocking period)
-
-        Args:
-            runtime: Zone runtime data.
-
-        Returns:
-            True if PID should be paused, False otherwise.
-
-        """
-        # Only auto mode uses PID-based control
-        if self._state.mode != "auto":
-            return True
-
-        # Disabled zones shouldn't accumulate integral
-        if not runtime.state.enabled:
-            return True
-
-        # Window was open recently - pause PID to let temperature stabilize
-        return runtime.state.window_recently_open
+        # Delegate PID update to zone
+        return runtime.update_pid(dt, self._state.mode)
 
     def update_zone_historical(
         self,
@@ -295,6 +244,9 @@ class HeatingController:
         """
         Update zone historical averages from Recorder queries.
 
+        Note: This is a thin delegator. The actual logic is in ZoneRuntime.
+        This method exists for backwards compatibility with coordinator.
+
         Args:
             zone_id: Zone identifier.
             period_state_avg: Average valve state since observation start.
@@ -307,18 +259,12 @@ class HeatingController:
         if runtime is None:
             return
 
-        runtime.state.period_state_avg = period_state_avg
-        runtime.state.open_state_avg = open_state_avg
-        runtime.state.window_recently_open = window_recently_open
-
-        # Calculate used and requested durations
-        period = self.config.timing.observation_period
-        runtime.state.used_duration = period_state_avg * elapsed_time
-        # requested_duration uses full observation period
-        duty_cycle = runtime.pid.state.duty_cycle if runtime.pid.state else 0.0
-        runtime.state.requested_duration = calculate_requested_duration(
-            duty_cycle,
-            period,
+        runtime.update_historical(
+            period_state_avg=period_state_avg,
+            open_state_avg=open_state_avg,
+            window_recently_open=window_recently_open,
+            elapsed_time=elapsed_time,
+            observation_period=self.config.timing.observation_period,
         )
 
     def evaluate_zones(self, *, now: datetime) -> dict[str, ZoneAction]:

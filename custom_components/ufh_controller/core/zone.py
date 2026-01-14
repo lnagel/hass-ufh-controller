@@ -21,6 +21,8 @@ from custom_components.ufh_controller.const import (
     ZoneStatus,
 )
 
+from .ema import apply_ema
+
 if TYPE_CHECKING:
     from datetime import datetime
 
@@ -103,14 +105,165 @@ class ZoneConfig:
     temp_ema_time_constant: int = DEFAULT_TEMP_EMA_TIME_CONSTANT
 
 
-@dataclass
 class ZoneRuntime:
-    """Runtime data for a zone including PID controller and state."""
+    """
+    Runtime data for a zone including PID controller and state.
 
-    config: ZoneConfig
-    pid: PIDController
-    state: ZoneState
-    last_update: datetime | None = None
+    This class owns the zone's configuration, PID controller, and mutable state.
+    It provides methods for updating temperature, PID, and historical data.
+    """
+
+    def __init__(
+        self,
+        config: ZoneConfig,
+        pid: PIDController,
+        state: ZoneState,
+        last_update: datetime | None = None,
+    ) -> None:
+        """
+        Initialize zone runtime.
+
+        Args:
+            config: Zone configuration (immutable).
+            pid: PID controller instance.
+            state: Zone state (mutable).
+            last_update: Timestamp of last update.
+
+        """
+        self.config = config
+        self.pid = pid
+        self.state = state
+        self.last_update = last_update
+
+    def update_temperature(self, raw_temp: float | None, dt: float) -> None:
+        """
+        Update zone temperature with EMA smoothing.
+
+        Args:
+            raw_temp: Raw temperature reading from sensor, or None if unavailable.
+            dt: Time delta since last update in seconds.
+
+        """
+        if raw_temp is None:
+            return
+
+        self.state.current = apply_ema(
+            current=raw_temp,
+            previous=self.state.current,
+            tau=self.config.temp_ema_time_constant,
+            dt=dt,
+        )
+
+    def update_pid(self, dt: float, controller_mode: str) -> float | None:
+        """
+        Update the PID controller for this zone.
+
+        PID integration is paused (no update called) when:
+        - Temperature reading is unavailable
+        - Controller mode is not 'auto' (PID only meaningful in auto mode)
+        - Zone is disabled
+        - Window was open recently (within blocking period)
+
+        Args:
+            dt: Time delta since last update in seconds.
+            controller_mode: Current controller operation mode.
+
+        Returns:
+            The duty cycle (0-100), None if not yet calculated.
+
+        """
+        if self.state.current is None:
+            # No temperature reading - maintain last duty cycle
+            return self.pid.state.duty_cycle if self.pid.state else None
+
+        if self._should_pause_pid(controller_mode):
+            return self.pid.state.duty_cycle if self.pid.state else None
+
+        pid_state = self.pid.update(
+            setpoint=self.state.setpoint,
+            current=self.state.current,
+            dt=dt,
+        )
+
+        return pid_state.duty_cycle
+
+    def _should_pause_pid(self, controller_mode: str) -> bool:
+        """
+        Check if PID integration should be paused.
+
+        Args:
+            controller_mode: Current controller operation mode.
+
+        Returns:
+            True if PID should be paused.
+
+        """
+        # Only auto mode uses PID-based control
+        if controller_mode != "auto":
+            return True
+
+        # Disabled zones shouldn't accumulate integral
+        if not self.state.enabled:
+            return True
+
+        # Window was open recently - pause PID to let temperature stabilize
+        return self.state.window_recently_open
+
+    def update_historical(
+        self,
+        *,
+        period_state_avg: float,
+        open_state_avg: float,
+        window_recently_open: bool,
+        elapsed_time: float,
+        observation_period: int,
+    ) -> None:
+        """
+        Update zone historical averages from Recorder queries.
+
+        Args:
+            period_state_avg: Average valve state since observation start.
+            open_state_avg: Average valve state for open detection.
+            window_recently_open: Was any window open within blocking period.
+            elapsed_time: Actual elapsed time since observation start in seconds.
+            observation_period: Full observation period in seconds.
+
+        """
+        self.state.period_state_avg = period_state_avg
+        self.state.open_state_avg = open_state_avg
+        self.state.window_recently_open = window_recently_open
+
+        # Calculate used and requested durations
+        self.state.used_duration = period_state_avg * elapsed_time
+        duty_cycle = self.pid.state.duty_cycle if self.pid.state else 0.0
+        self.state.requested_duration = calculate_requested_duration(
+            duty_cycle,
+            observation_period,
+        )
+
+    def set_setpoint(self, setpoint: float) -> None:
+        """
+        Set the target temperature, clamped to configured limits.
+
+        Args:
+            setpoint: Target temperature in degrees.
+
+        """
+        clamped = max(
+            self.config.setpoint_min,
+            min(self.config.setpoint_max, setpoint),
+        )
+        self.state.setpoint = clamped
+
+    def set_enabled(self, *, enabled: bool) -> None:
+        """
+        Enable or disable this zone.
+
+        Args:
+            enabled: Whether the zone should be enabled.
+
+        """
+        self.state.enabled = enabled
 
 
 def calculate_requested_duration(
