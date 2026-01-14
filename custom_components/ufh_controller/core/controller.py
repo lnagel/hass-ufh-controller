@@ -56,6 +56,20 @@ class ControllerConfig:
     zones: list[ZoneConfig] = field(default_factory=list)
 
 
+@dataclass
+class ControllerActions:
+    """
+    All actions computed by the controller for execution.
+
+    The coordinator executes these actions via Home Assistant services.
+    Optional fields (heat_request, summer_mode) are None when no change is needed.
+    """
+
+    valve_actions: dict[str, ZoneAction]
+    heat_request: ValveState | None = None  # ON/OFF, or None if no change needed
+    summer_mode: SummerMode | None = None  # winter/summer/auto, or None if no change
+
+
 def compute_flush_request(
     *,
     flush_enabled: bool,
@@ -118,6 +132,10 @@ class HeatingController:
         self.config = config
         self._state = ControllerState(mode="auto")
         self._zones: dict[str, ZoneRuntime] = {}
+
+        # Track previous states for change detection
+        self._prev_heat_request: bool = False
+        self._prev_summer_mode: str | None = None
 
         # Initialize zones from config
         for zone_config in config.zones:
@@ -309,6 +327,47 @@ class HeatingController:
                 actions[zone_id] = self._evaluate_single_zone(zone_id, runtime)
 
         return actions
+
+    def evaluate(self, *, now: datetime) -> ControllerActions:
+        """
+        Evaluate all zones and compute all controller actions.
+
+        This is the main entry point for the control loop. Returns all actions
+        (valve, heat request, summer mode) in a single call for the coordinator
+        to execute.
+
+        Args:
+            now: Current time for flush timer comparison.
+
+        Returns:
+            ControllerActions with valve actions and optional state changes.
+
+        """
+        # Get valve actions
+        valve_actions = self.evaluate_zones(now=now)
+
+        # Calculate heat request and check for change
+        heat_request = self.calculate_heat_request()
+        heat_request_action: ValveState | None = None
+        if heat_request != self._prev_heat_request:
+            heat_request_action = ValveState.ON if heat_request else ValveState.OFF
+            self._prev_heat_request = heat_request
+
+        # Calculate summer mode and check for change
+        summer_mode_value = self.get_summer_mode_value(heat_request=heat_request)
+        summer_mode_action: SummerMode | None = None
+        if (
+            summer_mode_value is not None
+            and summer_mode_value != self._prev_summer_mode
+        ):
+            summer_mode_action = SummerMode(summer_mode_value)
+            self._prev_summer_mode = summer_mode_value
+
+        return ControllerActions(
+            valve_actions=valve_actions,
+            heat_request=heat_request_action,
+            summer_mode=summer_mode_action,
+        )
 
     def _evaluate_single_zone(
         self,

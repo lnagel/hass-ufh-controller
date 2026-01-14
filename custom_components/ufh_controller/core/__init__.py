@@ -3,6 +3,7 @@
 from custom_components.ufh_controller.const import TimingParams
 
 from .controller import (
+    ControllerActions,
     ControllerConfig,
     ControllerState,
     HeatingController,
@@ -29,6 +30,7 @@ from .zone import (
 
 __all__ = [
     "CircuitType",
+    "ControllerActions",
     "ControllerConfig",
     "ControllerState",
     "HeatingController",
