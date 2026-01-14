@@ -12,40 +12,7 @@ from custom_components.ufh_controller.core.zone import (
     ZoneAction,
     ZoneState,
     evaluate_zone,
-    is_flush_requested,
 )
-
-
-class TestIsFlushRequested:
-    """Test cases for is_flush_requested helper function."""
-
-    def test_returns_true_when_dhw_active(self) -> None:
-        """Flush is requested when DHW is active."""
-        controller = ControllerState(dhw_active=True, flush_until=None)
-        assert is_flush_requested(controller) is True
-
-    def test_returns_true_during_post_dhw_period(self) -> None:
-        """Flush is requested during post-DHW flush period."""
-        future_time = datetime.now(UTC) + timedelta(minutes=5)
-        controller = ControllerState(dhw_active=False, flush_until=future_time)
-        assert is_flush_requested(controller) is True
-
-    def test_returns_false_when_post_dhw_period_expired(self) -> None:
-        """Flush is not requested when post-DHW period has expired."""
-        past_time = datetime.now(UTC) - timedelta(minutes=1)
-        controller = ControllerState(dhw_active=False, flush_until=past_time)
-        assert is_flush_requested(controller) is False
-
-    def test_returns_false_when_no_dhw_and_no_flush_until(self) -> None:
-        """Flush is not requested when DHW is off and no flush_until set."""
-        controller = ControllerState(dhw_active=False, flush_until=None)
-        assert is_flush_requested(controller) is False
-
-    def test_dhw_takes_priority_over_flush_until(self) -> None:
-        """DHW active takes priority even if flush_until is expired."""
-        past_time = datetime.now(UTC) - timedelta(minutes=1)
-        controller = ControllerState(dhw_active=True, flush_until=past_time)
-        assert is_flush_requested(controller) is True
 
 
 class TestEvaluateZoneFlushCircuitPostDHW:
@@ -58,7 +25,6 @@ class TestEvaluateZoneFlushCircuitPostDHW:
 
     def test_flush_during_post_dhw_turns_on(self, timing: TimingParams) -> None:
         """Flush circuit turns on during post-DHW flush period."""
-        future_time = datetime.now(UTC) + timedelta(minutes=5)
         zone = ZoneState(
             zone_id="bathroom",
             circuit_type=CircuitType.FLUSH,
@@ -66,8 +32,7 @@ class TestEvaluateZoneFlushCircuitPostDHW:
         )
         controller = ControllerState(
             flush_enabled=True,
-            dhw_active=False,  # DHW is off
-            flush_until=future_time,  # But in post-DHW flush period
+            flush_request=True,  # In post-DHW flush period
             zones={"bathroom": zone},
         )
         result = evaluate_zone(zone, controller, timing)
@@ -75,7 +40,6 @@ class TestEvaluateZoneFlushCircuitPostDHW:
 
     def test_flush_during_post_dhw_stays_on(self, timing: TimingParams) -> None:
         """Flush circuit stays on during post-DHW flush period."""
-        future_time = datetime.now(UTC) + timedelta(minutes=5)
         zone = ZoneState(
             zone_id="bathroom",
             circuit_type=CircuitType.FLUSH,
@@ -83,8 +47,7 @@ class TestEvaluateZoneFlushCircuitPostDHW:
         )
         controller = ControllerState(
             flush_enabled=True,
-            dhw_active=False,
-            flush_until=future_time,
+            flush_request=True,  # In post-DHW flush period
             zones={"bathroom": zone},
         )
         result = evaluate_zone(zone, controller, timing)
@@ -92,7 +55,6 @@ class TestEvaluateZoneFlushCircuitPostDHW:
 
     def test_flush_after_post_dhw_period_expired(self, timing: TimingParams) -> None:
         """Flush circuit follows normal logic after post-DHW period expires."""
-        past_time = datetime.now(UTC) - timedelta(minutes=1)
         zone = ZoneState(
             zone_id="bathroom",
             circuit_type=CircuitType.FLUSH,
@@ -101,8 +63,7 @@ class TestEvaluateZoneFlushCircuitPostDHW:
         )
         controller = ControllerState(
             flush_enabled=True,
-            dhw_active=False,
-            flush_until=past_time,  # Post-DHW period expired
+            flush_request=False,  # Post-DHW period expired
             zones={"bathroom": zone},
         )
         result = evaluate_zone(zone, controller, timing)
@@ -113,7 +74,6 @@ class TestEvaluateZoneFlushCircuitPostDHW:
         self, timing: TimingParams
     ) -> None:
         """Flush circuit blocked during post-DHW when regular valve is ON."""
-        future_time = datetime.now(UTC) + timedelta(minutes=5)
         flush_zone = ZoneState(
             zone_id="bathroom",
             circuit_type=CircuitType.FLUSH,
@@ -128,8 +88,7 @@ class TestEvaluateZoneFlushCircuitPostDHW:
         )
         controller = ControllerState(
             flush_enabled=True,
-            dhw_active=False,
-            flush_until=future_time,
+            flush_request=True,  # In post-DHW flush period
             zones={"bathroom": flush_zone, "living_room": regular_zone},
         )
         result = evaluate_zone(flush_zone, controller, timing)
@@ -140,7 +99,6 @@ class TestEvaluateZoneFlushCircuitPostDHW:
         self, timing: TimingParams
     ) -> None:
         """Flush circuit NOT blocked during post-DHW when regular valve is OFF."""
-        future_time = datetime.now(UTC) + timedelta(minutes=5)
         flush_zone = ZoneState(
             zone_id="bathroom",
             circuit_type=CircuitType.FLUSH,
@@ -155,8 +113,7 @@ class TestEvaluateZoneFlushCircuitPostDHW:
         )
         controller = ControllerState(
             flush_enabled=True,
-            dhw_active=False,
-            flush_until=future_time,
+            flush_request=True,  # In post-DHW flush period
             zones={"bathroom": flush_zone, "living_room": regular_zone},
         )
         result = evaluate_zone(flush_zone, controller, timing)
@@ -188,8 +145,6 @@ class TestFlushCircuitScenarios:
         capturing residual waste heat. The regular zone has a valid heat request
         and should not be blocked by flush circuits.
         """
-        future_time = datetime.now(UTC) + timedelta(minutes=5)
-
         flush_zone = ZoneState(
             zone_id="bathroom",
             circuit_type=CircuitType.FLUSH,
@@ -205,8 +160,7 @@ class TestFlushCircuitScenarios:
         )
         controller = ControllerState(
             flush_enabled=True,
-            dhw_active=False,  # DHW finished
-            flush_until=future_time,  # But still in post-DHW flush period
+            flush_request=True,  # Still in post-DHW flush period
             zones={"bathroom": flush_zone, "living_room": regular_zone},
         )
 
@@ -230,3 +184,13 @@ class TestControllerStateFlushUntil:
         future_time = datetime.now(UTC) + timedelta(minutes=8)
         controller = ControllerState(flush_until=future_time)
         assert controller.flush_until == future_time
+
+    def test_flush_request_default_false(self) -> None:
+        """Test flush_request defaults to False."""
+        controller = ControllerState()
+        assert controller.flush_request is False
+
+    def test_flush_request_can_be_set(self) -> None:
+        """Test flush_request can be set to True."""
+        controller = ControllerState(flush_request=True)
+        assert controller.flush_request is True

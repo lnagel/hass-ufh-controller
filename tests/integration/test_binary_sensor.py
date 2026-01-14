@@ -327,10 +327,10 @@ async def test_flush_request_on_during_post_dhw_period(
 
     coordinator = mock_config_entry.runtime_data.coordinator
 
-    # Set DHW inactive but flush_until in the future
+    # Set flush_request to True (simulates post-DHW flush period)
     hass.states.async_set("binary_sensor.dhw_active", "off")
     coordinator.controller.state.flush_enabled = True
-    coordinator.controller.state.flush_until = datetime.now(UTC) + timedelta(minutes=5)
+    coordinator.controller.state.flush_request = True
     coordinator.async_set_updated_data(coordinator._build_state_dict())
     await hass.async_block_till_done()
 

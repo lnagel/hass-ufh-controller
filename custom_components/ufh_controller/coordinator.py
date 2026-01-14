@@ -39,7 +39,7 @@ from .core import (
     get_valve_open_window,
     was_any_window_open_recently,
 )
-from .core.zone import CircuitType, is_flush_requested
+from .core.zone import CircuitType
 
 # Storage constants
 STORAGE_VERSION = 1
@@ -408,6 +408,13 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Update current state
         self._prev_dhw_active = current_dhw_active
         self._controller.state.dhw_active = current_dhw_active
+
+        # Compute flush_request: True when DHW active OR in post-DHW flush period
+        now = datetime.now(UTC)
+        self._controller.state.flush_request = current_dhw_active or (
+            self._controller.state.flush_until is not None
+            and now < self._controller.state.flush_until
+        )
 
     def _is_any_window_open(self, window_sensors: list[str]) -> bool:
         """Check if any window sensor is currently in 'on' state."""
@@ -856,7 +863,7 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "controller_status": self._status.value,
             "zones_degraded": zones_degraded,
             "zones_fail_safe": zones_fail_safe,
-            "flush_request": is_flush_requested(self._controller.state),
+            "flush_request": self._controller.state.flush_request,
             "zones": {},
         }
 
