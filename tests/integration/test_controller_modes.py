@@ -62,7 +62,7 @@ class TestEvaluateZonesAutoMode:
             elapsed_time=7200.0,  # Full observation period
         )
 
-        actions = controller.evaluate_zones(now=datetime.now(UTC))
+        actions = controller.evaluate(now=datetime.now(UTC)).valve_actions
 
         assert actions["living_room"] == ZoneAction.TURN_ON
 
@@ -71,7 +71,7 @@ class TestEvaluateZonesAutoMode:
         controller = HeatingController(basic_config)
         controller.set_zone_enabled("living_room", enabled=False)
 
-        actions = controller.evaluate_zones(now=datetime.now(UTC))
+        actions = controller.evaluate(now=datetime.now(UTC)).valve_actions
 
         # Valve state is UNKNOWN by default, so actively turn off
         assert actions["living_room"] == ZoneAction.TURN_OFF
@@ -86,7 +86,7 @@ class TestEvaluateZonesAutoMode:
         assert zone_state is not None
         zone_state.valve_state = ValveState.OFF
 
-        actions = controller.evaluate_zones(now=datetime.now(UTC))
+        actions = controller.evaluate(now=datetime.now(UTC)).valve_actions
 
         assert actions["living_room"] == ZoneAction.STAY_OFF
 
@@ -99,7 +99,7 @@ class TestEvaluateZonesAllOnMode:
         controller = HeatingController(basic_config)
         controller.mode = "all_on"
 
-        actions = controller.evaluate_zones(now=datetime.now(UTC))
+        actions = controller.evaluate(now=datetime.now(UTC)).valve_actions
 
         assert actions["living_room"] == ZoneAction.TURN_ON
         assert actions["bedroom"] == ZoneAction.TURN_ON
@@ -115,7 +115,7 @@ class TestEvaluateZonesAllOnMode:
         zone_state.valve_state = ValveState.ON
 
         # Evaluation with valve already on should stay on
-        actions = controller.evaluate_zones(now=datetime.now(UTC))
+        actions = controller.evaluate(now=datetime.now(UTC)).valve_actions
 
         assert actions["living_room"] == ZoneAction.STAY_ON
 
@@ -128,7 +128,7 @@ class TestEvaluateZonesAllOffMode:
         controller = HeatingController(basic_config)
         controller.mode = "all_off"
 
-        actions = controller.evaluate_zones(now=datetime.now(UTC))
+        actions = controller.evaluate(now=datetime.now(UTC)).valve_actions
 
         assert actions["living_room"] == ZoneAction.STAY_OFF
         assert actions["bedroom"] == ZoneAction.STAY_OFF
@@ -142,7 +142,7 @@ class TestEvaluateZonesFlushMode:
         controller = HeatingController(basic_config)
         controller.mode = "flush"
 
-        actions = controller.evaluate_zones(now=datetime.now(UTC))
+        actions = controller.evaluate(now=datetime.now(UTC)).valve_actions
 
         assert actions["living_room"] == ZoneAction.TURN_ON
         assert actions["bedroom"] == ZoneAction.TURN_ON
@@ -162,7 +162,7 @@ class TestEvaluateZonesDisabledMode:
 
         # Switch to disabled
         controller.mode = "disabled"
-        actions = controller.evaluate_zones(now=datetime.now(UTC))
+        actions = controller.evaluate(now=datetime.now(UTC)).valve_actions
 
         # Disabled mode returns empty actions
         assert actions == {}
@@ -178,7 +178,7 @@ class TestEvaluateZonesCycleMode:
 
         # Pass time directly - no mocking needed with new architecture
         now = datetime(2024, 1, 15, 0, 30, 0, tzinfo=UTC)
-        actions = controller.evaluate_zones(now=now)
+        actions = controller.evaluate(now=now).valve_actions
 
         assert actions["living_room"] == ZoneAction.STAY_OFF
         assert actions["bedroom"] == ZoneAction.STAY_OFF
@@ -190,7 +190,7 @@ class TestEvaluateZonesCycleMode:
 
         # Pass time directly - no mocking needed with new architecture
         now = datetime(2024, 1, 15, 1, 30, 0, tzinfo=UTC)
-        actions = controller.evaluate_zones(now=now)
+        actions = controller.evaluate(now=now).valve_actions
 
         # First zone should be on, second should be off
         assert actions["living_room"] == ZoneAction.TURN_ON
@@ -205,7 +205,7 @@ class TestEvaluateZonesCycleMode:
 
         # Pass time directly - no mocking needed with new architecture
         now = datetime(2024, 1, 15, 2, 30, 0, tzinfo=UTC)
-        actions = controller.evaluate_zones(now=now)
+        actions = controller.evaluate(now=now).valve_actions
 
         # Second zone should be on
         assert actions["living_room"] == ZoneAction.STAY_OFF

@@ -377,26 +377,6 @@ class HeatingController:
             flush_request=flush_request,
         )
 
-    def evaluate_zones(self, *, now: datetime) -> dict[str, ZoneAction]:
-        """
-        Evaluate all zones and determine valve actions.
-
-        This method is maintained for backwards compatibility. It returns
-        only valve actions (not heat_request).
-
-        For full evaluation with all actions, use evaluate() instead.
-
-        Args:
-            now: Current time for flush timer comparison.
-
-        Returns:
-            Dictionary mapping zone IDs to their actions.
-
-        """
-        # Delegate to evaluate() and extract valve actions
-        actions = self.evaluate(now=now)
-        return actions.valve_actions
-
     def evaluate(self, *, now: datetime) -> ControllerActions:
         """
         Evaluate all zones and compute all controller actions.

@@ -568,7 +568,7 @@ class TestUpdateZoneHistorical:
             elapsed_time=1800.0,
         )
 
-        actions = controller.evaluate_zones(now=datetime.now(UTC))
+        actions = controller.evaluate(now=datetime.now(UTC)).valve_actions
 
         # Zone should turn on because it still has quota remaining:
         # With 100% duty cycle: requested_duration is 7200s, used_duration is 1440s,
