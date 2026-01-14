@@ -14,7 +14,6 @@ from .const import (
     DEFAULT_SETPOINT,
     DEFAULT_TEMP_EMA_TIME_CONSTANT,
     DEFAULT_TIMING,
-    DEFAULT_VALVE_OPEN_THRESHOLD,
     DOMAIN,
     FAIL_SAFE_TIMEOUT,
     LOGGER,
@@ -36,6 +35,7 @@ from .core import (
     ZoneStatusTransition,
     get_observation_start,
     get_valve_open_window,
+    should_request_heat,
 )
 from .core.zone import CircuitType
 from .recorder import get_state_average, was_any_window_open_recently
@@ -845,10 +845,6 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 pid_state = runtime.pid.state
                 # Blocked now means PID is paused due to recent window activity
                 blocked = state.window_recently_open
-                heat_request = (
-                    state.valve_state == ValveState.ON
-                    and state.open_state_avg >= DEFAULT_VALVE_OPEN_THRESHOLD
-                )
 
                 result["zones"][zone_id] = {
                     "current": state.current,
@@ -861,7 +857,9 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "valve_state": state.valve_state.value,
                     "enabled": state.enabled,
                     "blocked": blocked,
-                    "heat_request": heat_request,
+                    "heat_request": should_request_heat(
+                        state, self._controller.config.timing
+                    ),
                     "preset_mode": self._zone_presets.get(zone_id),
                     "zone_status": state.zone_status.value,
                 }
