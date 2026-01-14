@@ -417,20 +417,6 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 return True
         return False
 
-    def _apply_ema_filter(
-        self,
-        runtime: Any,  # ZoneRuntime
-        raw_temp: float,
-        dt: float,
-    ) -> float:
-        """Apply EMA filter using the core function."""
-        return apply_ema(
-            current=raw_temp,
-            previous=runtime.state.current,
-            tau=runtime.config.temp_ema_time_constant,
-            dt=dt,
-        )
-
     async def _update_zone(
         self,
         zone_id: str,
@@ -454,7 +440,12 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             try:
                 raw_temp = float(temp_state.state)
                 # Apply EMA low-pass filter to smooth temperature readings
-                current = self._apply_ema_filter(runtime, raw_temp, dt)
+                current = apply_ema(
+                    current=raw_temp,
+                    previous=runtime.state.current,
+                    tau=runtime.config.temp_ema_time_constant,
+                    dt=dt,
+                )
             except (ValueError, TypeError):
                 temp_unavailable = True
                 LOGGER.warning(

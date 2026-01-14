@@ -1,5 +1,6 @@
 """Tests for EMA (Exponential Moving Average) temperature filtering behavior."""
 
+import pytest
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -32,7 +33,7 @@ async def test_ema_filter_smooths_temperature_spikes(
     await coordinator.async_refresh()
     initial_temp = runtime.state.current
     assert initial_temp is not None
-    assert initial_temp == 20.0  # First reading, no previous to filter
+    assert initial_temp == pytest.approx(20.0)  # First reading, no previous to filter
 
     # Now simulate a sudden spike
     hass.states.async_set("sensor.zone1_temp", "25.0")  # 5 degree spike
@@ -96,14 +97,14 @@ async def test_ema_filter_disabled_when_tau_zero(
 
     # First update
     await coordinator.async_refresh()
-    assert runtime.state.current == 20.0
+    assert runtime.state.current == pytest.approx(20.0)
 
     # Now simulate a sudden change - with tau=0, no filtering should occur
     hass.states.async_set("sensor.zone1_temp", "25.0")
     await coordinator.async_refresh()
 
     # With tau=0, the temperature should immediately jump to the raw value
-    assert runtime.state.current == 25.0
+    assert runtime.state.current == pytest.approx(25.0)
 
     # Cleanup
     await hass.config_entries.async_unload(config_entry.entry_id)
