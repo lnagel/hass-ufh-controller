@@ -8,16 +8,27 @@ for determining valve actions based on quota-based scheduling.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from custom_components.ufh_controller.const import (
+    DEFAULT_PID,
     DEFAULT_SETPOINT,
-    DEFAULT_TIMING,
+    DEFAULT_TEMP_EMA_TIME_CONSTANT,
     DEFAULT_VALVE_OPEN_THRESHOLD,
+    OperationMode,
+    TimingParams,
     ValveState,
     ZoneStatus,
 )
+
+from .ema import apply_ema
+
+if TYPE_CHECKING:
+    from datetime import datetime
+
+    from .controller import ControllerState
+    from .pid import PIDController
 
 
 class CircuitType(StrEnum):
@@ -36,21 +47,19 @@ class ZoneAction(StrEnum):
     STAY_OFF = "stay_off"
 
 
-@dataclass
-class TimingParams:
+class ZoneStatusTransition(StrEnum):
     """
-    Timing parameters for zone scheduling.
+    Status transitions that may occur during failure state update.
 
-    All durations are in seconds.
+    These values indicate what happened so the caller can log appropriately.
+    Pure core logic should not perform I/O (logging); instead it returns
+    these transitions for the integration layer to handle.
     """
 
-    observation_period: int = DEFAULT_TIMING["observation_period"]
-    min_run_time: int = DEFAULT_TIMING["min_run_time"]
-    valve_open_time: int = DEFAULT_TIMING["valve_open_time"]
-    closing_warning_duration: int = DEFAULT_TIMING["closing_warning_duration"]
-    window_block_time: int = DEFAULT_TIMING["window_block_time"]
-    controller_loop_interval: int = DEFAULT_TIMING["controller_loop_interval"]
-    flush_duration: int = DEFAULT_TIMING["flush_duration"]
+    NONE = "none"  # No status change
+    ENTERED_DEGRADED = "entered_degraded"  # Zone entered degraded mode
+    ENTERED_FAIL_SAFE = "entered_fail_safe"  # Zone entered fail-safe mode
+    RECOVERED = "recovered"  # Zone recovered from degraded/fail-safe
 
 
 @dataclass
@@ -92,18 +101,253 @@ class ZoneState:
 
 
 @dataclass
-class ControllerState:
-    """Runtime state for the entire controller."""
+class ZoneConfig:
+    """Configuration for a single zone."""
 
-    mode: str = "auto"
-    observation_start: datetime = field(default_factory=datetime.now)
-    period_elapsed: float = 0.0  # Seconds elapsed in current observation period
-    heat_request: bool = False
-    flush_enabled: bool = False
-    dhw_active: bool = False
-    flush_until: datetime | None = None
-    flush_request: bool = False
-    zones: dict[str, ZoneState] = field(default_factory=dict)
+    zone_id: str
+    name: str
+    temp_sensor: str
+    valve_switch: str
+    circuit_type: CircuitType = CircuitType.REGULAR
+    window_sensors: list[str] = field(default_factory=list)
+    setpoint_min: float = DEFAULT_SETPOINT["min"]
+    setpoint_max: float = DEFAULT_SETPOINT["max"]
+    setpoint_default: float = DEFAULT_SETPOINT["default"]
+    kp: float = DEFAULT_PID["kp"]
+    ki: float = DEFAULT_PID["ki"]
+    kd: float = DEFAULT_PID["kd"]
+    integral_min: float = DEFAULT_PID["integral_min"]
+    integral_max: float = DEFAULT_PID["integral_max"]
+    temp_ema_time_constant: int = DEFAULT_TEMP_EMA_TIME_CONSTANT
+
+
+class ZoneRuntime:
+    """
+    Runtime data for a zone including PID controller and state.
+
+    This class owns the zone's configuration, PID controller, and mutable state.
+    It provides methods for updating temperature, PID, and historical data.
+    """
+
+    def __init__(
+        self,
+        config: ZoneConfig,
+        pid: PIDController,
+        state: ZoneState,
+        last_update: datetime | None = None,
+    ) -> None:
+        """
+        Initialize zone runtime.
+
+        Args:
+            config: Zone configuration (immutable).
+            pid: PID controller instance.
+            state: Zone state (mutable).
+            last_update: Timestamp of last update.
+
+        """
+        self.config = config
+        self.pid = pid
+        self.state = state
+        self.last_update = last_update
+
+    def update_temperature(self, raw_temp: float, dt: float) -> None:
+        """
+        Update zone temperature with EMA smoothing.
+
+        Args:
+            raw_temp: Raw temperature reading from sensor.
+            dt: Time delta since last update in seconds.
+
+        """
+        self.state.current = apply_ema(
+            current=raw_temp,
+            previous=self.state.current,
+            tau=self.config.temp_ema_time_constant,
+            dt=dt,
+        )
+
+    def update_pid(self, dt: float, controller_mode: OperationMode) -> float | None:
+        """
+        Update the PID controller for this zone.
+
+        PID integration is paused (no update called) when:
+        - Temperature reading is unavailable
+        - Controller mode is not 'auto' (PID only meaningful in auto mode)
+        - Zone is disabled
+        - Window was open recently (within blocking period)
+
+        Args:
+            dt: Time delta since last update in seconds.
+            controller_mode: Current controller operation mode.
+
+        Returns:
+            The duty cycle (0-100), None if not yet calculated.
+
+        """
+        if self.state.current is None:
+            # No temperature reading - maintain last duty cycle
+            return self.pid.state.duty_cycle if self.pid.state else None
+
+        if self._should_pause_pid(controller_mode):
+            return self.pid.state.duty_cycle if self.pid.state else None
+
+        pid_state = self.pid.update(
+            setpoint=self.state.setpoint,
+            current=self.state.current,
+            dt=dt,
+        )
+
+        return pid_state.duty_cycle if pid_state else None
+
+    def _should_pause_pid(self, controller_mode: OperationMode) -> bool:
+        """
+        Check if PID integration should be paused.
+
+        Args:
+            controller_mode: Current controller operation mode.
+
+        Returns:
+            True if PID should be paused.
+
+        """
+        # Only auto mode uses PID-based control
+        if controller_mode != OperationMode.AUTO:
+            return True
+
+        # Disabled zones shouldn't accumulate integral
+        if not self.state.enabled:
+            return True
+
+        # Window was open recently - pause PID to let temperature stabilize
+        return self.state.window_recently_open
+
+    def update_historical(
+        self,
+        *,
+        period_state_avg: float,
+        open_state_avg: float,
+        window_recently_open: bool,
+        elapsed_time: float,
+        observation_period: int,
+    ) -> None:
+        """
+        Update zone historical averages from Recorder queries.
+
+        Args:
+            period_state_avg: Average valve state since observation start.
+            open_state_avg: Average valve state for open detection.
+            window_recently_open: Was any window open within blocking period.
+            elapsed_time: Actual elapsed time since observation start in seconds.
+            observation_period: Full observation period in seconds.
+
+        """
+        self.state.period_state_avg = period_state_avg
+        self.state.open_state_avg = open_state_avg
+        self.state.window_recently_open = window_recently_open
+
+        # Calculate used and requested durations
+        self.state.used_duration = period_state_avg * elapsed_time
+        duty_cycle = self.pid.state.duty_cycle if self.pid.state else 0.0
+        self.state.requested_duration = calculate_requested_duration(
+            duty_cycle,
+            observation_period,
+        )
+
+    def set_setpoint(self, setpoint: float) -> None:
+        """
+        Set the target temperature, clamped to configured limits.
+
+        Args:
+            setpoint: Target temperature in degrees.
+
+        """
+        clamped = max(
+            self.config.setpoint_min,
+            min(self.config.setpoint_max, setpoint),
+        )
+        self.state.setpoint = clamped
+
+    def set_enabled(self, *, enabled: bool) -> None:
+        """
+        Enable or disable this zone.
+
+        Args:
+            enabled: Whether the zone should be enabled.
+
+        """
+        self.state.enabled = enabled
+
+    def update_failure_state(
+        self,
+        now: datetime,
+        *,
+        temp_unavailable: bool,
+        recorder_failure: bool,
+        fail_safe_timeout: int,
+    ) -> ZoneStatusTransition:
+        """
+        Update zone failure tracking state.
+
+        Tracks consecutive failures and transitions zone status between
+        INITIALIZING, NORMAL, DEGRADED, and FAIL_SAFE states.
+
+        Args:
+            now: Current timestamp.
+            temp_unavailable: Whether temperature reading is unavailable.
+            recorder_failure: Whether Recorder query failed.
+            fail_safe_timeout: Seconds before entering fail-safe mode.
+
+        Returns:
+            ZoneStatusTransition indicating what happened (for caller to log).
+
+        """
+        if temp_unavailable or recorder_failure:
+            # Zone has a failure - increment counter and check for fail-safe
+            self.state.consecutive_failures += 1
+
+            # Check for zone-level fail-safe
+            if self._should_fail_safe(now, fail_safe_timeout):
+                if self.state.zone_status != ZoneStatus.FAIL_SAFE:
+                    self.state.zone_status = ZoneStatus.FAIL_SAFE
+                    return ZoneStatusTransition.ENTERED_FAIL_SAFE
+            elif self.state.zone_status == ZoneStatus.NORMAL:
+                # Only transition to DEGRADED if we were previously NORMAL
+                self.state.zone_status = ZoneStatus.DEGRADED
+                return ZoneStatusTransition.ENTERED_DEGRADED
+            # If zone is still INITIALIZING, keep it that way - don't report
+            # problems before we've had a successful update
+            return ZoneStatusTransition.NONE
+
+        # Zone succeeded - reset failure tracking
+        previous_status = self.state.zone_status
+        self.state.zone_status = ZoneStatus.NORMAL
+        self.state.last_successful_update = now
+        self.state.consecutive_failures = 0
+
+        if previous_status not in (ZoneStatus.NORMAL, ZoneStatus.INITIALIZING):
+            return ZoneStatusTransition.RECOVERED
+        return ZoneStatusTransition.NONE
+
+    def _should_fail_safe(self, now: datetime, fail_safe_timeout: int) -> bool:
+        """
+        Check if zone should enter fail-safe mode.
+
+        Args:
+            now: Current timestamp.
+            fail_safe_timeout: Seconds before entering fail-safe mode.
+
+        Returns:
+            True if zone should enter fail-safe.
+
+        """
+        if self.state.last_successful_update is None:
+            # First failure - start tracking
+            self.state.last_successful_update = now
+            return False
+
+        elapsed = (now - self.state.last_successful_update).total_seconds()
+        return elapsed > fail_safe_timeout
 
 
 def calculate_requested_duration(
@@ -131,6 +375,8 @@ def evaluate_zone(  # noqa: PLR0911
     zone: ZoneState,
     controller: ControllerState,
     timing: TimingParams,
+    *,
+    flush_request: bool = False,
 ) -> ZoneAction:
     """
     Evaluate zone state and determine valve action.
@@ -142,6 +388,7 @@ def evaluate_zone(  # noqa: PLR0911
         zone: Current zone state.
         controller: Current controller state.
         timing: Timing parameters.
+        flush_request: Whether flush circuits should activate.
 
     Returns:
         The action to take on the zone valve.
@@ -154,12 +401,11 @@ def evaluate_zone(  # noqa: PLR0911
     if not zone.enabled:
         return ZoneAction.STAY_OFF if valve_off else ZoneAction.TURN_OFF
 
-    # Flush circuit priority during DHW heating or post-DHW flush period
+    # Flush circuit activation
     if (
         zone.circuit_type == CircuitType.FLUSH
         and controller.flush_enabled
-        and controller.flush_request
-        and not _any_regular_circuits_active(controller)
+        and flush_request
     ):
         return ZoneAction.TURN_ON if not valve_on else ZoneAction.STAY_ON
 
@@ -228,39 +474,3 @@ def should_request_heat(
     # Don't request if zone is about to close
     remaining_quota = zone.requested_duration - zone.used_duration
     return remaining_quota >= timing.closing_warning_duration
-
-
-def aggregate_heat_request(
-    zones: dict[str, ZoneState],
-    timing: TimingParams,
-) -> bool:
-    """
-    Aggregate heat request from all zones.
-
-    Args:
-        zones: Dictionary of zone states keyed by zone ID.
-        timing: Timing parameters.
-
-    Returns:
-        True if any zone is requesting heat.
-
-    """
-    return any(should_request_heat(zone, timing) for zone in zones.values())
-
-
-def _any_regular_circuits_active(controller: ControllerState) -> bool:
-    """
-    Check if any regular circuits are currently running (valve ON).
-
-    Used for flush circuit priority - flush circuits only run
-    when no regular circuits are actively heating. This allows
-    flush circuits to capture DHW waste heat even when regular
-    zones have heating demand but their valves are OFF due to
-    DHW priority.
-    """
-    return any(
-        zone.circuit_type == CircuitType.REGULAR
-        and zone.enabled
-        and zone.valve_state == ValveState.ON
-        for zone in controller.zones.values()
-    )

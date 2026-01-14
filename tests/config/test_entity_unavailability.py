@@ -322,7 +322,7 @@ async def test_summer_mode_value_calculation(
 
     coordinator = mock_config_entry_with_summer_mode.runtime_data.coordinator
     # No heat request should mean SummerMode.SUMMER
-    heat_request = coordinator.controller.calculate_heat_request()
+    heat_request = coordinator.controller.state.heat_request
     summer_mode_value = coordinator.controller.get_summer_mode_value(
         heat_request=heat_request
     )
@@ -408,9 +408,9 @@ async def test_heat_request_calculation_with_unavailable_switch(
     await hass.async_block_till_done()
 
     coordinator = mock_config_entry_with_heat_request.runtime_data.coordinator
-    # Heat request calculation works - it's False because no valves are open yet
+    # Heat request is stored in state - it's False because no valves are open yet
     # (heat request requires valves to be open, not just temperature demand)
-    heat_request = coordinator.controller.calculate_heat_request()
+    heat_request = coordinator.controller.state.heat_request
     assert isinstance(heat_request, bool)
     # Duty cycle should be calculated based on temperature error
     runtime = coordinator.controller.get_zone_runtime("zone1")

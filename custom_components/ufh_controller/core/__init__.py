@@ -1,26 +1,27 @@
 """Core control logic for Underfloor Heating Controller."""
 
+from custom_components.ufh_controller.const import TimingParams
+
 from .controller import (
+    ControllerActions,
     ControllerConfig,
+    ControllerState,
     HeatingController,
-    ZoneConfig,
-    ZoneRuntime,
+    aggregate_heat_request,
 )
 from .ema import apply_ema
 from .history import (
     get_observation_start,
-    get_state_average,
     get_valve_open_window,
-    was_any_window_open_recently,
 )
 from .pid import PIDController, PIDState
 from .zone import (
     CircuitType,
-    ControllerState,
-    TimingParams,
     ZoneAction,
+    ZoneConfig,
+    ZoneRuntime,
     ZoneState,
-    aggregate_heat_request,
+    ZoneStatusTransition,
     calculate_requested_duration,
     evaluate_zone,
     should_request_heat,
@@ -28,6 +29,7 @@ from .zone import (
 
 __all__ = [
     "CircuitType",
+    "ControllerActions",
     "ControllerConfig",
     "ControllerState",
     "HeatingController",
@@ -38,13 +40,12 @@ __all__ = [
     "ZoneConfig",
     "ZoneRuntime",
     "ZoneState",
+    "ZoneStatusTransition",
     "aggregate_heat_request",
     "apply_ema",
     "calculate_requested_duration",
     "evaluate_zone",
     "get_observation_start",
-    "get_state_average",
     "get_valve_open_window",
     "should_request_heat",
-    "was_any_window_open_recently",
 ]

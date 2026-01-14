@@ -1,7 +1,6 @@
 """Test heating controller mode evaluation and configuration."""
 
 from datetime import UTC, datetime
-from unittest.mock import patch
 
 import pytest
 
@@ -19,6 +18,7 @@ from custom_components.ufh_controller.core.zone import (
     CircuitType,
     ZoneAction,
 )
+from tests.conftest import setup_zone_historical, setup_zone_pid
 
 
 @pytest.fixture
@@ -52,8 +52,9 @@ class TestEvaluateZonesAutoMode:
         controller = HeatingController(basic_config)
 
         # Set up zone with duty cycle and unused quota
-        controller.update_zone_pid("living_room", 20.0, 60.0)
-        controller.update_zone_historical(
+        setup_zone_pid(controller, "living_room", 20.0, 60.0)
+        setup_zone_historical(
+            controller,
             "living_room",
             period_state_avg=0.0,  # No usage yet
             open_state_avg=0.0,
@@ -61,7 +62,7 @@ class TestEvaluateZonesAutoMode:
             elapsed_time=7200.0,  # Full observation period
         )
 
-        actions = controller.evaluate_zones()
+        actions = controller.evaluate_zones(now=datetime.now(UTC))
 
         assert actions["living_room"] == ZoneAction.TURN_ON
 
@@ -70,7 +71,7 @@ class TestEvaluateZonesAutoMode:
         controller = HeatingController(basic_config)
         controller.set_zone_enabled("living_room", enabled=False)
 
-        actions = controller.evaluate_zones()
+        actions = controller.evaluate_zones(now=datetime.now(UTC))
 
         # Valve state is UNKNOWN by default, so actively turn off
         assert actions["living_room"] == ZoneAction.TURN_OFF
@@ -85,7 +86,7 @@ class TestEvaluateZonesAutoMode:
         assert zone_state is not None
         zone_state.valve_state = ValveState.OFF
 
-        actions = controller.evaluate_zones()
+        actions = controller.evaluate_zones(now=datetime.now(UTC))
 
         assert actions["living_room"] == ZoneAction.STAY_OFF
 
@@ -98,7 +99,7 @@ class TestEvaluateZonesAllOnMode:
         controller = HeatingController(basic_config)
         controller.mode = "all_on"
 
-        actions = controller.evaluate_zones()
+        actions = controller.evaluate_zones(now=datetime.now(UTC))
 
         assert actions["living_room"] == ZoneAction.TURN_ON
         assert actions["bedroom"] == ZoneAction.TURN_ON
@@ -108,11 +109,13 @@ class TestEvaluateZonesAllOnMode:
         controller = HeatingController(basic_config)
         controller.mode = "all_on"
 
-        # First evaluation turns on
-        controller.evaluate_zones()
+        # Simulate valve already being on (as if previously executed)
+        zone_state = controller.get_zone_state("living_room")
+        assert zone_state is not None
+        zone_state.valve_state = ValveState.ON
 
-        # Second evaluation stays on
-        actions = controller.evaluate_zones()
+        # Evaluation with valve already on should stay on
+        actions = controller.evaluate_zones(now=datetime.now(UTC))
 
         assert actions["living_room"] == ZoneAction.STAY_ON
 
@@ -125,7 +128,7 @@ class TestEvaluateZonesAllOffMode:
         controller = HeatingController(basic_config)
         controller.mode = "all_off"
 
-        actions = controller.evaluate_zones()
+        actions = controller.evaluate_zones(now=datetime.now(UTC))
 
         assert actions["living_room"] == ZoneAction.STAY_OFF
         assert actions["bedroom"] == ZoneAction.STAY_OFF
@@ -139,7 +142,7 @@ class TestEvaluateZonesFlushMode:
         controller = HeatingController(basic_config)
         controller.mode = "flush"
 
-        actions = controller.evaluate_zones()
+        actions = controller.evaluate_zones(now=datetime.now(UTC))
 
         assert actions["living_room"] == ZoneAction.TURN_ON
         assert actions["bedroom"] == ZoneAction.TURN_ON
@@ -148,20 +151,21 @@ class TestEvaluateZonesFlushMode:
 class TestEvaluateZonesDisabledMode:
     """Test evaluate_zones in disabled mode."""
 
-    def test_valves_maintain_state(self, basic_config: ControllerConfig) -> None:
-        """Test valves maintain state in disabled mode."""
+    def test_no_actions_returned(self, basic_config: ControllerConfig) -> None:
+        """Test disabled mode returns no actions - no state detection, no changes."""
         controller = HeatingController(basic_config)
 
-        # Turn on a valve first
-        controller.mode = "all_on"
-        controller.evaluate_zones()
+        # Simulate valve already being on (as if previously executed in all_on mode)
+        zone_state = controller.get_zone_state("living_room")
+        assert zone_state is not None
+        zone_state.valve_state = ValveState.ON
 
         # Switch to disabled
         controller.mode = "disabled"
-        actions = controller.evaluate_zones()
+        actions = controller.evaluate_zones(now=datetime.now(UTC))
 
-        # Valves that were on stay on
-        assert actions["living_room"] == ZoneAction.STAY_ON
+        # Disabled mode returns empty actions
+        assert actions == {}
 
 
 class TestEvaluateZonesCycleMode:
@@ -172,12 +176,9 @@ class TestEvaluateZonesCycleMode:
         controller = HeatingController(basic_config)
         controller.mode = "cycle"
 
-        with patch(
-            "custom_components.ufh_controller.core.controller.datetime"
-        ) as mock_dt:
-            mock_dt.now.return_value = datetime(2024, 1, 15, 0, 30, 0, tzinfo=UTC)
-            mock_dt.UTC = UTC
-            actions = controller.evaluate_zones()
+        # Pass time directly - no mocking needed with new architecture
+        now = datetime(2024, 1, 15, 0, 30, 0, tzinfo=UTC)
+        actions = controller.evaluate_zones(now=now)
 
         assert actions["living_room"] == ZoneAction.STAY_OFF
         assert actions["bedroom"] == ZoneAction.STAY_OFF
@@ -187,12 +188,9 @@ class TestEvaluateZonesCycleMode:
         controller = HeatingController(basic_config)
         controller.mode = "cycle"
 
-        with patch(
-            "custom_components.ufh_controller.core.controller.datetime"
-        ) as mock_dt:
-            mock_dt.now.return_value = datetime(2024, 1, 15, 1, 30, 0, tzinfo=UTC)
-            mock_dt.UTC = UTC
-            actions = controller.evaluate_zones()
+        # Pass time directly - no mocking needed with new architecture
+        now = datetime(2024, 1, 15, 1, 30, 0, tzinfo=UTC)
+        actions = controller.evaluate_zones(now=now)
 
         # First zone should be on, second should be off
         assert actions["living_room"] == ZoneAction.TURN_ON
@@ -205,12 +203,9 @@ class TestEvaluateZonesCycleMode:
         controller = HeatingController(basic_config)
         controller.mode = "cycle"
 
-        with patch(
-            "custom_components.ufh_controller.core.controller.datetime"
-        ) as mock_dt:
-            mock_dt.now.return_value = datetime(2024, 1, 15, 2, 30, 0, tzinfo=UTC)
-            mock_dt.UTC = UTC
-            actions = controller.evaluate_zones()
+        # Pass time directly - no mocking needed with new architecture
+        now = datetime(2024, 1, 15, 2, 30, 0, tzinfo=UTC)
+        actions = controller.evaluate_zones(now=now)
 
         # Second zone should be on
         assert actions["living_room"] == ZoneAction.STAY_OFF

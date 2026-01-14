@@ -138,23 +138,50 @@ class TestPIDController:
         assert pid.state.error == 2.0
         assert pid.state.duty_cycle == 50.0
 
-    def test_zero_dt(self) -> None:
-        """Test that zero dt returns zero PIDState."""
+    def test_zero_dt_no_prior_state_returns_none(self) -> None:
+        """Test that zero dt with no prior state returns None."""
         pid = PIDController(kp=50.0, ki=0.1, kd=1.0)
 
         result = pid.update(setpoint=22.0, current=20.0, dt=0.0)
-        assert result == PIDState(
-            error=0.0, p_term=0.0, i_term=0.0, d_term=0.0, duty_cycle=0.0
-        )
+        assert result is None
+        assert pid.state is None
 
-    def test_negative_dt(self) -> None:
-        """Test that negative dt returns zero PIDState."""
+    def test_zero_dt_preserves_existing_state(self) -> None:
+        """Test that zero dt preserves accumulated state (no-op)."""
+        pid = PIDController(kp=0.0, ki=1.0, kd=0.0, integral_max=1000.0)
+
+        # Accumulate some integral
+        pid.update(setpoint=21.0, current=20.0, dt=60.0)
+        assert pid.state is not None
+        assert pid.state.i_term == 60.0
+
+        # Zero dt should NOT reset the accumulated integral
+        state_before = pid.state
+        result = pid.update(setpoint=21.0, current=20.0, dt=0.0)
+        assert result == state_before
+        assert pid.state.i_term == 60.0  # Integral preserved
+
+    def test_negative_dt_no_prior_state_returns_none(self) -> None:
+        """Test that negative dt with no prior state returns None."""
         pid = PIDController(kp=50.0, ki=0.1, kd=1.0)
 
         result = pid.update(setpoint=22.0, current=20.0, dt=-60.0)
-        assert result == PIDState(
-            error=0.0, p_term=0.0, i_term=0.0, d_term=0.0, duty_cycle=0.0
-        )
+        assert result is None
+        assert pid.state is None
+
+    def test_negative_dt_preserves_existing_state(self) -> None:
+        """Test that negative dt preserves accumulated state (no-op)."""
+        pid = PIDController(kp=0.0, ki=1.0, kd=0.0, integral_max=1000.0)
+
+        # Accumulate some integral
+        pid.update(setpoint=21.0, current=20.0, dt=60.0)
+        assert pid.state is not None
+        state_before = pid.state
+
+        # Negative dt should NOT reset the accumulated integral
+        result = pid.update(setpoint=21.0, current=20.0, dt=-60.0)
+        assert result == state_before
+        assert pid.state.i_term == 60.0  # Integral preserved
 
     def test_default_values(self) -> None:
         """Test default PID parameters match spec."""

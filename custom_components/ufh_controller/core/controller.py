@@ -8,49 +8,41 @@ zone control, operation modes, and heat request aggregation.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime
 
 from custom_components.ufh_controller.const import (
     DEFAULT_CYCLE_MODE_HOURS,
-    DEFAULT_PID,
-    DEFAULT_SETPOINT,
-    DEFAULT_TEMP_EMA_TIME_CONSTANT,
+    OperationMode,
     SummerMode,
+    TimingParams,
     ValveState,
 )
 
 from .pid import PIDController
 from .zone import (
     CircuitType,
-    ControllerState,
-    TimingParams,
     ZoneAction,
+    ZoneConfig,
+    ZoneRuntime,
     ZoneState,
-    aggregate_heat_request,
-    calculate_requested_duration,
     evaluate_zone,
+    should_request_heat,
 )
 
 
 @dataclass
-class ZoneConfig:
-    """Configuration for a single zone."""
+class ControllerState:
+    """Runtime state for the entire controller."""
 
-    zone_id: str
-    name: str
-    temp_sensor: str
-    valve_switch: str
-    circuit_type: CircuitType = CircuitType.REGULAR
-    window_sensors: list[str] = field(default_factory=list)
-    setpoint_min: float = DEFAULT_SETPOINT["min"]
-    setpoint_max: float = DEFAULT_SETPOINT["max"]
-    setpoint_default: float = DEFAULT_SETPOINT["default"]
-    kp: float = DEFAULT_PID["kp"]
-    ki: float = DEFAULT_PID["ki"]
-    kd: float = DEFAULT_PID["kd"]
-    integral_min: float = DEFAULT_PID["integral_min"]
-    integral_max: float = DEFAULT_PID["integral_max"]
-    temp_ema_time_constant: int = DEFAULT_TEMP_EMA_TIME_CONSTANT
+    mode: OperationMode = OperationMode.AUTO
+    observation_start: datetime = field(default_factory=datetime.now)
+    period_elapsed: float = 0.0  # Seconds elapsed in current observation period
+    heat_request: bool = False
+    flush_enabled: bool = False
+    dhw_active: bool = False
+    flush_until: datetime | None = None
+    flush_request: bool = False
+    zones: dict[str, ZoneState] = field(default_factory=dict)
 
 
 @dataclass
@@ -68,13 +60,58 @@ class ControllerConfig:
 
 
 @dataclass
-class ZoneRuntime:
-    """Runtime data for a zone including PID controller and state."""
+class ControllerActions:
+    """
+    All actions computed by the controller for execution.
 
-    config: ZoneConfig
-    pid: PIDController
-    state: ZoneState
-    last_update: datetime | None = None
+    The coordinator executes these actions via Home Assistant services.
+    heat_request is None when no change is needed (e.g., disabled mode).
+    The coordinator derives summer_mode from heat_request.
+    """
+
+    valve_actions: dict[str, ZoneAction]
+    heat_request: bool | None = None  # True/False, or None if no change
+    flush_request: bool = False  # Whether flush circuits should activate
+
+
+def compute_flush_request(
+    *,
+    flush_enabled: bool,
+    dhw_active: bool,
+    flush_until: datetime | None,
+    any_regular_on: bool,
+    now: datetime,
+) -> bool:
+    """
+    Compute whether flush circuits should activate.
+
+    Flush circuits activate when:
+    - flush_enabled is True (user has enabled the feature)
+    - DHW is active OR was recently active (within flush_until timer)
+    - No regular circuits are currently ON
+
+    Args:
+        flush_enabled: User toggle for flush feature.
+        dhw_active: Whether DHW is currently heating.
+        flush_until: Post-DHW timer expiration, or None.
+        any_regular_on: Whether any regular zones have valves ON.
+        now: Current time for timer comparison.
+
+    Returns:
+        True if flush circuits should activate.
+
+    """
+    if not flush_enabled:
+        return False
+
+    # Check if DHW is active or was recently active
+    dhw_or_recent = dhw_active or (flush_until is not None and now < flush_until)
+
+    if not dhw_or_recent:
+        return False
+
+    # Flush only when no regular circuits are running
+    return not any_regular_on
 
 
 class HeatingController:
@@ -97,7 +134,7 @@ class HeatingController:
 
         """
         self.config = config
-        self._state = ControllerState(mode="auto")
+        self._state = ControllerState(mode=OperationMode.AUTO)
         self._zones: dict[str, ZoneRuntime] = {}
 
         # Initialize zones from config
@@ -124,14 +161,14 @@ class HeatingController:
         return self._state
 
     @property
-    def mode(self) -> str:
+    def mode(self) -> OperationMode:
         """Get the current operation mode."""
         return self._state.mode
 
     @mode.setter
-    def mode(self, value: str) -> None:
+    def mode(self, value: str | OperationMode) -> None:
         """Set the operation mode."""
-        self._state.mode = value
+        self._state.mode = OperationMode(value)
 
     def get_zone_state(self, zone_id: str) -> ZoneState | None:
         """Get the state of a specific zone."""
@@ -158,12 +195,7 @@ class HeatingController:
         if runtime is None:
             return False
 
-        # Clamp setpoint to configured limits
-        clamped = max(
-            runtime.config.setpoint_min,
-            min(runtime.config.setpoint_max, setpoint),
-        )
-        runtime.state.setpoint = clamped
+        runtime.set_setpoint(setpoint)
         return True
 
     def set_zone_enabled(self, zone_id: str, *, enabled: bool) -> bool:
@@ -181,227 +213,217 @@ class HeatingController:
         runtime = self._zones.get(zone_id)
         if runtime is None:
             return False
-        runtime.state.enabled = enabled
+        runtime.set_enabled(enabled=enabled)
         return True
 
-    def update_zone_pid(
-        self,
-        zone_id: str,
-        current: float | None,
-        dt: float,
-    ) -> float | None:
+    # -------------------------------------------------------------------------
+    # Mode-specific evaluation functions
+    # -------------------------------------------------------------------------
+
+    def _evaluate_disabled_mode(self) -> ControllerActions:
         """
-        Update the PID controller for a zone.
+        Disabled mode - no changes whatsoever.
 
-        PID integration is paused (no update called) when:
-        - Temperature reading is unavailable
-        - Controller mode is not 'auto' (PID only meaningful in auto mode)
-        - Zone is disabled
-        - Window was open recently (within blocking period + delay)
-
-        This prevents integral windup during blocked periods while allowing
-        the valve to remain open at the last calculated duty cycle.
-
-        Args:
-            zone_id: Zone identifier.
-            current: Current temperature reading, or None if unavailable.
-            dt: Time delta since last update in seconds.
-
-        Returns:
-            The new duty cycle (0-100), None if not yet calculated, or 0 if zone
-            not found.
-
+        Returns empty valve actions - no state detection, no changes.
         """
-        runtime = self._zones.get(zone_id)
-        if runtime is None:
-            return 0.0
+        return ControllerActions(valve_actions={})
 
-        runtime.state.current = current
+    def _evaluate_all_on_mode(self) -> ControllerActions:
+        """
+        All-on mode - all valves open, boiler fires.
 
-        if current is None:
-            # No temperature reading - maintain last duty cycle, pause integration
-            return runtime.pid.state.duty_cycle if runtime.pid.state else None
-
-        # Check if PID should be paused (prevent integral windup)
-        if self._should_pause_pid(runtime):
-            return runtime.pid.state.duty_cycle if runtime.pid.state else None
-
-        pid_state = runtime.pid.update(
-            setpoint=runtime.state.setpoint,
-            current=current,
-            dt=dt,
+        Permanently heating: heat_request=True.
+        """
+        valve_actions = {
+            zid: (
+                ZoneAction.STAY_ON
+                if rt.state.valve_state == ValveState.ON
+                else ZoneAction.TURN_ON
+            )
+            for zid, rt in self._zones.items()
+        }
+        return ControllerActions(
+            valve_actions=valve_actions,
+            heat_request=True,
         )
 
-        return pid_state.duty_cycle
-
-    def _should_pause_pid(self, runtime: ZoneRuntime) -> bool:
+    def _evaluate_all_off_mode(self) -> ControllerActions:
         """
-        Check if PID integration should be paused for a zone.
+        All-off mode - all valves closed, no heating.
 
-        PID is paused when:
-        - Controller mode is not 'auto' (other modes don't use PID control)
-        - Zone is disabled
-        - Window was open recently (within blocking period)
-
-        Args:
-            runtime: Zone runtime data.
-
-        Returns:
-            True if PID should be paused, False otherwise.
-
+        Permanently not heating: heat_request=False.
         """
-        # Only auto mode uses PID-based control
-        if self._state.mode != "auto":
-            return True
-
-        # Disabled zones shouldn't accumulate integral
-        if not runtime.state.enabled:
-            return True
-
-        # Window was open recently - pause PID to let temperature stabilize
-        return runtime.state.window_recently_open
-
-    def update_zone_historical(
-        self,
-        zone_id: str,
-        *,
-        period_state_avg: float,
-        open_state_avg: float,
-        window_recently_open: bool,
-        elapsed_time: float,
-    ) -> None:
-        """
-        Update zone historical averages from Recorder queries.
-
-        Args:
-            zone_id: Zone identifier.
-            period_state_avg: Average valve state since observation start.
-            open_state_avg: Average valve state for open detection.
-            window_recently_open: Was any window open within blocking period.
-            elapsed_time: Actual elapsed time since observation start in seconds.
-
-        """
-        runtime = self._zones.get(zone_id)
-        if runtime is None:
-            return
-
-        runtime.state.period_state_avg = period_state_avg
-        runtime.state.open_state_avg = open_state_avg
-        runtime.state.window_recently_open = window_recently_open
-
-        # Calculate used and requested durations
-        period = self.config.timing.observation_period
-        runtime.state.used_duration = period_state_avg * elapsed_time
-        # requested_duration uses full observation period
-        duty_cycle = runtime.pid.state.duty_cycle if runtime.pid.state else 0.0
-        runtime.state.requested_duration = calculate_requested_duration(
-            duty_cycle,
-            period,
+        valve_actions = {
+            zid: (
+                ZoneAction.TURN_OFF
+                if rt.state.valve_state == ValveState.ON
+                else ZoneAction.STAY_OFF
+            )
+            for zid, rt in self._zones.items()
+        }
+        return ControllerActions(
+            valve_actions=valve_actions,
+            heat_request=False,
         )
 
-    def evaluate_zones(self) -> dict[str, ZoneAction]:
+    def _evaluate_flush_mode(self) -> ControllerActions:
+        """
+        Flush mode - all valves open, circulation only (no boiler firing).
+
+        Permanently not heating: heat_request=False.
+        """
+        valve_actions = {
+            zid: (
+                ZoneAction.STAY_ON
+                if rt.state.valve_state == ValveState.ON
+                else ZoneAction.TURN_ON
+            )
+            for zid, rt in self._zones.items()
+        }
+        return ControllerActions(
+            valve_actions=valve_actions,
+            heat_request=False,
+        )
+
+    def _evaluate_cycle_mode(self, now: datetime) -> ControllerActions:
+        """
+        Cycle mode - rotate through zones by hour, circulation only.
+
+        Same as flush mode but one zone at a time on an 8-hour rotation.
+        Hour 0: all closed (rest hour)
+        Hours 1-7: zones open sequentially
+
+        Permanently not heating: heat_request=False.
+        """
+        cycle_hour = now.hour % DEFAULT_CYCLE_MODE_HOURS
+        zone_ids = list(self._zones.keys())
+
+        valve_actions: dict[str, ZoneAction] = {}
+        for zid, rt in self._zones.items():
+            valve_on = rt.state.valve_state == ValveState.ON
+            if cycle_hour == 0:
+                # Rest hour - all closed
+                valve_actions[zid] = (
+                    ZoneAction.TURN_OFF if valve_on else ZoneAction.STAY_OFF
+                )
+            elif not zone_ids:
+                valve_actions[zid] = ZoneAction.STAY_OFF
+            else:
+                active_index = (cycle_hour - 1) % len(zone_ids)
+                if zid == zone_ids[active_index]:
+                    valve_actions[zid] = (
+                        ZoneAction.STAY_ON if valve_on else ZoneAction.TURN_ON
+                    )
+                else:
+                    valve_actions[zid] = (
+                        ZoneAction.TURN_OFF if valve_on else ZoneAction.STAY_OFF
+                    )
+
+        return ControllerActions(
+            valve_actions=valve_actions,
+            heat_request=False,
+        )
+
+    def _evaluate_auto_mode(self, now: datetime) -> ControllerActions:
+        """
+        Auto mode - quota-based scheduling with flush circuit logic.
+
+        Uses PID-based quota scheduling for regular zones, then evaluates
+        flush circuits based on whether any regular zones are running.
+
+        Returns raw computed values; the coordinator handles change detection.
+        """
+        valve_actions: dict[str, ZoneAction] = {}
+
+        # Phase 1: Evaluate regular zones first using quota-based scheduling
+        for zone_id, runtime in self._zones.items():
+            if runtime.config.circuit_type == CircuitType.REGULAR:
+                valve_actions[zone_id] = evaluate_zone(
+                    runtime.state, self._state, self.config.timing
+                )
+
+        # Phase 2: Compute flush_request based on regular zone actions
+        any_regular_on = any(
+            action in {ZoneAction.TURN_ON, ZoneAction.STAY_ON}
+            for action in valve_actions.values()
+        )
+        flush_request = compute_flush_request(
+            flush_enabled=self._state.flush_enabled,
+            dhw_active=self._state.dhw_active,
+            flush_until=self._state.flush_until,
+            any_regular_on=any_regular_on,
+            now=now,
+        )
+
+        # Phase 3: Evaluate flush zones with explicit flush_request parameter
+        for zone_id, runtime in self._zones.items():
+            if runtime.config.circuit_type == CircuitType.FLUSH:
+                valve_actions[zone_id] = evaluate_zone(
+                    runtime.state,
+                    self._state,
+                    self.config.timing,
+                    flush_request=flush_request,
+                )
+
+        # Calculate heat request from zone outputs
+        heat_request = any(
+            should_request_heat(rt.state, self.config.timing)
+            for rt in self._zones.values()
+        )
+
+        return ControllerActions(
+            valve_actions=valve_actions,
+            heat_request=heat_request,
+            flush_request=flush_request,
+        )
+
+    def evaluate_zones(self, *, now: datetime) -> dict[str, ZoneAction]:
         """
         Evaluate all zones and determine valve actions.
 
-        Handles operation modes and per-zone decision logic.
+        This method is maintained for backwards compatibility. It returns
+        only valve actions (not heat_request).
+
+        For full evaluation with all actions, use evaluate() instead.
+
+        Args:
+            now: Current time for flush timer comparison.
 
         Returns:
             Dictionary mapping zone IDs to their actions.
 
         """
-        actions: dict[str, ZoneAction] = {}
+        # Delegate to evaluate() and extract valve actions
+        actions = self.evaluate(now=now)
+        return actions.valve_actions
 
-        # Build current controller state for decision logic
-        self._state.zones = {zid: zr.state for zid, zr in self._zones.items()}
-
-        for zone_id, runtime in self._zones.items():
-            action = self._evaluate_single_zone(zone_id, runtime)
-            actions[zone_id] = action
-            # Update expected valve state based on action
-            if action in (ZoneAction.TURN_ON, ZoneAction.STAY_ON):
-                runtime.state.valve_state = ValveState.ON
-            else:
-                runtime.state.valve_state = ValveState.OFF
-
-        return actions
-
-    def _evaluate_single_zone(
-        self,
-        zone_id: str,
-        runtime: ZoneRuntime,
-    ) -> ZoneAction:
-        """Evaluate a single zone based on current mode."""
-        mode = self._state.mode
-        valve_on = runtime.state.valve_state == ValveState.ON
-
-        if mode == "disabled":
-            # Disabled mode - no action, maintain current state
-            return ZoneAction.STAY_ON if valve_on else ZoneAction.STAY_OFF
-
-        if mode == "all_on":
-            return ZoneAction.STAY_ON if valve_on else ZoneAction.TURN_ON
-
-        if mode == "all_off":
-            return ZoneAction.TURN_OFF if valve_on else ZoneAction.STAY_OFF
-
-        if mode == "flush":
-            # Flush mode - all valves open
-            return ZoneAction.STAY_ON if valve_on else ZoneAction.TURN_ON
-
-        if mode == "cycle":
-            return self._evaluate_cycle_mode(zone_id, runtime)
-
-        # Default: auto mode - use decision tree
-        return evaluate_zone(runtime.state, self._state, self.config.timing)
-
-    def _evaluate_cycle_mode(
-        self,
-        zone_id: str,
-        runtime: ZoneRuntime,
-    ) -> ZoneAction:
-        """Evaluate zone action for cycle mode."""
-        # Get current hour of day
-        now = datetime.now(UTC)
-        cycle_hour = now.hour % DEFAULT_CYCLE_MODE_HOURS
-        valve_on = runtime.state.valve_state == ValveState.ON
-
-        if cycle_hour == 0:
-            # Rest hour - all closed
-            return ZoneAction.TURN_OFF if valve_on else ZoneAction.STAY_OFF
-
-        # Determine which zone should be active
-        zone_ids = list(self._zones.keys())
-        if not zone_ids:
-            return ZoneAction.STAY_OFF
-
-        active_index = (cycle_hour - 1) % len(zone_ids)
-        active_zone_id = zone_ids[active_index]
-
-        if zone_id == active_zone_id:
-            return ZoneAction.TURN_ON if not valve_on else ZoneAction.STAY_ON
-        return ZoneAction.TURN_OFF if valve_on else ZoneAction.STAY_OFF
-
-    def calculate_heat_request(self) -> bool:
+    def evaluate(self, *, now: datetime) -> ControllerActions:
         """
-        Calculate aggregate heat request from all zones.
+        Evaluate all zones and compute all controller actions.
+
+        This is the main entry point for the control loop. Dispatches to
+        mode-specific evaluation functions that return complete ControllerActions.
+
+        Args:
+            now: Current time for flush timer and cycle mode calculation.
 
         Returns:
-            True if any zone is requesting heat.
+            ControllerActions with valve actions and optional state changes.
 
         """
-        if self._state.mode == "disabled":
-            return False
-
-        if self._state.mode == "all_off":
-            return False
-
-        if self._state.mode in ("all_on", "flush"):
-            # These modes control heat differently
-            return self._state.mode == "all_on"
-
-        # Auto and cycle modes use zone-based logic
-        zone_states = {zid: zr.state for zid, zr in self._zones.items()}
-        return aggregate_heat_request(zone_states, self.config.timing)
+        mode = self._state.mode
+        if mode == OperationMode.DISABLED:
+            return self._evaluate_disabled_mode()
+        if mode == OperationMode.ALL_ON:
+            return self._evaluate_all_on_mode()
+        if mode == OperationMode.ALL_OFF:
+            return self._evaluate_all_off_mode()
+        if mode == OperationMode.FLUSH:
+            return self._evaluate_flush_mode()
+        if mode == OperationMode.CYCLE:
+            return self._evaluate_cycle_mode(now)
+        # Default: auto mode
+        return self._evaluate_auto_mode(now)
 
     def get_summer_mode_value(self, *, heat_request: bool) -> str | None:
         """
@@ -420,13 +442,13 @@ class HeatingController:
 
         mode = self._state.mode
 
-        if mode == "disabled":
+        if mode == OperationMode.DISABLED:
             return None
 
-        if mode in ("flush", "all_off"):
+        if mode in (OperationMode.FLUSH, OperationMode.ALL_OFF):
             return SummerMode.SUMMER
 
-        if mode == "all_on":
+        if mode == OperationMode.ALL_ON:
             return SummerMode.WINTER
 
         # Auto and cycle modes depend on heat request
@@ -436,3 +458,21 @@ class HeatingController:
     def zone_ids(self) -> list[str]:
         """Get list of all zone IDs."""
         return list(self._zones.keys())
+
+
+def aggregate_heat_request(
+    zones: dict[str, ZoneState],
+    timing: TimingParams,
+) -> bool:
+    """
+    Aggregate heat request from all zones.
+
+    Args:
+        zones: Dictionary of zone states keyed by zone ID.
+        timing: Timing parameters.
+
+    Returns:
+        True if any zone is requesting heat.
+
+    """
+    return any(should_request_heat(zone, timing) for zone in zones.values())

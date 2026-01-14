@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from enum import StrEnum
 from logging import Logger, getLogger
 from typing import TYPE_CHECKING, TypedDict
@@ -143,6 +144,24 @@ DEFAULT_TIMING: TimingDefaults = {
     "controller_loop_interval": 60,  # PID update interval
     "flush_duration": 480,  # 8 minutes - flush duration after DHW ends
 }
+
+
+@dataclass
+class TimingParams:
+    """
+    Timing parameters for zone scheduling.
+
+    All durations are in seconds.
+    """
+
+    observation_period: int = DEFAULT_TIMING["observation_period"]
+    min_run_time: int = DEFAULT_TIMING["min_run_time"]
+    valve_open_time: int = DEFAULT_TIMING["valve_open_time"]
+    closing_warning_duration: int = DEFAULT_TIMING["closing_warning_duration"]
+    window_block_time: int = DEFAULT_TIMING["window_block_time"]
+    controller_loop_interval: int = DEFAULT_TIMING["controller_loop_interval"]
+    flush_duration: int = DEFAULT_TIMING["flush_duration"]
+
 
 # Default PID controller parameters
 DEFAULT_PID: PIDDefaults = {

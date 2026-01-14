@@ -10,6 +10,7 @@ from sqlalchemy.exc import OperationalError
 from custom_components.ufh_controller.const import (
     FAIL_SAFE_TIMEOUT,
     ControllerStatus,
+    SummerMode,
     ValveState,
     ZoneStatus,
 )
@@ -648,10 +649,10 @@ class TestZoneIsolation:
         assert zone2 is not None
         zone2.state.zone_status = ZoneStatus.FAIL_SAFE
 
-        # Call summer mode update with heat_request=True
+        # Try to set summer mode to "winter"
         # Without fail-safe zone, this would set to "winter"
         # But with fail-safe zone, it should force to "auto"
-        await coordinator._update_summer_mode(heat_request=True)
+        await coordinator._set_summer_mode(SummerMode.WINTER)
 
         assert "auto" in summer_mode_calls
 

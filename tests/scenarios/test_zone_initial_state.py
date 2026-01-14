@@ -20,6 +20,7 @@ from custom_components.ufh_controller.core.controller import (
     ZoneConfig,
 )
 from custom_components.ufh_controller.core.zone import ZoneState
+from tests.conftest import setup_zone_pid
 
 
 class TestZoneStateInitialization:
@@ -75,7 +76,7 @@ class TestControllerZoneInitialization:
         controller.set_zone_setpoint("living_room", 22.0)
 
         # Perform a PID update with a valid temperature
-        controller.update_zone_pid("living_room", 20.0, 60.0)
+        setup_zone_pid(controller, "living_room", 20.0, 60.0)
 
         runtime = controller.get_zone_runtime("living_room")
         assert runtime is not None

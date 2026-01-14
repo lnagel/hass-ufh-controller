@@ -538,11 +538,10 @@ def get_observation_start(now: datetime) -> datetime:
 def evaluate_zone(zone: ZoneState, controller: ControllerState,
                   timing: TimingParams) -> ZoneAction:
 
-    # Flush circuit priority during DHW heating or post-DHW flush period
+    # Flush circuit activation (flush_request includes "no regular circuits active")
     if (zone.circuit_type == "flush" and
         controller.flush_enabled and
-        is_flush_requested(controller) and  # True during DHW or post-DHW period
-        not any_regular_circuits_active(controller)):  # No regular valves currently ON
+        controller.flush_request):  # Pre-computed: DHW active/recent AND no regular ON
         return ZoneAction.TURN_ON
 
     # Note: Window blocking is handled via PID pause, not valve control

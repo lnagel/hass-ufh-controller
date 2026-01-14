@@ -2,11 +2,10 @@
 
 import pytest
 
-from custom_components.ufh_controller.const import ValveState
+from custom_components.ufh_controller.const import TimingParams, ValveState
+from custom_components.ufh_controller.core.controller import ControllerState
 from custom_components.ufh_controller.core.zone import (
     CircuitType,
-    ControllerState,
-    TimingParams,
     ZoneAction,
     ZoneState,
     calculate_requested_duration,

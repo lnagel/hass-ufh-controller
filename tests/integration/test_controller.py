@@ -1,5 +1,7 @@
 """Test heating controller core logic."""
 
+from datetime import UTC, datetime
+
 import pytest
 
 from custom_components.ufh_controller.const import (
@@ -15,6 +17,7 @@ from custom_components.ufh_controller.core.zone import (
     CircuitType,
     ZoneAction,
 )
+from tests.conftest import setup_zone_historical, setup_zone_pid
 
 
 @pytest.fixture
@@ -187,7 +190,7 @@ class TestUpdateZonePID:
         controller = HeatingController(basic_config)
         controller.set_zone_setpoint("living_room", 22.0)
 
-        duty_cycle = controller.update_zone_pid("living_room", 20.0, 60.0)
+        duty_cycle = setup_zone_pid(controller, "living_room", 20.0, 60.0)
 
         # With 2 degree error and Kp=50, expect significant duty cycle
         assert duty_cycle is not None
@@ -205,21 +208,21 @@ class TestUpdateZonePID:
         controller = HeatingController(basic_config)
 
         # First update with valid temp
-        controller.update_zone_pid("living_room", 20.0, 60.0)
+        setup_zone_pid(controller, "living_room", 20.0, 60.0)
         runtime = controller.get_zone_runtime("living_room")
         assert runtime is not None
         assert runtime.pid.state is not None
         first_duty = runtime.pid.state.duty_cycle
 
         # Update with None - should maintain duty cycle
-        duty_cycle = controller.update_zone_pid("living_room", None, 60.0)
+        duty_cycle = setup_zone_pid(controller, "living_room", None, 60.0)
         assert duty_cycle == first_duty
 
     def test_update_unknown_zone(self, basic_config: ControllerConfig) -> None:
-        """Test PID update for unknown zone."""
+        """Test PID update for unknown zone returns None."""
         controller = HeatingController(basic_config)
-        duty_cycle = controller.update_zone_pid("unknown", 20.0, 60.0)
-        assert duty_cycle == 0.0
+        duty_cycle = setup_zone_pid(controller, "unknown", 20.0, 60.0)
+        assert duty_cycle is None
 
 
 class TestPIDIntegrationPause:
@@ -230,7 +233,7 @@ class TestPIDIntegrationPause:
         controller = HeatingController(basic_config)
 
         # First update in auto mode to establish baseline integral
-        controller.update_zone_pid("living_room", 20.0, 60.0)
+        setup_zone_pid(controller, "living_room", 20.0, 60.0)
         runtime = controller.get_zone_runtime("living_room")
         assert runtime is not None
         initial_integral = runtime.pid.state.i_term
@@ -239,7 +242,7 @@ class TestPIDIntegrationPause:
         controller.mode = "all_off"
 
         # PID update should NOT accumulate integral
-        controller.update_zone_pid("living_room", 19.0, 60.0)  # Larger error
+        setup_zone_pid(controller, "living_room", 19.0, 60.0)  # Larger error
 
         # Integral should remain unchanged (paused)
         assert runtime.pid.state.i_term == initial_integral
@@ -249,7 +252,7 @@ class TestPIDIntegrationPause:
         controller = HeatingController(basic_config)
 
         # First update in auto mode
-        controller.update_zone_pid("living_room", 20.0, 60.0)
+        setup_zone_pid(controller, "living_room", 20.0, 60.0)
         runtime = controller.get_zone_runtime("living_room")
         assert runtime is not None
         initial_integral = runtime.pid.state.i_term
@@ -258,46 +261,46 @@ class TestPIDIntegrationPause:
         controller.mode = "flush"
 
         # PID update should NOT accumulate integral
-        controller.update_zone_pid("living_room", 19.0, 60.0)
+        setup_zone_pid(controller, "living_room", 19.0, 60.0)
         assert runtime.pid.state.i_term == initial_integral
 
     def test_pid_paused_in_all_on_mode(self, basic_config: ControllerConfig) -> None:
         """Test PID integration is paused when mode is all_on."""
         controller = HeatingController(basic_config)
 
-        controller.update_zone_pid("living_room", 20.0, 60.0)
+        setup_zone_pid(controller, "living_room", 20.0, 60.0)
         runtime = controller.get_zone_runtime("living_room")
         assert runtime is not None
         initial_integral = runtime.pid.state.i_term
 
         controller.mode = "all_on"
-        controller.update_zone_pid("living_room", 19.0, 60.0)
+        setup_zone_pid(controller, "living_room", 19.0, 60.0)
         assert runtime.pid.state.i_term == initial_integral
 
     def test_pid_paused_in_disabled_mode(self, basic_config: ControllerConfig) -> None:
         """Test PID integration is paused when mode is disabled."""
         controller = HeatingController(basic_config)
 
-        controller.update_zone_pid("living_room", 20.0, 60.0)
+        setup_zone_pid(controller, "living_room", 20.0, 60.0)
         runtime = controller.get_zone_runtime("living_room")
         assert runtime is not None
         initial_integral = runtime.pid.state.i_term
 
         controller.mode = "disabled"
-        controller.update_zone_pid("living_room", 19.0, 60.0)
+        setup_zone_pid(controller, "living_room", 19.0, 60.0)
         assert runtime.pid.state.i_term == initial_integral
 
     def test_pid_paused_in_cycle_mode(self, basic_config: ControllerConfig) -> None:
         """Test PID integration is paused when mode is cycle."""
         controller = HeatingController(basic_config)
 
-        controller.update_zone_pid("living_room", 20.0, 60.0)
+        setup_zone_pid(controller, "living_room", 20.0, 60.0)
         runtime = controller.get_zone_runtime("living_room")
         assert runtime is not None
         initial_integral = runtime.pid.state.i_term
 
         controller.mode = "cycle"
-        controller.update_zone_pid("living_room", 19.0, 60.0)
+        setup_zone_pid(controller, "living_room", 19.0, 60.0)
         assert runtime.pid.state.i_term == initial_integral
 
     def test_pid_paused_when_zone_disabled(
@@ -307,7 +310,7 @@ class TestPIDIntegrationPause:
         controller = HeatingController(basic_config)
 
         # First update with zone enabled
-        controller.update_zone_pid("living_room", 20.0, 60.0)
+        setup_zone_pid(controller, "living_room", 20.0, 60.0)
         runtime = controller.get_zone_runtime("living_room")
         assert runtime is not None
         initial_integral = runtime.pid.state.i_term
@@ -316,7 +319,7 @@ class TestPIDIntegrationPause:
         controller.set_zone_enabled("living_room", enabled=False)
 
         # PID update should NOT accumulate integral
-        controller.update_zone_pid("living_room", 19.0, 60.0)
+        setup_zone_pid(controller, "living_room", 19.0, 60.0)
         assert runtime.pid.state.i_term == initial_integral
 
     def test_pid_paused_when_window_recently_open(
@@ -326,7 +329,7 @@ class TestPIDIntegrationPause:
         controller = HeatingController(basic_config)
 
         # First update with no recent window activity
-        controller.update_zone_pid("living_room", 20.0, 60.0)
+        setup_zone_pid(controller, "living_room", 20.0, 60.0)
         runtime = controller.get_zone_runtime("living_room")
         assert runtime is not None
         initial_integral = runtime.pid.state.i_term
@@ -335,7 +338,7 @@ class TestPIDIntegrationPause:
         runtime.state.window_recently_open = True
 
         # PID update should NOT accumulate integral
-        controller.update_zone_pid("living_room", 19.0, 60.0)
+        setup_zone_pid(controller, "living_room", 19.0, 60.0)
         assert runtime.pid.state.i_term == initial_integral
 
     def test_pid_not_paused_when_window_not_recently_open(
@@ -345,7 +348,7 @@ class TestPIDIntegrationPause:
         controller = HeatingController(basic_config)
 
         # First update
-        controller.update_zone_pid("living_room", 20.0, 60.0)
+        setup_zone_pid(controller, "living_room", 20.0, 60.0)
         runtime = controller.get_zone_runtime("living_room")
         assert runtime is not None
         initial_integral = runtime.pid.state.i_term
@@ -354,7 +357,7 @@ class TestPIDIntegrationPause:
         runtime.state.window_recently_open = False
 
         # PID update SHOULD accumulate integral
-        controller.update_zone_pid("living_room", 19.0, 60.0)
+        setup_zone_pid(controller, "living_room", 19.0, 60.0)
         assert runtime.pid.state.i_term > initial_integral
 
     def test_pid_runs_normally_in_auto_mode(
@@ -365,13 +368,13 @@ class TestPIDIntegrationPause:
         assert controller.mode == "auto"
 
         # First update
-        controller.update_zone_pid("living_room", 20.0, 60.0)
+        setup_zone_pid(controller, "living_room", 20.0, 60.0)
         runtime = controller.get_zone_runtime("living_room")
         assert runtime is not None
         initial_integral = runtime.pid.state.i_term
 
         # Second update should accumulate integral
-        controller.update_zone_pid("living_room", 20.0, 60.0)
+        setup_zone_pid(controller, "living_room", 20.0, 60.0)
         assert runtime.pid.state.i_term > initial_integral
 
     def test_pid_paused_maintains_duty_cycle(
@@ -381,7 +384,7 @@ class TestPIDIntegrationPause:
         controller = HeatingController(basic_config)
 
         # Establish a duty cycle in auto mode
-        controller.update_zone_pid("living_room", 20.0, 60.0)
+        setup_zone_pid(controller, "living_room", 20.0, 60.0)
         runtime = controller.get_zone_runtime("living_room")
         assert runtime is not None
         initial_duty_cycle = runtime.pid.state.duty_cycle
@@ -392,7 +395,7 @@ class TestPIDIntegrationPause:
         controller.mode = "all_off"
 
         # Update with different temperature - duty cycle should be maintained
-        returned_duty = controller.update_zone_pid("living_room", 15.0, 60.0)
+        returned_duty = setup_zone_pid(controller, "living_room", 15.0, 60.0)
         assert returned_duty == initial_duty_cycle
         assert runtime.pid.state.duty_cycle == initial_duty_cycle
 
@@ -404,7 +407,7 @@ class TestPIDIntegrationPause:
         controller.set_zone_setpoint("living_room", 22.0)
 
         # Establish state in auto mode
-        controller.update_zone_pid("living_room", 20.0, 60.0)
+        setup_zone_pid(controller, "living_room", 20.0, 60.0)
 
         runtime = controller.get_zone_runtime("living_room")
         assert runtime is not None
@@ -415,7 +418,7 @@ class TestPIDIntegrationPause:
         controller.mode = "all_off"
 
         # Update with new temperature - PID is paused so state should not change
-        controller.update_zone_pid("living_room", 18.0, 60.0)
+        setup_zone_pid(controller, "living_room", 18.0, 60.0)
 
         # Error should still reflect last PID calculation, not current temperature
         assert runtime.pid.state.error == 2.0
@@ -425,20 +428,20 @@ class TestPIDIntegrationPause:
         controller = HeatingController(basic_config)
 
         # Initial update in auto mode
-        controller.update_zone_pid("living_room", 20.0, 60.0)
+        setup_zone_pid(controller, "living_room", 20.0, 60.0)
         runtime = controller.get_zone_runtime("living_room")
         assert runtime is not None
         integral_after_first = runtime.pid.state.i_term
 
         # Pause by switching mode
         controller.mode = "all_off"
-        controller.update_zone_pid("living_room", 19.0, 60.0)
+        setup_zone_pid(controller, "living_room", 19.0, 60.0)
         integral_while_paused = runtime.pid.state.i_term
         assert integral_while_paused == integral_after_first
 
         # Resume by switching back to auto
         controller.mode = "auto"
-        controller.update_zone_pid("living_room", 19.0, 60.0)
+        setup_zone_pid(controller, "living_room", 19.0, 60.0)
         integral_after_resume = runtime.pid.state.i_term
 
         # Integral should have increased after resuming
@@ -451,14 +454,14 @@ class TestPIDIntegrationPause:
         controller = HeatingController(basic_config)
 
         # First update with valid temp
-        controller.update_zone_pid("living_room", 20.0, 60.0)
+        setup_zone_pid(controller, "living_room", 20.0, 60.0)
         runtime = controller.get_zone_runtime("living_room")
         assert runtime is not None
         initial_integral = runtime.pid.state.i_term
         initial_duty_cycle = runtime.pid.state.duty_cycle
 
         # Update with None temperature
-        returned_duty = controller.update_zone_pid("living_room", None, 60.0)
+        returned_duty = setup_zone_pid(controller, "living_room", None, 60.0)
 
         # Integral should be unchanged, duty cycle maintained
         assert runtime.pid.state.i_term == initial_integral
@@ -473,9 +476,10 @@ class TestUpdateZoneHistorical:
         controller = HeatingController(basic_config)
 
         # Set duty cycle first
-        controller.update_zone_pid("living_room", 20.0, 60.0)
+        setup_zone_pid(controller, "living_room", 20.0, 60.0)
 
-        controller.update_zone_historical(
+        setup_zone_historical(
+            controller,
             "living_room",
             period_state_avg=0.25,
             open_state_avg=0.9,
@@ -495,7 +499,8 @@ class TestUpdateZoneHistorical:
         """Test updating unknown zone does nothing."""
         controller = HeatingController(basic_config)
         # Should not raise
-        controller.update_zone_historical(
+        setup_zone_historical(
+            controller,
             "unknown",
             period_state_avg=0.25,
             open_state_avg=0.9,
@@ -515,11 +520,12 @@ class TestUpdateZoneHistorical:
         controller = HeatingController(basic_config)
 
         # Set duty cycle to 90%
-        controller.update_zone_pid("living_room", 19.0, 60.0)  # 2 degree error
+        setup_zone_pid(controller, "living_room", 19.0, 60.0)  # 2 degree error
 
         # Simulate being 30 minutes (1800s) into a 2-hour observation period
         # Valve was on 50% of the elapsed time (15 minutes = 900 seconds)
-        controller.update_zone_historical(
+        setup_zone_historical(
+            controller,
             "living_room",
             period_state_avg=0.5,  # On 50% of elapsed time
             open_state_avg=0.9,
@@ -548,12 +554,13 @@ class TestUpdateZoneHistorical:
         controller = HeatingController(basic_config)
 
         # Set up zone with high duty cycle (90%)
-        controller.update_zone_pid("living_room", 19.0, 60.0)
+        setup_zone_pid(controller, "living_room", 19.0, 60.0)
 
         # Early in observation period (30 min), valve was on most of the time (80%)
         # Bug: used_duration = 0.8 * 7200 = 5760 (would exceed quota for 80% duty)
         # Fix: used_duration = 0.8 * 1800 = 1440 (still has plenty of quota)
-        controller.update_zone_historical(
+        setup_zone_historical(
+            controller,
             "living_room",
             period_state_avg=0.8,
             open_state_avg=0.0,
@@ -561,7 +568,7 @@ class TestUpdateZoneHistorical:
             elapsed_time=1800.0,
         )
 
-        actions = controller.evaluate_zones()
+        actions = controller.evaluate_zones(now=datetime.now(UTC))
 
         # Zone should turn on because it still has quota remaining:
         # With 100% duty cycle: requested_duration is 7200s, used_duration is 1440s,
@@ -569,42 +576,48 @@ class TestUpdateZoneHistorical:
         assert actions["living_room"] == ZoneAction.TURN_ON
 
 
-class TestCalculateHeatRequest:
-    """Test calculate_heat_request method."""
+class TestHeatRequestFromEvaluate:
+    """Test heat_request values returned by evaluate()."""
 
-    def test_disabled_mode_no_request(self, basic_config: ControllerConfig) -> None:
-        """Test disabled mode returns no heat request."""
+    def test_disabled_mode_no_action(self, basic_config: ControllerConfig) -> None:
+        """Test disabled mode returns no heat request action (None)."""
         controller = HeatingController(basic_config)
         controller.mode = "disabled"
-        assert controller.calculate_heat_request() is False
+        actions = controller.evaluate(now=datetime.now(UTC))
+        # Disabled mode takes no action on heat_request
+        assert actions.heat_request is None
 
     def test_all_off_mode_no_request(self, basic_config: ControllerConfig) -> None:
-        """Test all_off mode returns no heat request."""
+        """Test all_off mode returns heat_request=False."""
         controller = HeatingController(basic_config)
         controller.mode = "all_off"
-        assert controller.calculate_heat_request() is False
+        actions = controller.evaluate(now=datetime.now(UTC))
+        assert actions.heat_request is False
 
     def test_all_on_mode_requests_heat(self, basic_config: ControllerConfig) -> None:
-        """Test all_on mode requests heat."""
+        """Test all_on mode returns heat_request=True."""
         controller = HeatingController(basic_config)
         controller.mode = "all_on"
-        assert controller.calculate_heat_request() is True
+        actions = controller.evaluate(now=datetime.now(UTC))
+        assert actions.heat_request is True
 
     def test_flush_mode_no_heat_request(self, basic_config: ControllerConfig) -> None:
-        """Test flush mode doesn't request heat."""
+        """Test flush mode returns heat_request=False."""
         controller = HeatingController(basic_config)
         controller.mode = "flush"
-        assert controller.calculate_heat_request() is False
+        actions = controller.evaluate(now=datetime.now(UTC))
+        assert actions.heat_request is False
 
     def test_auto_mode_with_valve_open_and_ready(
         self, basic_config: ControllerConfig
     ) -> None:
-        """Test auto mode requests heat when valve is open and ready."""
+        """Test auto mode returns heat_request=True when valve is open and ready."""
         controller = HeatingController(basic_config)
 
         # Set up zone with valve on and fully open
-        controller.update_zone_pid("living_room", 20.0, 60.0)
-        controller.update_zone_historical(
+        setup_zone_pid(controller, "living_room", 20.0, 60.0)
+        setup_zone_historical(
+            controller,
             "living_room",
             period_state_avg=0.0,
             open_state_avg=0.9,  # Above 0.85 threshold
@@ -618,7 +631,8 @@ class TestCalculateHeatRequest:
         runtime.state.requested_duration = 3600.0  # 1 hour
         runtime.state.used_duration = 0.0
 
-        assert controller.calculate_heat_request() is True
+        actions = controller.evaluate(now=datetime.now(UTC))
+        assert actions.heat_request is True
 
 
 class TestGetSummerModeValue:

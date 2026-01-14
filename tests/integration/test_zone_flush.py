@@ -4,11 +4,10 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from custom_components.ufh_controller.const import ValveState
+from custom_components.ufh_controller.const import TimingParams, ValveState
+from custom_components.ufh_controller.core.controller import ControllerState
 from custom_components.ufh_controller.core.zone import (
     CircuitType,
-    ControllerState,
-    TimingParams,
     ZoneAction,
     ZoneState,
     evaluate_zone,
@@ -32,10 +31,9 @@ class TestEvaluateZoneFlushCircuitPostDHW:
         )
         controller = ControllerState(
             flush_enabled=True,
-            flush_request=True,  # In post-DHW flush period
             zones={"bathroom": zone},
         )
-        result = evaluate_zone(zone, controller, timing)
+        result = evaluate_zone(zone, controller, timing, flush_request=True)
         assert result == ZoneAction.TURN_ON
 
     def test_flush_during_post_dhw_stays_on(self, timing: TimingParams) -> None:
@@ -47,10 +45,9 @@ class TestEvaluateZoneFlushCircuitPostDHW:
         )
         controller = ControllerState(
             flush_enabled=True,
-            flush_request=True,  # In post-DHW flush period
             zones={"bathroom": zone},
         )
-        result = evaluate_zone(zone, controller, timing)
+        result = evaluate_zone(zone, controller, timing, flush_request=True)
         assert result == ZoneAction.STAY_ON
 
     def test_flush_after_post_dhw_period_expired(self, timing: TimingParams) -> None:
@@ -88,7 +85,7 @@ class TestEvaluateZoneFlushCircuitPostDHW:
         )
         controller = ControllerState(
             flush_enabled=True,
-            flush_request=True,  # In post-DHW flush period
+            flush_request=False,
             zones={"bathroom": flush_zone, "living_room": regular_zone},
         )
         result = evaluate_zone(flush_zone, controller, timing)
@@ -113,11 +110,9 @@ class TestEvaluateZoneFlushCircuitPostDHW:
         )
         controller = ControllerState(
             flush_enabled=True,
-            flush_request=True,  # In post-DHW flush period
             zones={"bathroom": flush_zone, "living_room": regular_zone},
         )
-        result = evaluate_zone(flush_zone, controller, timing)
-        # Flush should turn on - regular valve is OFF
+        result = evaluate_zone(flush_zone, controller, timing, flush_request=True)
         assert result == ZoneAction.TURN_ON
 
 
@@ -160,7 +155,7 @@ class TestFlushCircuitScenarios:
         )
         controller = ControllerState(
             flush_enabled=True,
-            flush_request=True,  # Still in post-DHW flush period
+            flush_request=False,
             zones={"bathroom": flush_zone, "living_room": regular_zone},
         )
 

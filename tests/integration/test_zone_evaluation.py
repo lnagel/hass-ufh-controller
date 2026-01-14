@@ -2,14 +2,15 @@
 
 import pytest
 
-from custom_components.ufh_controller.const import ValveState
+from custom_components.ufh_controller.const import TimingParams, ValveState
+from custom_components.ufh_controller.core.controller import (
+    ControllerState,
+    aggregate_heat_request,
+)
 from custom_components.ufh_controller.core.zone import (
     CircuitType,
-    ControllerState,
-    TimingParams,
     ZoneAction,
     ZoneState,
-    aggregate_heat_request,
     evaluate_zone,
     should_request_heat,
 )
@@ -78,10 +79,9 @@ class TestEvaluateZoneFlushCircuit:
         controller = ControllerState(
             flush_enabled=True,
             dhw_active=True,
-            flush_request=True,  # DHW active implies flush request
             zones={"bathroom": zone},
         )
-        result = evaluate_zone(zone, controller, timing)
+        result = evaluate_zone(zone, controller, timing, flush_request=True)
         assert result == ZoneAction.TURN_ON
 
     def test_flush_during_dhw_stays_on(self, timing: TimingParams) -> None:
@@ -94,10 +94,9 @@ class TestEvaluateZoneFlushCircuit:
         controller = ControllerState(
             flush_enabled=True,
             dhw_active=True,
-            flush_request=True,  # DHW active implies flush request
             zones={"bathroom": zone},
         )
-        result = evaluate_zone(zone, controller, timing)
+        result = evaluate_zone(zone, controller, timing, flush_request=True)
         assert result == ZoneAction.STAY_ON
 
     def test_flush_blocked_by_regular_valve_on(self, timing: TimingParams) -> None:
@@ -117,7 +116,7 @@ class TestEvaluateZoneFlushCircuit:
         controller = ControllerState(
             flush_enabled=True,
             dhw_active=True,
-            flush_request=True,  # DHW active implies flush request
+            flush_request=False,
             zones={"bathroom": flush_zone, "living_room": regular_zone},
         )
         # Should fall through to normal quota logic (stays off with 0 quota)
@@ -143,11 +142,9 @@ class TestEvaluateZoneFlushCircuit:
         controller = ControllerState(
             flush_enabled=True,
             dhw_active=True,
-            flush_request=True,  # DHW active implies flush request
             zones={"bathroom": flush_zone, "living_room": regular_zone},
         )
-        # Flush should turn on - regular valve is OFF
-        result = evaluate_zone(flush_zone, controller, timing)
+        result = evaluate_zone(flush_zone, controller, timing, flush_request=True)
         assert result == ZoneAction.TURN_ON
 
     def test_flush_disabled_no_priority(self, timing: TimingParams) -> None:
