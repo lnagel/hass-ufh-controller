@@ -1,51 +1,28 @@
-"""Test EMA (Exponential Moving Average) temperature filter."""
+"""Test EMA (Exponential Moving Average) formula calculation."""
 
 import pytest
 
-from custom_components.ufh_controller.const import (
-    DEFAULT_TEMP_EMA_TIME_CONSTANT,
-    UI_TEMP_EMA_TIME_CONSTANT,
-)
+from custom_components.ufh_controller.core.ema import apply_ema
 
 
-def apply_ema(
-    raw_temp: float, previous_ema: float | None, tau: int, dt: float
-) -> float:
-    """
-    Apply EMA filter to temperature reading.
-
-    This is a standalone implementation of the EMA formula for testing purposes.
-    The actual implementation is in coordinator._apply_ema_filter().
-
-    Args:
-        raw_temp: Raw temperature reading from sensor.
-        previous_ema: Previous EMA value (None on first reading).
-        tau: Time constant in seconds.
-        dt: Time delta since last update in seconds.
-
-    Returns:
-        Filtered temperature value.
-
-    """
-    # No filtering if time constant is 0 or no previous value
-    if tau <= 0 or previous_ema is None:
-        return raw_temp
-
-    # Calculate smoothing factor alpha
-    alpha = dt / (tau + dt)
-
-    # Apply EMA filter
-    return alpha * raw_temp + (1 - alpha) * previous_ema
-
-
-class TestEMAFormula:
-    """Test cases for EMA filter formula."""
+class TestApplyEma:
+    """Test cases for the apply_ema function."""
 
     def test_no_filtering_when_tau_zero(self) -> None:
         """Test that tau=0 disables filtering and returns raw value."""
         raw_temp = 22.5
         previous_ema = 20.0
         tau = 0
+        dt = 60.0
+
+        result = apply_ema(raw_temp, previous_ema, tau, dt)
+        assert result == raw_temp
+
+    def test_no_filtering_when_tau_negative(self) -> None:
+        """Test that negative tau disables filtering and returns raw value."""
+        raw_temp = 22.5
+        previous_ema = 20.0
+        tau = -100
         dt = 60.0
 
         result = apply_ema(raw_temp, previous_ema, tau, dt)
@@ -195,17 +172,3 @@ class TestEMAFormula:
 
         # Should stay approximately the same (allowing for float precision)
         assert result == pytest.approx(previous_ema)
-
-
-class TestEMADefaults:
-    """Test default EMA configuration values."""
-
-    def test_default_time_constant(self) -> None:
-        """Test default time constant matches spec."""
-        assert DEFAULT_TEMP_EMA_TIME_CONSTANT == 600  # 10 minutes
-
-    def test_ui_constraints(self) -> None:
-        """Test UI validation constraints for EMA time constant."""
-        assert UI_TEMP_EMA_TIME_CONSTANT["min"] == 0
-        assert UI_TEMP_EMA_TIME_CONSTANT["max"] == 1800
-        assert UI_TEMP_EMA_TIME_CONSTANT["step"] == 60

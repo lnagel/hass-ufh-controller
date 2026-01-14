@@ -33,6 +33,7 @@ from .core import (
     TimingParams,
     ZoneAction,
     ZoneConfig,
+    apply_ema,
     get_observation_start,
     get_state_average,
     get_valve_open_window,
@@ -422,33 +423,13 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         raw_temp: float,
         dt: float,
     ) -> float:
-        """
-        Apply Exponential Moving Average filter to temperature reading.
-
-        EMA formula: ema = alpha * raw + (1 - alpha) * previous_ema
-        Where alpha = dt / (tau + dt), tau is the time constant.
-
-        Args:
-            runtime: Zone runtime data containing config and state.
-            raw_temp: Raw temperature reading from sensor.
-            dt: Time delta since last update in seconds.
-
-        Returns:
-            Filtered temperature value.
-
-        """
-        tau = runtime.config.temp_ema_time_constant
-        previous_ema = runtime.state.current
-
-        # No filtering if time constant is 0 or no previous value
-        if tau <= 0 or previous_ema is None:
-            return raw_temp
-
-        # Calculate smoothing factor
-        alpha = dt / (tau + dt)
-
-        # Apply EMA filter
-        return alpha * raw_temp + (1 - alpha) * previous_ema
+        """Apply EMA filter using the core function."""
+        return apply_ema(
+            raw_temp=raw_temp,
+            previous_ema=runtime.state.current,
+            tau=runtime.config.temp_ema_time_constant,
+            dt=dt,
+        )
 
     async def _update_zone(
         self,
