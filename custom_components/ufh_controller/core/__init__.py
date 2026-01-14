@@ -12,9 +12,7 @@ from .controller import (
 from .ema import apply_ema
 from .history import (
     get_observation_start,
-    get_state_average,
     get_valve_open_window,
-    was_any_window_open_recently,
 )
 from .pid import PIDController, PIDState
 from .zone import (
@@ -46,8 +44,6 @@ __all__ = [
     "calculate_requested_duration",
     "evaluate_zone",
     "get_observation_start",
-    "get_state_average",
     "get_valve_open_window",
     "should_request_heat",
-    "was_any_window_open_recently",
 ]

@@ -9,9 +9,9 @@ from sqlalchemy.exc import OperationalError
 
 from custom_components.ufh_controller.core.history import (
     get_observation_start,
-    get_state_average,
     get_valve_open_window,
 )
+from custom_components.ufh_controller.recorder import get_state_average
 
 
 class TestGetObservationStart:

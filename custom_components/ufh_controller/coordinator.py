@@ -34,11 +34,10 @@ from .core import (
     ZoneAction,
     ZoneConfig,
     get_observation_start,
-    get_state_average,
     get_valve_open_window,
-    was_any_window_open_recently,
 )
 from .core.zone import CircuitType
+from .recorder import get_state_average, was_any_window_open_recently
 
 # Storage constants
 STORAGE_VERSION = 1
