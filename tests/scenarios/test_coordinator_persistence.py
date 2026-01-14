@@ -52,9 +52,13 @@ async def test_coordinator_loads_stored_state(
                 "i_term": 45.5,
                 "d_term": 1.5,
                 "duty_cycle": 55.0,
+                "temperature": 20.8,  # EMA-filtered temperature
             },
         },
     }
+
+    # Set raw sensor to a different value to verify EMA restoration works
+    hass.states.async_set("sensor.zone1_temp", "21.5")
 
     with patch(
         "homeassistant.helpers.storage.Store.async_load",
@@ -79,6 +83,10 @@ async def test_coordinator_loads_stored_state(
     assert runtime.pid.state.d_term == 1.5
     assert runtime.pid.state.duty_cycle == 55.0
 
+    # Check EMA temperature was restored (value between stored and raw)
+    assert runtime.state.current is not None
+    assert 20.8 <= runtime.state.current <= 21.5
+
 
 async def test_coordinator_save_state_format(
     hass: HomeAssistant,
@@ -100,6 +108,9 @@ async def test_coordinator_save_state_format(
     runtime.pid.set_state(
         PIDState(error=1.5, p_term=25.0, i_term=75.0, d_term=0.8, duty_cycle=65.0)
     )
+
+    # Set EMA-filtered temperature that should be persisted
+    runtime.state.current = 21.5
 
     saved_data = None
 
@@ -124,6 +135,9 @@ async def test_coordinator_save_state_format(
     assert saved_data["zones"]["zone1"]["i_term"] == 75.0
     assert saved_data["zones"]["zone1"]["d_term"] == 0.8
     assert saved_data["zones"]["zone1"]["duty_cycle"] == 65.0
+
+    # Verify EMA temperature is saved
+    assert saved_data["zones"]["zone1"]["temperature"] == 21.5
 
 
 async def test_coordinator_no_stored_state(

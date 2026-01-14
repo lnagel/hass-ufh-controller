@@ -191,5 +191,11 @@ UI_SETPOINT_MIN = {"min": 5.0, "max": 30.0, "step": 0.1}
 UI_SETPOINT_MAX = {"min": 5.0, "max": 35.0, "step": 0.1}
 UI_SETPOINT_DEFAULT = {"min": 5.0, "max": 35.0, "step": 0.1}
 
+# Temperature smoothing (EMA low-pass filter)
+DEFAULT_TEMP_EMA_TIME_CONSTANT = 600  # 10 minutes in seconds
+
+# UI validation constraints for temperature smoothing
+UI_TEMP_EMA_TIME_CONSTANT = {"min": 0, "max": 1800, "step": 60}  # 0-30 minutes
+
 # UI validation constraints for preset temperatures
 UI_PRESET_TEMPERATURE = {"min": 5.0, "max": 35.0, "step": 0.5}

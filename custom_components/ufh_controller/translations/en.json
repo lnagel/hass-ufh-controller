@@ -65,6 +65,7 @@
           "setpoint_min": "Minimum setpoint",
           "setpoint_max": "Maximum setpoint",
           "setpoint_default": "Default setpoint",
+          "temp_ema_time_constant": "Temperature smoothing time constant",
           "kp": "PID proportional gain (Kp)",
           "ki": "PID integral gain (Ki)",
           "kd": "PID derivative gain (Kd)"
@@ -129,6 +130,7 @@
             "setpoint_min": "Minimum setpoint",
             "setpoint_max": "Maximum setpoint",
             "setpoint_default": "Default setpoint",
+            "temp_ema_time_constant": "Temperature smoothing time constant",
             "kp": "PID proportional gain (Kp)",
             "ki": "PID integral gain (Ki)",
             "kd": "PID derivative gain (Kd)"
@@ -160,6 +162,7 @@
             "setpoint_min": "Minimum setpoint",
             "setpoint_max": "Maximum setpoint",
             "setpoint_default": "Default setpoint",
+            "temp_ema_time_constant": "Temperature smoothing time constant",
             "kp": "PID proportional gain (Kp)",
             "ki": "PID integral gain (Ki)",
             "kd": "PID derivative gain (Kd)"

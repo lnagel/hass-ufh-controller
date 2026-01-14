@@ -12,6 +12,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from .const import (
     DEFAULT_PID,
     DEFAULT_SETPOINT,
+    DEFAULT_TEMP_EMA_TIME_CONSTANT,
     DEFAULT_TIMING,
     DEFAULT_VALVE_OPEN_THRESHOLD,
     DOMAIN,
@@ -32,6 +33,7 @@ from .core import (
     TimingParams,
     ZoneAction,
     ZoneConfig,
+    apply_ema,
     get_observation_start,
     get_state_average,
     get_valve_open_window,
@@ -160,6 +162,9 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     integral_max=pid_opts.get(
                         "integral_max", DEFAULT_PID["integral_max"]
                     ),
+                    temp_ema_time_constant=zone_data.get(
+                        "temp_ema_time_constant", DEFAULT_TEMP_EMA_TIME_CONSTANT
+                    ),
                 )
             )
 
@@ -241,6 +246,10 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if "preset_mode" in zone_state:
             self._zone_presets[zone_id] = zone_state["preset_mode"]
 
+        # Restore temperature (EMA value) for smooth continuity across restarts
+        if "temperature" in zone_state:
+            runtime.state.current = zone_state["temperature"]
+
     async def async_save_state(self) -> None:
         """Save current state to storage."""
         zones_data: dict[str, dict[str, Any]] = {}
@@ -263,6 +272,9 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 preset_mode = self._zone_presets.get(zone_id)
                 if preset_mode is not None:
                     zone_data["preset_mode"] = preset_mode
+                # Save temperature (EMA value) for smooth continuity across restarts
+                if runtime.state.current is not None:
+                    zone_data["temperature"] = runtime.state.current
                 zones_data[zone_id] = zone_data
 
         data = {
@@ -426,7 +438,14 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         temp_unavailable = False
         if temp_state is not None:
             try:
-                current = float(temp_state.state)
+                raw_temp = float(temp_state.state)
+                # Apply EMA low-pass filter to smooth temperature readings
+                current = apply_ema(
+                    current=raw_temp,
+                    previous=runtime.state.current,
+                    tau=runtime.config.temp_ema_time_constant,
+                    dt=dt,
+                )
             except (ValueError, TypeError):
                 temp_unavailable = True
                 LOGGER.warning(
