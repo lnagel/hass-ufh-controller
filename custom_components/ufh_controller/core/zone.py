@@ -16,7 +16,6 @@ from custom_components.ufh_controller.const import (
     DEFAULT_SETPOINT,
     DEFAULT_TEMP_EMA_TIME_CONSTANT,
     DEFAULT_VALVE_OPEN_THRESHOLD,
-    LOGGER,
     TimingParams,
     ValveState,
     ZoneStatus,
@@ -45,6 +44,21 @@ class ZoneAction(StrEnum):
     TURN_OFF = "turn_off"
     STAY_ON = "stay_on"
     STAY_OFF = "stay_off"
+
+
+class ZoneStatusTransition(StrEnum):
+    """
+    Status transitions that may occur during failure state update.
+
+    These values indicate what happened so the caller can log appropriately.
+    Pure core logic should not perform I/O (logging); instead it returns
+    these transitions for the integration layer to handle.
+    """
+
+    NONE = "none"  # No status change
+    ENTERED_DEGRADED = "entered_degraded"  # Zone entered degraded mode
+    ENTERED_FAIL_SAFE = "entered_fail_safe"  # Zone entered fail-safe mode
+    RECOVERED = "recovered"  # Zone recovered from degraded/fail-safe
 
 
 @dataclass
@@ -270,7 +284,7 @@ class ZoneRuntime:
         temp_unavailable: bool,
         recorder_failure: bool,
         fail_safe_timeout: int,
-    ) -> None:
+    ) -> ZoneStatusTransition:
         """
         Update zone failure tracking state.
 
@@ -283,6 +297,9 @@ class ZoneRuntime:
             recorder_failure: Whether Recorder query failed.
             fail_safe_timeout: Seconds before entering fail-safe mode.
 
+        Returns:
+            ZoneStatusTransition indicating what happened (for caller to log).
+
         """
         if temp_unavailable or recorder_failure:
             # Zone has a failure - increment counter and check for fail-safe
@@ -292,37 +309,24 @@ class ZoneRuntime:
             if self._should_fail_safe(now, fail_safe_timeout):
                 if self.state.zone_status != ZoneStatus.FAIL_SAFE:
                     self.state.zone_status = ZoneStatus.FAIL_SAFE
-                    LOGGER.error(
-                        "Zone %s entering fail-safe mode after %d seconds of failures",
-                        self.state.zone_id,
-                        fail_safe_timeout,
-                    )
+                    return ZoneStatusTransition.ENTERED_FAIL_SAFE
             elif self.state.zone_status == ZoneStatus.NORMAL:
                 # Only transition to DEGRADED if we were previously NORMAL
                 self.state.zone_status = ZoneStatus.DEGRADED
-                LOGGER.warning(
-                    "Zone %s entering degraded mode: temp_unavailable=%s, "
-                    "recorder_failure=%s",
-                    self.state.zone_id,
-                    temp_unavailable,
-                    recorder_failure,
-                )
+                return ZoneStatusTransition.ENTERED_DEGRADED
             # If zone is still INITIALIZING, keep it that way - don't report
             # problems before we've had a successful update
-        else:
-            # Zone succeeded - reset failure tracking
-            if self.state.zone_status not in (
-                ZoneStatus.NORMAL,
-                ZoneStatus.INITIALIZING,
-            ):
-                LOGGER.info(
-                    "Zone %s recovered from %s mode",
-                    self.state.zone_id,
-                    self.state.zone_status.value,
-                )
-            self.state.zone_status = ZoneStatus.NORMAL
-            self.state.last_successful_update = now
-            self.state.consecutive_failures = 0
+            return ZoneStatusTransition.NONE
+
+        # Zone succeeded - reset failure tracking
+        previous_status = self.state.zone_status
+        self.state.zone_status = ZoneStatus.NORMAL
+        self.state.last_successful_update = now
+        self.state.consecutive_failures = 0
+
+        if previous_status not in (ZoneStatus.NORMAL, ZoneStatus.INITIALIZING):
+            return ZoneStatusTransition.RECOVERED
+        return ZoneStatusTransition.NONE
 
     def _should_fail_safe(self, now: datetime, fail_safe_timeout: int) -> bool:
         """

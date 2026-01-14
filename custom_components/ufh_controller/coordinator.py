@@ -33,6 +33,7 @@ from .core import (
     TimingParams,
     ZoneAction,
     ZoneConfig,
+    ZoneStatusTransition,
     get_observation_start,
     get_valve_open_window,
 )
@@ -565,12 +566,44 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
 
         # Track zone-level failure state
-        runtime.update_failure_state(
+        transition = runtime.update_failure_state(
             now,
             temp_unavailable=temp_unavailable,
             recorder_failure=recorder_failure,
             fail_safe_timeout=FAIL_SAFE_TIMEOUT,
         )
+        self._log_zone_status_transition(
+            zone_id,
+            transition,
+            temp_unavailable=temp_unavailable,
+            recorder_failure=recorder_failure,
+        )
+
+    def _log_zone_status_transition(
+        self,
+        zone_id: str,
+        transition: ZoneStatusTransition,
+        *,
+        temp_unavailable: bool,
+        recorder_failure: bool,
+    ) -> None:
+        """Log zone status transitions (integration layer's responsibility)."""
+        if transition == ZoneStatusTransition.ENTERED_FAIL_SAFE:
+            LOGGER.error(
+                "Zone %s entering fail-safe mode after %d seconds of failures",
+                zone_id,
+                FAIL_SAFE_TIMEOUT,
+            )
+        elif transition == ZoneStatusTransition.ENTERED_DEGRADED:
+            LOGGER.warning(
+                "Zone %s entering degraded mode: temp_unavailable=%s, "
+                "recorder_failure=%s",
+                zone_id,
+                temp_unavailable,
+                recorder_failure,
+            )
+        elif transition == ZoneStatusTransition.RECOVERED:
+            LOGGER.info("Zone %s recovered to normal operation", zone_id)
 
     def _update_controller_status_from_zones(self) -> None:
         """Update controller status based on zone statuses."""
