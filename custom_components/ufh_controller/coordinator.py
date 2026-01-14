@@ -92,6 +92,10 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Track previous DHW state for transition detection
         self._prev_dhw_active: bool = False
 
+        # Track previous states for change detection
+        self._prev_heat_request: bool = False
+        self._prev_summer_mode: SummerMode = SummerMode.SUMMER
+
     def _build_controller(self, entry: UFHControllerConfigEntry) -> HeatingController:
         """Build HeatingController from config entry."""
         data = entry.data
@@ -363,18 +367,27 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Evaluate all zones and get all actions
         actions = self._controller.evaluate(now=now)
 
+        # Update flush_request state for binary_sensor exposure
+        self._controller.state.flush_request = actions.flush_request
+
         # Execute valve actions with zone-level isolation
         await self._execute_valve_actions_with_isolation(actions.valve_actions)
 
         # Execute heat request if changed
-        if actions.heat_request is not None:
-            await self._execute_heat_request(
-                heat_request=actions.heat_request == ValveState.ON
-            )
+        if (
+            actions.heat_request is not None
+            and actions.heat_request != self._prev_heat_request
+        ):
+            await self._execute_heat_request(heat_request=actions.heat_request)
+            self._prev_heat_request = actions.heat_request
 
         # Execute summer mode if changed
-        if actions.summer_mode is not None:
+        if (
+            actions.summer_mode is not None
+            and actions.summer_mode != self._prev_summer_mode
+        ):
             await self._set_summer_mode(actions.summer_mode)
+            self._prev_summer_mode = actions.summer_mode
 
         # Save state after every update for crash resilience
         await self.async_save_state()

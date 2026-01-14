@@ -353,6 +353,8 @@ class ZoneRuntime:
         self,
         controller_state: ControllerState,
         timing: TimingParams,
+        *,
+        flush_request: bool = False,
     ) -> ZoneAction:
         """
         Evaluate zone state and determine valve action.
@@ -363,6 +365,7 @@ class ZoneRuntime:
         Args:
             controller_state: Current controller state.
             timing: Timing parameters.
+            flush_request: Whether flush circuits should activate.
 
         Returns:
             The action to take on the zone valve.
@@ -379,7 +382,7 @@ class ZoneRuntime:
         if (
             self.state.circuit_type == CircuitType.FLUSH
             and controller_state.flush_enabled
-            and controller_state.flush_request
+            and flush_request
         ):
             return ZoneAction.TURN_ON if not valve_on else ZoneAction.STAY_ON
 
@@ -473,6 +476,8 @@ def evaluate_zone(  # noqa: PLR0911
     zone: ZoneState,
     controller: ControllerState,
     timing: TimingParams,
+    *,
+    flush_request: bool = False,
 ) -> ZoneAction:
     """
     Evaluate zone state and determine valve action.
@@ -484,6 +489,7 @@ def evaluate_zone(  # noqa: PLR0911
         zone: Current zone state.
         controller: Current controller state.
         timing: Timing parameters.
+        flush_request: Whether flush circuits should activate.
 
     Returns:
         The action to take on the zone valve.
@@ -500,7 +506,7 @@ def evaluate_zone(  # noqa: PLR0911
     if (
         zone.circuit_type == CircuitType.FLUSH
         and controller.flush_enabled
-        and controller.flush_request
+        and flush_request
     ):
         return ZoneAction.TURN_ON if not valve_on else ZoneAction.STAY_ON
 
