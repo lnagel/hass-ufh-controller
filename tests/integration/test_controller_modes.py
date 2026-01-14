@@ -1,7 +1,6 @@
 """Test heating controller mode evaluation and configuration."""
 
 from datetime import UTC, datetime
-from unittest.mock import patch
 
 import pytest
 
@@ -150,8 +149,8 @@ class TestEvaluateZonesFlushMode:
 class TestEvaluateZonesDisabledMode:
     """Test evaluate_zones in disabled mode."""
 
-    def test_valves_maintain_state(self, basic_config: ControllerConfig) -> None:
-        """Test valves maintain state in disabled mode."""
+    def test_no_actions_returned(self, basic_config: ControllerConfig) -> None:
+        """Test disabled mode returns no actions - no state detection, no changes."""
         controller = HeatingController(basic_config)
 
         # Simulate valve already being on (as if previously executed in all_on mode)
@@ -163,8 +162,8 @@ class TestEvaluateZonesDisabledMode:
         controller.mode = "disabled"
         actions = controller.evaluate_zones(now=datetime.now(UTC))
 
-        # Valves that were on stay on
-        assert actions["living_room"] == ZoneAction.STAY_ON
+        # Disabled mode returns empty actions
+        assert actions == {}
 
 
 class TestEvaluateZonesCycleMode:
@@ -175,12 +174,9 @@ class TestEvaluateZonesCycleMode:
         controller = HeatingController(basic_config)
         controller.mode = "cycle"
 
-        with patch(
-            "custom_components.ufh_controller.core.controller.datetime"
-        ) as mock_dt:
-            mock_dt.now.return_value = datetime(2024, 1, 15, 0, 30, 0, tzinfo=UTC)
-            mock_dt.UTC = UTC
-            actions = controller.evaluate_zones(now=datetime.now(UTC))
+        # Pass time directly - no mocking needed with new architecture
+        now = datetime(2024, 1, 15, 0, 30, 0, tzinfo=UTC)
+        actions = controller.evaluate_zones(now=now)
 
         assert actions["living_room"] == ZoneAction.STAY_OFF
         assert actions["bedroom"] == ZoneAction.STAY_OFF
@@ -190,12 +186,9 @@ class TestEvaluateZonesCycleMode:
         controller = HeatingController(basic_config)
         controller.mode = "cycle"
 
-        with patch(
-            "custom_components.ufh_controller.core.controller.datetime"
-        ) as mock_dt:
-            mock_dt.now.return_value = datetime(2024, 1, 15, 1, 30, 0, tzinfo=UTC)
-            mock_dt.UTC = UTC
-            actions = controller.evaluate_zones(now=datetime.now(UTC))
+        # Pass time directly - no mocking needed with new architecture
+        now = datetime(2024, 1, 15, 1, 30, 0, tzinfo=UTC)
+        actions = controller.evaluate_zones(now=now)
 
         # First zone should be on, second should be off
         assert actions["living_room"] == ZoneAction.TURN_ON
@@ -208,12 +201,9 @@ class TestEvaluateZonesCycleMode:
         controller = HeatingController(basic_config)
         controller.mode = "cycle"
 
-        with patch(
-            "custom_components.ufh_controller.core.controller.datetime"
-        ) as mock_dt:
-            mock_dt.now.return_value = datetime(2024, 1, 15, 2, 30, 0, tzinfo=UTC)
-            mock_dt.UTC = UTC
-            actions = controller.evaluate_zones(now=datetime.now(UTC))
+        # Pass time directly - no mocking needed with new architecture
+        now = datetime(2024, 1, 15, 2, 30, 0, tzinfo=UTC)
+        actions = controller.evaluate_zones(now=now)
 
         # Second zone should be on
         assert actions["living_room"] == ZoneAction.STAY_OFF

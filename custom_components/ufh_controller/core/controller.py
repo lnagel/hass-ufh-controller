@@ -8,7 +8,7 @@ zone control, operation modes, and heat request aggregation.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime
 
 from custom_components.ufh_controller.const import (
     DEFAULT_CYCLE_MODE_HOURS,
@@ -283,9 +283,175 @@ class HeatingController:
             observation_period=self.config.timing.observation_period,
         )
 
+    # -------------------------------------------------------------------------
+    # Mode-specific evaluation functions
+    # -------------------------------------------------------------------------
+
+    def _evaluate_disabled_mode(self) -> ControllerActions:
+        """
+        Disabled mode - no changes whatsoever.
+
+        Returns empty valve actions - no state detection, no changes.
+        """
+        return ControllerActions(valve_actions={})
+
+    def _evaluate_all_on_mode(self) -> ControllerActions:
+        """
+        All-on mode - all valves open, boiler fires.
+
+        Permanently heating: heat_request=ON, summer_mode=WINTER.
+        """
+        valve_actions = {
+            zid: (
+                ZoneAction.STAY_ON
+                if rt.state.valve_state == ValveState.ON
+                else ZoneAction.TURN_ON
+            )
+            for zid, rt in self._zones.items()
+        }
+        return ControllerActions(
+            valve_actions=valve_actions,
+            heat_request=ValveState.ON,
+            summer_mode=SummerMode.WINTER,
+        )
+
+    def _evaluate_all_off_mode(self) -> ControllerActions:
+        """
+        All-off mode - all valves closed, no heating.
+
+        Permanently not heating: heat_request=OFF, summer_mode=SUMMER.
+        """
+        valve_actions = {
+            zid: (
+                ZoneAction.TURN_OFF
+                if rt.state.valve_state == ValveState.ON
+                else ZoneAction.STAY_OFF
+            )
+            for zid, rt in self._zones.items()
+        }
+        return ControllerActions(
+            valve_actions=valve_actions,
+            heat_request=ValveState.OFF,
+            summer_mode=SummerMode.SUMMER,
+        )
+
+    def _evaluate_flush_mode(self) -> ControllerActions:
+        """
+        Flush mode - all valves open, circulation only (no boiler firing).
+
+        Permanently not heating: heat_request=OFF, summer_mode=SUMMER.
+        """
+        valve_actions = {
+            zid: (
+                ZoneAction.STAY_ON
+                if rt.state.valve_state == ValveState.ON
+                else ZoneAction.TURN_ON
+            )
+            for zid, rt in self._zones.items()
+        }
+        return ControllerActions(
+            valve_actions=valve_actions,
+            heat_request=ValveState.OFF,
+            summer_mode=SummerMode.SUMMER,
+        )
+
+    def _evaluate_cycle_mode(self, now: datetime) -> ControllerActions:
+        """
+        Cycle mode - rotate through zones by hour, circulation only.
+
+        Same as flush mode but one zone at a time on an 8-hour rotation.
+        Hour 0: all closed (rest hour)
+        Hours 1-7: zones open sequentially
+
+        Permanently not heating: heat_request=OFF, summer_mode=SUMMER.
+        """
+        cycle_hour = now.hour % DEFAULT_CYCLE_MODE_HOURS
+        zone_ids = list(self._zones.keys())
+
+        valve_actions: dict[str, ZoneAction] = {}
+        for zid, rt in self._zones.items():
+            valve_on = rt.state.valve_state == ValveState.ON
+            if cycle_hour == 0:
+                # Rest hour - all closed
+                valve_actions[zid] = (
+                    ZoneAction.TURN_OFF if valve_on else ZoneAction.STAY_OFF
+                )
+            elif not zone_ids:
+                valve_actions[zid] = ZoneAction.STAY_OFF
+            else:
+                active_index = (cycle_hour - 1) % len(zone_ids)
+                if zid == zone_ids[active_index]:
+                    valve_actions[zid] = (
+                        ZoneAction.STAY_ON if valve_on else ZoneAction.TURN_ON
+                    )
+                else:
+                    valve_actions[zid] = (
+                        ZoneAction.TURN_OFF if valve_on else ZoneAction.STAY_OFF
+                    )
+
+        return ControllerActions(
+            valve_actions=valve_actions,
+            heat_request=ValveState.OFF,
+            summer_mode=SummerMode.SUMMER,
+        )
+
+    def _evaluate_auto_mode(self, now: datetime) -> ControllerActions:
+        """
+        Auto mode - quota-based scheduling with flush circuit logic.
+
+        Uses PID-based quota scheduling for regular zones, then evaluates
+        flush circuits based on whether any regular zones are running.
+
+        Heat request and summer mode are calculated from zone outputs.
+        """
+        valve_actions = self._evaluate_auto_valves(now)
+
+        # Calculate heat request from zone outputs
+        heat_request = any(
+            rt.should_request_heat(self.config.timing) for rt in self._zones.values()
+        )
+
+        # Apply change detection for auto mode
+        heat_request_action: ValveState | None = None
+        if heat_request != self._prev_heat_request:
+            heat_request_action = ValveState.ON if heat_request else ValveState.OFF
+            self._prev_heat_request = heat_request
+
+        summer_mode = SummerMode.WINTER if heat_request else SummerMode.SUMMER
+        summer_mode_action: SummerMode | None = None
+        if summer_mode != self._prev_summer_mode:
+            summer_mode_action = summer_mode
+            self._prev_summer_mode = summer_mode
+
+        return ControllerActions(
+            valve_actions=valve_actions,
+            heat_request=heat_request_action,
+            summer_mode=summer_mode_action,
+        )
+
     def evaluate_zones(self, *, now: datetime) -> dict[str, ZoneAction]:
         """
         Evaluate all zones and determine valve actions.
+
+        This method is maintained for backwards compatibility. It returns
+        only valve actions (not heat_request or summer_mode).
+
+        For full evaluation with all actions, use evaluate() instead.
+
+        Args:
+            now: Current time for flush timer comparison.
+
+        Returns:
+            Dictionary mapping zone IDs to their actions.
+
+        """
+        # Delegate to evaluate() and extract valve actions
+        actions = self.evaluate(now=now)
+        return actions.valve_actions
+
+    def _evaluate_auto_valves(self, now: datetime) -> dict[str, ZoneAction]:
+        """
+        Evaluate all zones in auto mode using quota-based scheduling.
 
         Evaluates regular zones first, then computes flush_request,
         then evaluates flush zones. This ensures flush circuits only
@@ -300,13 +466,10 @@ class HeatingController:
         """
         actions: dict[str, ZoneAction] = {}
 
-        # Build current controller state for decision logic
-        self._state.zones = {zid: zr.state for zid, zr in self._zones.items()}
-
-        # Phase 1: Evaluate regular zones first
+        # Phase 1: Evaluate regular zones first using quota-based scheduling
         for zone_id, runtime in self._zones.items():
             if runtime.config.circuit_type == CircuitType.REGULAR:
-                actions[zone_id] = self._evaluate_single_zone(zone_id, runtime)
+                actions[zone_id] = runtime.evaluate(self._state, self.config.timing)
 
         # Phase 2: Compute flush_request based on regular zone actions
         any_regular_on = any(
@@ -324,7 +487,7 @@ class HeatingController:
         # Phase 3: Evaluate flush zones
         for zone_id, runtime in self._zones.items():
             if runtime.config.circuit_type == CircuitType.FLUSH:
-                actions[zone_id] = self._evaluate_single_zone(zone_id, runtime)
+                actions[zone_id] = runtime.evaluate(self._state, self.config.timing)
 
         return actions
 
@@ -332,98 +495,33 @@ class HeatingController:
         """
         Evaluate all zones and compute all controller actions.
 
-        This is the main entry point for the control loop. Returns all actions
-        (valve, heat request, summer mode) in a single call for the coordinator
-        to execute.
+        This is the main entry point for the control loop. Dispatches to
+        mode-specific evaluation functions that return complete ControllerActions.
 
         Args:
-            now: Current time for flush timer comparison.
+            now: Current time for flush timer and cycle mode calculation.
 
         Returns:
             ControllerActions with valve actions and optional state changes.
 
         """
-        # Get valve actions
-        valve_actions = self.evaluate_zones(now=now)
+        # Build current controller state for decision logic
+        self._state.zones = {zid: zr.state for zid, zr in self._zones.items()}
 
-        # Calculate heat request and check for change
-        heat_request = self.calculate_heat_request()
-        heat_request_action: ValveState | None = None
-        if heat_request != self._prev_heat_request:
-            heat_request_action = ValveState.ON if heat_request else ValveState.OFF
-            self._prev_heat_request = heat_request
-
-        # Calculate summer mode and check for change
-        summer_mode_value = self.get_summer_mode_value(heat_request=heat_request)
-        summer_mode_action: SummerMode | None = None
-        if (
-            summer_mode_value is not None
-            and summer_mode_value != self._prev_summer_mode
-        ):
-            summer_mode_action = SummerMode(summer_mode_value)
-            self._prev_summer_mode = summer_mode_value
-
-        return ControllerActions(
-            valve_actions=valve_actions,
-            heat_request=heat_request_action,
-            summer_mode=summer_mode_action,
-        )
-
-    def _evaluate_single_zone(
-        self,
-        zone_id: str,
-        runtime: ZoneRuntime,
-    ) -> ZoneAction:
-        """Evaluate a single zone based on current mode."""
+        # Dispatch to mode-specific evaluation
         mode = self._state.mode
-        valve_on = runtime.state.valve_state == ValveState.ON
-
         if mode == "disabled":
-            # Disabled mode - no action, maintain current state
-            return ZoneAction.STAY_ON if valve_on else ZoneAction.STAY_OFF
-
+            return self._evaluate_disabled_mode()
         if mode == "all_on":
-            return ZoneAction.STAY_ON if valve_on else ZoneAction.TURN_ON
-
+            return self._evaluate_all_on_mode()
         if mode == "all_off":
-            return ZoneAction.TURN_OFF if valve_on else ZoneAction.STAY_OFF
-
+            return self._evaluate_all_off_mode()
         if mode == "flush":
-            # Flush mode - all valves open
-            return ZoneAction.STAY_ON if valve_on else ZoneAction.TURN_ON
-
+            return self._evaluate_flush_mode()
         if mode == "cycle":
-            return self._evaluate_cycle_mode(zone_id, runtime)
-
-        # Default: auto mode - delegate to zone
-        return runtime.evaluate(self._state, self.config.timing)
-
-    def _evaluate_cycle_mode(
-        self,
-        zone_id: str,
-        runtime: ZoneRuntime,
-    ) -> ZoneAction:
-        """Evaluate zone action for cycle mode."""
-        # Get current hour of day
-        now = datetime.now(UTC)
-        cycle_hour = now.hour % DEFAULT_CYCLE_MODE_HOURS
-        valve_on = runtime.state.valve_state == ValveState.ON
-
-        if cycle_hour == 0:
-            # Rest hour - all closed
-            return ZoneAction.TURN_OFF if valve_on else ZoneAction.STAY_OFF
-
-        # Determine which zone should be active
-        zone_ids = list(self._zones.keys())
-        if not zone_ids:
-            return ZoneAction.STAY_OFF
-
-        active_index = (cycle_hour - 1) % len(zone_ids)
-        active_zone_id = zone_ids[active_index]
-
-        if zone_id == active_zone_id:
-            return ZoneAction.TURN_ON if not valve_on else ZoneAction.STAY_ON
-        return ZoneAction.TURN_OFF if valve_on else ZoneAction.STAY_OFF
+            return self._evaluate_cycle_mode(now)
+        # Default: auto mode
+        return self._evaluate_auto_mode(now)
 
     def calculate_heat_request(self) -> bool:
         """
