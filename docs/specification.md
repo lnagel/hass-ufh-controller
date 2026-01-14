@@ -267,10 +267,10 @@ Zones are managed as **config subentries**. Users interact with zones through:
 | setpoint_min | float | No | Minimum allowed setpoint (default: 16°C) |
 | setpoint_max | float | No | Maximum allowed setpoint (default: 28°C) |
 | setpoint_default | float | No | Initial setpoint (default: 21°C) |
+| temp_ema_time_constant | number (s) | No | Temperature EMA filter time constant (default: 600s / 10 min) |
 | kp | float | No | PID proportional gain (default: 50.0) |
 | ki | float | No | PID integral gain (default: 0.05) |
 | kd | float | No | PID derivative gain (default: 0.0) |
-| temp_ema_time_constant | number (s) | No | Temperature EMA filter time constant (default: 600s / 10 min) |
 
 **Reconfiguring a Zone:**
 - Navigate to: Settings → Devices & Services → Devices → [Zone Device] → "Configure" (cogwheel)

@@ -221,6 +221,19 @@ def get_zone_schema(
                 )
             ),
             vol.Optional(
+                "temp_ema_time_constant",
+                default=defaults.get(
+                    "temp_ema_time_constant", DEFAULT_TEMP_EMA_TIME_CONSTANT
+                ),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=UI_TEMP_EMA_TIME_CONSTANT["min"],
+                    max=UI_TEMP_EMA_TIME_CONSTANT["max"],
+                    step=UI_TEMP_EMA_TIME_CONSTANT["step"],
+                    unit_of_measurement="s",
+                )
+            ),
+            vol.Optional(
                 "kp", default=pid.get("kp", DEFAULT_PID["kp"])
             ): selector.NumberSelector(
                 selector.NumberSelectorConfig(
@@ -241,19 +254,6 @@ def get_zone_schema(
             ): selector.NumberSelector(
                 selector.NumberSelectorConfig(
                     mode=selector.NumberSelectorMode.BOX,
-                )
-            ),
-            vol.Optional(
-                "temp_ema_time_constant",
-                default=defaults.get(
-                    "temp_ema_time_constant", DEFAULT_TEMP_EMA_TIME_CONSTANT
-                ),
-            ): selector.NumberSelector(
-                selector.NumberSelectorConfig(
-                    min=UI_TEMP_EMA_TIME_CONSTANT["min"],
-                    max=UI_TEMP_EMA_TIME_CONSTANT["max"],
-                    step=UI_TEMP_EMA_TIME_CONSTANT["step"],
-                    unit_of_measurement="s",
                 )
             ),
         }
@@ -343,6 +343,19 @@ def get_zone_temperature_schema(
                 )
             ),
             vol.Optional(
+                "temp_ema_time_constant",
+                default=defaults.get(
+                    "temp_ema_time_constant", DEFAULT_TEMP_EMA_TIME_CONSTANT
+                ),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=UI_TEMP_EMA_TIME_CONSTANT["min"],
+                    max=UI_TEMP_EMA_TIME_CONSTANT["max"],
+                    step=UI_TEMP_EMA_TIME_CONSTANT["step"],
+                    unit_of_measurement="s",
+                )
+            ),
+            vol.Optional(
                 "kp", default=pid.get("kp", DEFAULT_PID["kp"])
             ): selector.NumberSelector(
                 selector.NumberSelectorConfig(
@@ -363,19 +376,6 @@ def get_zone_temperature_schema(
             ): selector.NumberSelector(
                 selector.NumberSelectorConfig(
                     mode=selector.NumberSelectorMode.BOX,
-                )
-            ),
-            vol.Optional(
-                "temp_ema_time_constant",
-                default=defaults.get(
-                    "temp_ema_time_constant", DEFAULT_TEMP_EMA_TIME_CONSTANT
-                ),
-            ): selector.NumberSelector(
-                selector.NumberSelectorConfig(
-                    min=UI_TEMP_EMA_TIME_CONSTANT["min"],
-                    max=UI_TEMP_EMA_TIME_CONSTANT["max"],
-                    step=UI_TEMP_EMA_TIME_CONSTANT["step"],
-                    unit_of_measurement="s",
                 )
             ),
         }

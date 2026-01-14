@@ -177,9 +177,6 @@ DEFAULT_CYCLE_MODE_HOURS = 8
 DEFAULT_VALVE_OPEN_THRESHOLD = 0.85  # 85% threshold for considering valve fully open
 DEFAULT_WINDOW_OPEN_THRESHOLD = 0.1  # 10% threshold for window open detection
 
-# Temperature smoothing (EMA low-pass filter)
-DEFAULT_TEMP_EMA_TIME_CONSTANT = 600  # 10 minutes in seconds
-
 # UI validation constraints for timing parameters
 UI_TIMING_OBSERVATION_PERIOD = {"min": 1800, "max": 14400, "step": 600}
 UI_TIMING_MIN_RUN_TIME = {"min": 60, "max": 1800, "step": 60}
@@ -193,6 +190,9 @@ UI_TIMING_FLUSH_DURATION = {"min": 0, "max": 1800, "step": 60}  # 0-30 minutes
 UI_SETPOINT_MIN = {"min": 5.0, "max": 30.0, "step": 0.1}
 UI_SETPOINT_MAX = {"min": 5.0, "max": 35.0, "step": 0.1}
 UI_SETPOINT_DEFAULT = {"min": 5.0, "max": 35.0, "step": 0.1}
+
+# Temperature smoothing (EMA low-pass filter)
+DEFAULT_TEMP_EMA_TIME_CONSTANT = 600  # 10 minutes in seconds
 
 # UI validation constraints for temperature smoothing
 UI_TEMP_EMA_TIME_CONSTANT = {"min": 0, "max": 1800, "step": 60}  # 0-30 minutes
