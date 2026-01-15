@@ -15,6 +15,7 @@ class TestPIDController:
         """Positive error (setpoint > current) gives positive output, clamped to 100."""
         pid = PIDController(kp=50.0, ki=0.0, kd=0.0)
         result = pid.update(setpoint=22.0, current=20.0, dt=60.0)
+        assert result is not None
         assert result.duty_cycle == 100.0  # 50 * 2 = 100, clamped
         assert result.p_term == 100.0
 
@@ -22,6 +23,7 @@ class TestPIDController:
         """Smaller error gives proportional output without clamping."""
         pid = PIDController(kp=50.0, ki=0.0, kd=0.0)
         result = pid.update(setpoint=21.0, current=20.0, dt=60.0)
+        assert result is not None
         assert result.duty_cycle == 50.0  # 50 * 1 = 50
         assert result.p_term == 50.0
 
@@ -29,6 +31,7 @@ class TestPIDController:
         """Negative error (setpoint < current) gives 0 (clamped)."""
         pid = PIDController(kp=50.0, ki=0.0, kd=0.0)
         result = pid.update(setpoint=20.0, current=22.0, dt=60.0)
+        assert result is not None
         assert result.duty_cycle == 0.0  # 50 * -2 = -100, clamped to 0
         assert result.p_term == -100.0
 
@@ -39,12 +42,14 @@ class TestPIDController:
         # First update: integral = ki * error * dt = 1.0 * 1 * 60 = 60%
         result1 = pid.update(setpoint=21.0, current=20.0, dt=60.0)
         assert pid.state is not None
+        assert result1 is not None
         assert pid.state.i_term == 60.0
         assert result1.duty_cycle == pytest.approx(60.0)
         assert result1.i_term == pytest.approx(60.0)
 
         # Second update: integral = 60 + 60 = 120%
         result2 = pid.update(setpoint=21.0, current=20.0, dt=60.0)
+        assert result2 is not None
         assert pid.state.i_term == 120.0
         assert result2.duty_cycle == pytest.approx(100.0)  # Clamped to 100%
 
@@ -55,6 +60,7 @@ class TestPIDController:
         # Large error should clamp integral at max: 0.1 * 10 * 60 = 60, clamped to 50
         result = pid.update(setpoint=30.0, current=20.0, dt=60.0)
         assert pid.state is not None
+        assert result is not None
         assert pid.state.i_term == 50.0  # Clamped at max
         assert result.duty_cycle == pytest.approx(50.0)
 
@@ -78,6 +84,7 @@ class TestPIDController:
         pid = PIDController(kp=50.0, ki=0.0, kd=0.0)
 
         result = pid.update(setpoint=15.0, current=25.0, dt=60.0)
+        assert result is not None
         assert result.duty_cycle == 0.0
 
     def test_output_clamped_at_hundred(self) -> None:
@@ -85,6 +92,7 @@ class TestPIDController:
         pid = PIDController(kp=100.0, ki=0.0, kd=0.0)
 
         result = pid.update(setpoint=30.0, current=20.0, dt=60.0)
+        assert result is not None
         assert result.duty_cycle == 100.0
 
     def test_derivative_term(self) -> None:
@@ -94,6 +102,7 @@ class TestPIDController:
         # First update sets last_error (via state.error)
         result1 = pid.update(setpoint=21.0, current=20.0, dt=60.0)
         assert pid.state is not None
+        assert result1 is not None
         assert pid.state.error == 1.0  # error is stored for next derivative calc
         # d_term = 10 * (1 - 0) / 60 = 0.167
         assert result1.d_term == pytest.approx(10.0 / 60.0, rel=0.01)
@@ -101,11 +110,13 @@ class TestPIDController:
 
         # Second update with same error - derivative should be 0
         result2 = pid.update(setpoint=21.0, current=20.0, dt=60.0)
+        assert result2 is not None
         assert result2.d_term == pytest.approx(0.0)
         assert result2.duty_cycle == pytest.approx(0.0)
 
         # Third update with increasing error
         result3 = pid.update(setpoint=22.0, current=20.0, dt=60.0)
+        assert result3 is not None
         # d_term = 10 * (2 - 1) / 60 = 0.167
         assert result3.d_term == pytest.approx(10.0 / 60.0, rel=0.01)
         assert result3.duty_cycle == pytest.approx(10.0 / 60.0, rel=0.01)
@@ -199,6 +210,7 @@ class TestPIDController:
 
         # First update
         result = pid.update(setpoint=22.0, current=20.0, dt=60.0)
+        assert result is not None
         # P = 10 * 2 = 20
         # I = ki * error * dt = 0.1 * 2 * 60 = 12% (stored in % units)
         # D = 1 * (2 - 0) / 60 = 0.033
@@ -235,6 +247,7 @@ class TestPIDController:
 
         # Next update uses new ki: adds ki * error * dt = 0.02 * 2 * 60 = 2.4%
         result = pid.update(setpoint=22.0, current=20.0, dt=60.0)
+        assert result is not None
         assert pid.state.i_term == pytest.approx(4.8)  # 2.4% + 2.4% = 4.8%
         assert result.duty_cycle == pytest.approx(4.8)  # i_term = integral = 4.8%
 
