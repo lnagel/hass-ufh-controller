@@ -44,7 +44,6 @@ from .recorder import get_state_average, was_any_window_open_recently
 STORAGE_VERSION = 1
 STORAGE_KEY = "ufh_controller"
 
-
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
@@ -847,7 +846,7 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 blocked = state.window_recently_open
 
                 result["zones"][zone_id] = {
-                    "current": state.current,
+                    "current": state.display_temp,
                     "setpoint": state.setpoint,
                     "duty_cycle": pid_state.duty_cycle if pid_state else None,
                     "error": pid_state.error if pid_state else None,
