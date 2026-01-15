@@ -110,8 +110,9 @@ async def async_unload_entry(
     LOGGER.debug("Unloading Underfloor Heating Controller entry: %s", entry.entry_id)
 
     # Save state before unloading
-    coordinator = entry.runtime_data.coordinator
-    await coordinator.async_save_state()
+    if hasattr(entry, "runtime_data") and entry.runtime_data is not None:
+        coordinator = entry.runtime_data.coordinator
+        await coordinator.async_save_state()
 
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
