@@ -10,6 +10,7 @@ from homeassistant.components.climate import (
     HVACAction,
     HVACMode,
 )
+from homeassistant.const import UnitOfTemperature
 
 from .const import DEFAULT_SETPOINT, SUBENTRY_TYPE_ZONE, ValveState
 from .entity import UFHControllerZoneEntity
@@ -54,7 +55,7 @@ class UFHZoneClimate(UFHControllerZoneEntity, ClimateEntity):
     _attr_hvac_modes: ClassVar[list[HVACMode]] = [HVACMode.HEAT, HVACMode.OFF]
     _attr_icon = "mdi:heating-coil"
     _attr_name = "Thermostat"
-    _attr_temperature_unit = "°C"
+    _attr_temperature_unit = UnitOfTemperature.CELSIUS
     _enable_turn_on_off_backwards_compat = False
 
     def __init__(

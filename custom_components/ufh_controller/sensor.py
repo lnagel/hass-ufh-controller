@@ -11,6 +11,7 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
+from homeassistant.const import PERCENTAGE, UnitOfTemperature
 
 from .const import SUBENTRY_TYPE_ZONE, ZoneStatus
 from .entity import (
@@ -40,7 +41,7 @@ ZONE_SENSORS: tuple[UFHZoneSensorEntityDescription, ...] = (
     UFHZoneSensorEntityDescription(
         key="duty_cycle",
         translation_key="duty_cycle",
-        native_unit_of_measurement="%",
+        native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=1,
         value_fn=lambda data: data.get("duty_cycle"),
@@ -48,7 +49,7 @@ ZONE_SENSORS: tuple[UFHZoneSensorEntityDescription, ...] = (
     UFHZoneSensorEntityDescription(
         key="pid_error",
         translation_key="pid_error",
-        native_unit_of_measurement="°C",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         device_class=SensorDeviceClass.TEMPERATURE,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
@@ -57,7 +58,7 @@ ZONE_SENSORS: tuple[UFHZoneSensorEntityDescription, ...] = (
     UFHZoneSensorEntityDescription(
         key="pid_proportional",
         translation_key="pid_proportional",
-        native_unit_of_measurement="%",
+        native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=1,
         value_fn=lambda data: data.get("p_term"),
@@ -65,7 +66,7 @@ ZONE_SENSORS: tuple[UFHZoneSensorEntityDescription, ...] = (
     UFHZoneSensorEntityDescription(
         key="pid_integral",
         translation_key="pid_integral",
-        native_unit_of_measurement="%",
+        native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=1,
         value_fn=lambda data: data.get("i_term"),
@@ -73,7 +74,7 @@ ZONE_SENSORS: tuple[UFHZoneSensorEntityDescription, ...] = (
     UFHZoneSensorEntityDescription(
         key="pid_derivative",
         translation_key="pid_derivative",
-        native_unit_of_measurement="%",
+        native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         value_fn=lambda data: data.get("d_term"),

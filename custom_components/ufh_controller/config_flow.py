@@ -11,6 +11,7 @@ from homeassistant.config_entries import (
     ConfigSubentryFlow,
     SubentryFlowResult,
 )
+from homeassistant.const import UnitOfTemperature, UnitOfTime
 from homeassistant.core import callback
 from homeassistant.helpers import selector
 from slugify import slugify
@@ -63,7 +64,7 @@ def get_timing_schema(timing: TimingDefaults | None = None) -> vol.Schema:
                     min=UI_TIMING_OBSERVATION_PERIOD["min"],
                     max=UI_TIMING_OBSERVATION_PERIOD["max"],
                     step=UI_TIMING_OBSERVATION_PERIOD["step"],
-                    unit_of_measurement="s",
+                    unit_of_measurement=UnitOfTime.SECONDS,
                 )
             ),
             vol.Required(
@@ -74,7 +75,7 @@ def get_timing_schema(timing: TimingDefaults | None = None) -> vol.Schema:
                     min=UI_TIMING_MIN_RUN_TIME["min"],
                     max=UI_TIMING_MIN_RUN_TIME["max"],
                     step=UI_TIMING_MIN_RUN_TIME["step"],
-                    unit_of_measurement="s",
+                    unit_of_measurement=UnitOfTime.SECONDS,
                 )
             ),
             vol.Required(
@@ -87,7 +88,7 @@ def get_timing_schema(timing: TimingDefaults | None = None) -> vol.Schema:
                     min=UI_TIMING_VALVE_OPEN_TIME["min"],
                     max=UI_TIMING_VALVE_OPEN_TIME["max"],
                     step=UI_TIMING_VALVE_OPEN_TIME["step"],
-                    unit_of_measurement="s",
+                    unit_of_measurement=UnitOfTime.SECONDS,
                 )
             ),
             vol.Required(
@@ -101,7 +102,7 @@ def get_timing_schema(timing: TimingDefaults | None = None) -> vol.Schema:
                     min=UI_TIMING_CLOSING_WARNING["min"],
                     max=UI_TIMING_CLOSING_WARNING["max"],
                     step=UI_TIMING_CLOSING_WARNING["step"],
-                    unit_of_measurement="s",
+                    unit_of_measurement=UnitOfTime.SECONDS,
                 )
             ),
             vol.Required(
@@ -115,7 +116,7 @@ def get_timing_schema(timing: TimingDefaults | None = None) -> vol.Schema:
                     min=UI_TIMING_WINDOW_BLOCK_TIME["min"],
                     max=UI_TIMING_WINDOW_BLOCK_TIME["max"],
                     step=UI_TIMING_WINDOW_BLOCK_TIME["step"],
-                    unit_of_measurement="s",
+                    unit_of_measurement=UnitOfTime.SECONDS,
                 )
             ),
             vol.Required(
@@ -129,7 +130,7 @@ def get_timing_schema(timing: TimingDefaults | None = None) -> vol.Schema:
                     min=UI_TIMING_CONTROLLER_LOOP_INTERVAL["min"],
                     max=UI_TIMING_CONTROLLER_LOOP_INTERVAL["max"],
                     step=UI_TIMING_CONTROLLER_LOOP_INTERVAL["step"],
-                    unit_of_measurement="s",
+                    unit_of_measurement=UnitOfTime.SECONDS,
                 )
             ),
             vol.Required(
@@ -143,7 +144,7 @@ def get_timing_schema(timing: TimingDefaults | None = None) -> vol.Schema:
                     min=UI_TIMING_FLUSH_DURATION["min"],
                     max=UI_TIMING_FLUSH_DURATION["max"],
                     step=UI_TIMING_FLUSH_DURATION["step"],
-                    unit_of_measurement="s",
+                    unit_of_measurement=UnitOfTime.SECONDS,
                 )
             ),
         }
@@ -192,7 +193,7 @@ def get_zone_schema(
                     min=UI_SETPOINT_MIN["min"],
                     max=UI_SETPOINT_MIN["max"],
                     step=UI_SETPOINT_MIN["step"],
-                    unit_of_measurement="°C",
+                    unit_of_measurement=UnitOfTemperature.CELSIUS,
                     mode=selector.NumberSelectorMode.SLIDER,
                 )
             ),
@@ -204,7 +205,7 @@ def get_zone_schema(
                     min=UI_SETPOINT_MAX["min"],
                     max=UI_SETPOINT_MAX["max"],
                     step=UI_SETPOINT_MAX["step"],
-                    unit_of_measurement="°C",
+                    unit_of_measurement=UnitOfTemperature.CELSIUS,
                     mode=selector.NumberSelectorMode.SLIDER,
                 )
             ),
@@ -216,7 +217,7 @@ def get_zone_schema(
                     min=UI_SETPOINT_DEFAULT["min"],
                     max=UI_SETPOINT_DEFAULT["max"],
                     step=UI_SETPOINT_DEFAULT["step"],
-                    unit_of_measurement="°C",
+                    unit_of_measurement=UnitOfTemperature.CELSIUS,
                     mode=selector.NumberSelectorMode.SLIDER,
                 )
             ),
@@ -230,7 +231,7 @@ def get_zone_schema(
                     min=UI_TEMP_EMA_TIME_CONSTANT["min"],
                     max=UI_TEMP_EMA_TIME_CONSTANT["max"],
                     step=UI_TEMP_EMA_TIME_CONSTANT["step"],
-                    unit_of_measurement="s",
+                    unit_of_measurement=UnitOfTime.SECONDS,
                 )
             ),
             vol.Optional(
@@ -314,7 +315,7 @@ def get_zone_temperature_schema(
                     min=UI_SETPOINT_MIN["min"],
                     max=UI_SETPOINT_MIN["max"],
                     step=UI_SETPOINT_MIN["step"],
-                    unit_of_measurement="°C",
+                    unit_of_measurement=UnitOfTemperature.CELSIUS,
                     mode=selector.NumberSelectorMode.SLIDER,
                 )
             ),
@@ -326,7 +327,7 @@ def get_zone_temperature_schema(
                     min=UI_SETPOINT_MAX["min"],
                     max=UI_SETPOINT_MAX["max"],
                     step=UI_SETPOINT_MAX["step"],
-                    unit_of_measurement="°C",
+                    unit_of_measurement=UnitOfTemperature.CELSIUS,
                     mode=selector.NumberSelectorMode.SLIDER,
                 )
             ),
@@ -338,7 +339,7 @@ def get_zone_temperature_schema(
                     min=UI_SETPOINT_DEFAULT["min"],
                     max=UI_SETPOINT_DEFAULT["max"],
                     step=UI_SETPOINT_DEFAULT["step"],
-                    unit_of_measurement="°C",
+                    unit_of_measurement=UnitOfTemperature.CELSIUS,
                     mode=selector.NumberSelectorMode.SLIDER,
                 )
             ),
@@ -352,7 +353,7 @@ def get_zone_temperature_schema(
                     min=UI_TEMP_EMA_TIME_CONSTANT["min"],
                     max=UI_TEMP_EMA_TIME_CONSTANT["max"],
                     step=UI_TEMP_EMA_TIME_CONSTANT["step"],
-                    unit_of_measurement="s",
+                    unit_of_measurement=UnitOfTime.SECONDS,
                 )
             ),
             vol.Optional(
@@ -401,7 +402,7 @@ def get_zone_presets_schema(
                     min=UI_PRESET_TEMPERATURE["min"],
                     max=UI_PRESET_TEMPERATURE["max"],
                     step=UI_PRESET_TEMPERATURE["step"],
-                    unit_of_measurement="°C",
+                    unit_of_measurement=UnitOfTemperature.CELSIUS,
                     mode=selector.NumberSelectorMode.SLIDER,
                 )
             ),
@@ -415,7 +416,7 @@ def get_zone_presets_schema(
                     min=UI_PRESET_TEMPERATURE["min"],
                     max=UI_PRESET_TEMPERATURE["max"],
                     step=UI_PRESET_TEMPERATURE["step"],
-                    unit_of_measurement="°C",
+                    unit_of_measurement=UnitOfTemperature.CELSIUS,
                     mode=selector.NumberSelectorMode.SLIDER,
                 )
             ),
@@ -429,7 +430,7 @@ def get_zone_presets_schema(
                     min=UI_PRESET_TEMPERATURE["min"],
                     max=UI_PRESET_TEMPERATURE["max"],
                     step=UI_PRESET_TEMPERATURE["step"],
-                    unit_of_measurement="°C",
+                    unit_of_measurement=UnitOfTemperature.CELSIUS,
                     mode=selector.NumberSelectorMode.SLIDER,
                 )
             ),
@@ -445,7 +446,7 @@ def get_zone_presets_schema(
                     min=UI_PRESET_TEMPERATURE["min"],
                     max=UI_PRESET_TEMPERATURE["max"],
                     step=UI_PRESET_TEMPERATURE["step"],
-                    unit_of_measurement="°C",
+                    unit_of_measurement=UnitOfTemperature.CELSIUS,
                     mode=selector.NumberSelectorMode.SLIDER,
                 )
             ),
@@ -459,7 +460,7 @@ def get_zone_presets_schema(
                     min=UI_PRESET_TEMPERATURE["min"],
                     max=UI_PRESET_TEMPERATURE["max"],
                     step=UI_PRESET_TEMPERATURE["step"],
-                    unit_of_measurement="°C",
+                    unit_of_measurement=UnitOfTemperature.CELSIUS,
                     mode=selector.NumberSelectorMode.SLIDER,
                 )
             ),
