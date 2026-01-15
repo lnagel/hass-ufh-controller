@@ -5,6 +5,8 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
+from homeassistant.components.select import SERVICE_SELECT_OPTION
+from homeassistant.const import SERVICE_TURN_OFF, SERVICE_TURN_ON, Platform
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from sqlalchemy.exc import SQLAlchemyError
@@ -142,7 +144,9 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     name=zone_data["name"],
                     temp_sensor=zone_data["temp_sensor"],
                     valve_switch=zone_data["valve_switch"],
-                    circuit_type=CircuitType(zone_data.get("circuit_type", "regular")),
+                    circuit_type=CircuitType(
+                        zone_data.get("circuit_type", CircuitType.REGULAR)
+                    ),
                     window_sensors=zone_data.get("window_sensors", []),
                     setpoint_min=setpoint_opts.get("min", DEFAULT_SETPOINT["min"]),
                     setpoint_max=setpoint_opts.get("max", DEFAULT_SETPOINT["max"]),
@@ -307,12 +311,13 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         summer_entity = self._controller.config.summer_mode_entity
         if summer_entity:
             await self.hass.services.async_call(
-                "select",
-                "select_option",
+                Platform.SELECT,
+                SERVICE_SELECT_OPTION,
                 {"entity_id": summer_entity, "option": SummerMode.AUTO},
             )
             LOGGER.debug(
-                "Select service 'select_option' called for %s with option '%s'",
+                "Select service '%s' called for %s with option '%s'",
+                SERVICE_SELECT_OPTION,
                 summer_entity,
                 SummerMode.AUTO,
             )
@@ -763,17 +768,18 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return  # Already in correct mode
 
         # Check if select service is available
-        if not self.hass.services.has_service("select", "select_option"):
+        if not self.hass.services.has_service(Platform.SELECT, SERVICE_SELECT_OPTION):
             LOGGER.debug(
-                "Select service 'select_option' not available, skipping call to %s",
+                "Select service '%s' not available, skipping call to %s",
+                SERVICE_SELECT_OPTION,
                 entity_id,
             )
             return
 
         # Call select service to change mode
         await self.hass.services.async_call(
-            "select",
-            "select_option",
+            Platform.SELECT,
+            SERVICE_SELECT_OPTION,
             {"entity_id": entity_id, "option": summer_mode},
         )
         LOGGER.debug(
@@ -789,10 +795,10 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         turn_on: bool,
     ) -> None:
         """Call switch turn_on or turn_off service."""
-        service = "turn_on" if turn_on else "turn_off"
+        service = SERVICE_TURN_ON if turn_on else SERVICE_TURN_OFF
 
         # Check if switch service is available
-        if not self.hass.services.has_service("switch", service):
+        if not self.hass.services.has_service(Platform.SWITCH, service):
             LOGGER.debug(
                 "Switch service '%s' not available, skipping call to %s",
                 service,
@@ -801,7 +807,7 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return
 
         await self.hass.services.async_call(
-            "switch",
+            Platform.SWITCH,
             service,
             {"entity_id": entity_id},
         )

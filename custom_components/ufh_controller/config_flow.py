@@ -40,6 +40,7 @@ from .const import (
     UI_TIMING_WINDOW_BLOCK_TIME,
     TimingDefaults,
 )
+from .core.zone import CircuitType
 
 CONF_NAME = "name"
 CONF_CONTROLLER_ID = "controller_id"
@@ -171,12 +172,17 @@ def get_zone_schema(
                 "valve_switch", default=defaults.get("valve_switch", "")
             ): selector.EntitySelector(selector.EntitySelectorConfig(domain="switch")),
             vol.Optional(
-                "circuit_type", default=defaults.get("circuit_type", "regular")
+                "circuit_type",
+                default=defaults.get("circuit_type", CircuitType.REGULAR),
             ): selector.SelectSelector(
                 selector.SelectSelectorConfig(
                     options=[
-                        selector.SelectOptionDict(value="regular", label="Regular"),
-                        selector.SelectOptionDict(value="flush", label="Flush"),
+                        selector.SelectOptionDict(
+                            value=CircuitType.REGULAR, label="Regular"
+                        ),
+                        selector.SelectOptionDict(
+                            value=CircuitType.FLUSH, label="Flush"
+                        ),
                     ]
                 )
             ),
@@ -279,12 +285,17 @@ def get_zone_entities_schema(
                 "valve_switch", default=defaults.get("valve_switch", "")
             ): selector.EntitySelector(selector.EntitySelectorConfig(domain="switch")),
             vol.Optional(
-                "circuit_type", default=defaults.get("circuit_type", "regular")
+                "circuit_type",
+                default=defaults.get("circuit_type", CircuitType.REGULAR),
             ): selector.SelectSelector(
                 selector.SelectSelectorConfig(
                     options=[
-                        selector.SelectOptionDict(value="regular", label="Regular"),
-                        selector.SelectOptionDict(value="flush", label="Flush"),
+                        selector.SelectOptionDict(
+                            value=CircuitType.REGULAR, label="Regular"
+                        ),
+                        selector.SelectOptionDict(
+                            value=CircuitType.FLUSH, label="Flush"
+                        ),
                     ]
                 )
             ),
@@ -484,7 +495,7 @@ def build_zone_data(user_input: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": zone_id,
         "name": user_input["name"],
-        "circuit_type": user_input.get("circuit_type", "regular"),
+        "circuit_type": user_input.get("circuit_type", CircuitType.REGULAR),
         "temp_sensor": user_input["temp_sensor"],
         "valve_switch": user_input["valve_switch"],
         "window_sensors": user_input.get("window_sensors", []),
@@ -774,7 +785,7 @@ class ZoneSubentryFlowHandler(ConfigSubentryFlow):
                 "name": user_input["name"],
                 "temp_sensor": user_input["temp_sensor"],
                 "valve_switch": user_input["valve_switch"],
-                "circuit_type": user_input.get("circuit_type", "regular"),
+                "circuit_type": user_input.get("circuit_type", CircuitType.REGULAR),
                 "window_sensors": user_input.get("window_sensors", []),
             }
             LOGGER.debug("Updating zone entities: %s", new_data["id"])
