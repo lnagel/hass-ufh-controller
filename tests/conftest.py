@@ -25,7 +25,7 @@ from custom_components.ufh_controller.const import (
 )
 
 if TYPE_CHECKING:
-    from custom_components.ufh_controller.core import HeatingController
+    from custom_components.ufh_controller.core.controller import HeatingController
 
 
 # ---------------------------------------------------------------------------
