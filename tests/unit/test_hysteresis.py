@@ -20,8 +20,10 @@ from custom_components.ufh_controller.core.hysteresis import round_with_hysteres
         (20.03, 20.0, 20.0),
         # Crosses upper threshold
         (20.09, 20.0, 20.1),
+        (23.98, 23.9, 24.0),
         # Crosses lower threshold
         (19.91, 20.0, 19.9),
+        (23.92, 24.0, 23.9),
         # Large jumps
         (22.5, 20.0, 22.5),
         (18.0, 20.0, 18.0),

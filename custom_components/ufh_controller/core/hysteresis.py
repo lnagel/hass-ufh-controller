@@ -1,7 +1,7 @@
 """Hysteresis rounding for temperature display."""
 
 _PRECISION: float = 0.1  # Matches HA's PRECISION_TENTHS
-_HYSTERESIS: float = 0.03  # Margin to prevent flicker
+_HYSTERESIS: float = 0.0299  # Margin to prevent flicker
 
 
 def round_with_hysteresis(raw: float, prev: float | None) -> float:
