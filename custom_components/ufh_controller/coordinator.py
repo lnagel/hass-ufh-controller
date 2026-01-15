@@ -35,7 +35,6 @@ from .core import (
     ZoneStatusTransition,
     get_observation_start,
     get_valve_open_window,
-    round_with_hysteresis,
     should_request_heat,
 )
 from .core.zone import CircuitType
@@ -85,9 +84,6 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # Track preset modes per zone (not part of core controller state)
         self._zone_presets: dict[str, str | None] = {}
-
-        # Track display temperatures with hysteresis to prevent flicker
-        self._display_temps: dict[str, float] = {}
 
         # Controller status (derived from zone statuses)
         self._status: ControllerStatus = ControllerStatus.INITIALIZING
@@ -849,17 +845,8 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 # Blocked now means PID is paused due to recent window activity
                 blocked = state.window_recently_open
 
-                # Apply hysteresis to display temperature to prevent flicker
-                display_temp: float | None = None
-                if state.current is not None:
-                    display_temp = round_with_hysteresis(
-                        state.current,
-                        self._display_temps.get(zone_id),
-                    )
-                    self._display_temps[zone_id] = display_temp
-
                 result["zones"][zone_id] = {
-                    "current": display_temp,
+                    "current": state.display_temp,
                     "setpoint": state.setpoint,
                     "duty_cycle": pid_state.duty_cycle if pid_state else None,
                     "error": pid_state.error if pid_state else None,

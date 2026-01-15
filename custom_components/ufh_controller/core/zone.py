@@ -23,6 +23,7 @@ from custom_components.ufh_controller.const import (
 )
 
 from .ema import apply_ema
+from .hysteresis import round_with_hysteresis
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -75,7 +76,8 @@ class ZoneState:
     circuit_type: CircuitType = CircuitType.REGULAR
 
     # Temperature state
-    current: float | None = None
+    current: float | None = None  # EMA-smoothed temperature (full precision)
+    display_temp: float | None = None  # Quantized temperature with hysteresis
     setpoint: float = DEFAULT_SETPOINT["default"]
 
     # Valve state
@@ -153,7 +155,7 @@ class ZoneRuntime:
 
     def update_temperature(self, raw_temp: float, dt: float) -> None:
         """
-        Update zone temperature with EMA smoothing.
+        Update zone temperature with EMA smoothing and display hysteresis.
 
         Args:
             raw_temp: Raw temperature reading from sensor.
@@ -165,6 +167,11 @@ class ZoneRuntime:
             previous=self.state.current,
             tau=self.config.temp_ema_time_constant,
             dt=dt,
+        )
+        # Apply hysteresis to prevent display flicker at quantization boundaries
+        self.state.display_temp = round_with_hysteresis(
+            self.state.current,
+            self.state.display_temp,
         )
 
     def update_pid(self, dt: float, controller_mode: OperationMode) -> float | None:
