@@ -221,7 +221,7 @@ Key point: A failing sensor in one zone won't affect your other zones. Check Hom
 ## Documentation
 
 For detailed technical documentation, see:
-- [Technical Specification](docs/specification.md) - Full system design and algorithm details
+- [Documentation Index](docs/index.md) - Full system design and algorithm details
 - [Contributing Guide](CONTRIBUTING.md) - Development setup and coding standards
 
 ## License

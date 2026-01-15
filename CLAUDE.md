@@ -68,18 +68,18 @@ tests/                   # Test suite (see Test Organization below)
 │   ├── integration/     # Entity platform tests with mocked HA
 │   ├── scenarios/       # End-to-end workflows and resilience
 │   └── config/          # Config flows and setup lifecycle
-docs/specification.md    # Technical specification document
+docs/                    # Documentation (see docs/index.md for full list)
 ```
 
-## Specification Synchronization
+## Documentation Synchronization
 
-**The `docs/specification.md` file is the source of truth for design decisions.**
+**The `docs/` directory is the source of truth for design decisions.** See `docs/index.md` for the full documentation structure.
 
 When making changes:
-1. Check if your changes align with the specification
-2. If changes conflict with the specification, update BOTH the code AND specification
-3. Never leave the specification out of sync with the implementation
-4. Document any new features, entities, or configuration options in the specification
+1. Check if your changes align with the documentation
+2. If changes conflict with the docs, update BOTH the code AND relevant doc files
+3. Never leave the documentation out of sync with the implementation
+4. Document any new features, entities, or configuration options in the appropriate doc file
 
 ## Testing Requirements
 
@@ -194,12 +194,12 @@ uv run pytest && uv run ruff format . && uv run ruff check . --fix && uv run ty 
 git commit
 ```
 
-### 3. Not Updating Specification
+### 3. Not Updating Documentation
 ```python
 # WRONG - Added new entity without documenting
 # (creates silent drift between docs and code)
 
-# RIGHT - Update docs/specification.md with new entity details
+# RIGHT - Update docs/entities.md with new entity details
 ```
 
 ### 4. Fixing Bugs Without Tests
