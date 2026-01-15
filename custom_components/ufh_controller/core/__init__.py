@@ -13,6 +13,7 @@ from .history import (
     get_observation_start,
     get_valve_open_window,
 )
+from .hysteresis import round_with_hysteresis
 from .pid import PIDController, PIDState
 from .zone import (
     CircuitType,
@@ -45,5 +46,6 @@ __all__ = [
     "evaluate_zone",
     "get_observation_start",
     "get_valve_open_window",
+    "round_with_hysteresis",
     "should_request_heat",
 ]
