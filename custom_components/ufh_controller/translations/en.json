@@ -249,12 +249,12 @@
       "mode": {
         "name": "Mode",
         "state": {
-          "auto": "Automatic",
+          "heat": "Heat",
           "flush": "Flush",
           "cycle": "Cycle",
           "all_on": "All On",
           "all_off": "All Off",
-          "disabled": "Disabled"
+          "off": "Off"
         }
       }
     },

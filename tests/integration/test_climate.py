@@ -334,7 +334,7 @@ async def test_climate_restore_setpoint_from_store(
     # Store API should be authoritative for setpoint, not RestoreEntity
     stored_data = {
         "version": 1,
-        "controller_mode": "auto",
+        "controller_mode": "heat",
         "zones": {
             "zone1": {
                 "integral": 0.0,
@@ -367,7 +367,7 @@ async def test_climate_restore_hvac_mode_off_from_store(
     """Test climate entity restores HVAC mode OFF from Store API."""
     stored_data = {
         "version": 1,
-        "controller_mode": "auto",
+        "controller_mode": "heat",
         "zones": {
             "zone1": {
                 "integral": 0.0,
@@ -400,7 +400,7 @@ async def test_climate_restore_preset_mode_from_store(
     """Test climate entity restores preset mode from Store API."""
     stored_data = {
         "version": 1,
-        "controller_mode": "auto",
+        "controller_mode": "heat",
         "zones": {
             "zone1": {
                 "integral": 0.0,
@@ -435,7 +435,7 @@ async def test_climate_preset_cleared_when_none_stored(
     """Test preset mode is None when no preset stored (manual temperature)."""
     stored_data = {
         "version": 1,
-        "controller_mode": "auto",
+        "controller_mode": "heat",
         "zones": {
             "zone1": {
                 "integral": 0.0,

@@ -156,7 +156,7 @@ async def test_coordinator_no_stored_state(
     coordinator = mock_config_entry.runtime_data.coordinator
 
     # Should use default mode
-    assert coordinator.controller.mode == "auto"
+    assert coordinator.controller.mode == "heat"
 
     # PID state should be None (no stored state, no updates yet)
     runtime = coordinator.controller.get_zone_runtime("zone1")
@@ -187,7 +187,7 @@ async def test_crash_recovery_mid_update_valve_remains_safe(
     # Setup initial state with accumulated integral (zone wants heat)
     stored_data = {
         "version": 1,
-        "controller_mode": "auto",
+        "controller_mode": "heat",
         "zones": {
             "zone1": {
                 "error": 1.0,
@@ -249,7 +249,7 @@ async def test_crash_recovery_preserves_valve_off_when_duty_cycle_zero(
     # Setup: room at setpoint, no heating needed
     stored_data = {
         "version": 1,
-        "controller_mode": "auto",
+        "controller_mode": "heat",
         "zones": {
             "zone1": {
                 "error": 0.0,
@@ -300,7 +300,7 @@ async def test_crash_recovery_no_integral_windup_during_disabled_period(
     """
     stored_data = {
         "version": 1,
-        "controller_mode": "auto",
+        "controller_mode": "heat",
         "zones": {
             "zone1": {
                 "error": 0.5,
@@ -387,7 +387,7 @@ async def test_crash_recovery_no_integral_windup_with_window_open(
 
     stored_data = {
         "version": 1,
-        "controller_mode": "auto",
+        "controller_mode": "heat",
         "zones": {
             "zone1": {
                 "error": 1.0,
@@ -554,7 +554,7 @@ async def test_crash_recovery_valve_action_sequence_integrity(
 
     stored_data = {
         "version": 1,
-        "controller_mode": "auto",
+        "controller_mode": "heat",
         "zones": {
             "zone1": {
                 "error": 2.0,
@@ -619,7 +619,7 @@ async def test_crash_recovery_mode_preserved_across_restart(
     Scenario: Mode was set to 'flush' before crash.
     Expected: Mode should be 'flush' after restart.
     """
-    for test_mode in ["auto", "flush", "cycle", "all_on", "all_off"]:
+    for test_mode in ["heat", "flush", "cycle", "all_on", "all_off"]:
         stored_data = {
             "version": 1,
             "controller_mode": test_mode,
@@ -697,7 +697,7 @@ async def test_crash_recovery_partial_zone_state_restoration(
     # Stored state with only some PID fields (uses defaults for missing)
     stored_data = {
         "version": 1,
-        "controller_mode": "auto",
+        "controller_mode": "heat",
         "zones": {
             "zone1": {
                 "i_term": 35.0,
@@ -782,7 +782,7 @@ async def test_flush_enabled_restored_from_state(
     """Test that flush_enabled is restored from stored state."""
     stored_data = {
         "version": 1,
-        "controller_mode": "auto",
+        "controller_mode": "heat",
         "flush_enabled": True,
         "zones": {
             "zone1": {
@@ -817,7 +817,7 @@ async def test_flush_enabled_defaults_to_false_when_not_stored(
     # Stored data without flush_enabled (simulates old storage format)
     stored_data = {
         "version": 1,
-        "controller_mode": "auto",
+        "controller_mode": "heat",
         "zones": {
             "zone1": {
                 "error": 0.0,
@@ -887,7 +887,7 @@ async def test_crash_recovery_stale_zone_in_stored_state(
     # Stored state has a zone that doesn't exist in current config
     stored_data = {
         "version": 1,
-        "controller_mode": "auto",
+        "controller_mode": "heat",
         "zones": {
             "zone1": {
                 "error": 0.5,

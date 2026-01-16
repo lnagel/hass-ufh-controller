@@ -171,7 +171,7 @@ class TestControllerState:
     def test_default_values(self) -> None:
         """Test default values are set correctly."""
         controller = ControllerState()
-        assert controller.mode == "auto"
+        assert controller.mode == "heat"
         assert controller.period_elapsed == 0.0
         assert controller.heat_requests == {}
         assert controller.flush_enabled is False

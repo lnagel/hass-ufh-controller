@@ -30,12 +30,12 @@ The flush request sensor indicates when flush circuits are actively capturing he
 
 | Value | Label | Description |
 |-------|-------|-------------|
-| `auto` | Automatic | Normal PID-based operation |
+| `heat` | Heat | Normal PID-based operation |
 | `flush` | Flush | All valves open, boiler circulation only (no firing) |
 | `cycle` | Cycle | Rotate through zones on 8-hour schedule |
 | `all_on` | All On | All valves open, heating enabled |
 | `all_off` | All Off | All valves closed, heating disabled |
-| `disabled` | Disabled | Controller inactive, no actions taken |
+| `off` | Off | Controller inactive, no actions taken |
 
 ### Zone-Level Entities
 

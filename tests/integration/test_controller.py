@@ -80,9 +80,9 @@ class TestHeatingControllerInit:
         assert "bedroom" in controller.zone_ids
 
     def test_init_default_mode(self, basic_config: ControllerConfig) -> None:
-        """Test controller starts in auto mode."""
+        """Test controller starts in heat mode."""
         controller = HeatingController(basic_config)
-        assert controller.mode == "auto"
+        assert controller.mode == "heat"
 
     def test_init_zone_state(self, basic_config: ControllerConfig) -> None:
         """Test zone state is initialized correctly."""
@@ -102,7 +102,7 @@ class TestModeProperty:
     def test_get_mode(self, basic_config: ControllerConfig) -> None:
         """Test getting mode."""
         controller = HeatingController(basic_config)
-        assert controller.mode == "auto"
+        assert controller.mode == "heat"
 
     def test_set_mode(self, basic_config: ControllerConfig) -> None:
         """Test setting mode."""
@@ -232,7 +232,7 @@ class TestPIDIntegrationPause:
         """Test PID integration is paused when mode is all_off."""
         controller = HeatingController(basic_config)
 
-        # First update in auto mode to establish baseline integral
+        # First update in heat mode to establish baseline integral
         setup_zone_pid(controller, "living_room", 20.0, 60.0)
         runtime = controller.get_zone_runtime("living_room")
         assert runtime is not None
@@ -253,7 +253,7 @@ class TestPIDIntegrationPause:
         """Test PID integration is paused when mode is flush."""
         controller = HeatingController(basic_config)
 
-        # First update in auto mode
+        # First update in heat mode
         setup_zone_pid(controller, "living_room", 20.0, 60.0)
         runtime = controller.get_zone_runtime("living_room")
         assert runtime is not None
@@ -283,8 +283,8 @@ class TestPIDIntegrationPause:
         assert runtime.pid.state is not None
         assert runtime.pid.state.i_term == initial_integral
 
-    def test_pid_paused_in_disabled_mode(self, basic_config: ControllerConfig) -> None:
-        """Test PID integration is paused when mode is disabled."""
+    def test_pid_paused_in_off_mode(self, basic_config: ControllerConfig) -> None:
+        """Test PID integration is paused when mode is off."""
         controller = HeatingController(basic_config)
 
         setup_zone_pid(controller, "living_room", 20.0, 60.0)
@@ -293,7 +293,7 @@ class TestPIDIntegrationPause:
         assert runtime.pid.state is not None
         initial_integral = runtime.pid.state.i_term
 
-        controller.mode = "disabled"
+        controller.mode = "off"
         setup_zone_pid(controller, "living_room", 19.0, 60.0)
         assert runtime.pid.state is not None
         assert runtime.pid.state.i_term == initial_integral
@@ -376,12 +376,12 @@ class TestPIDIntegrationPause:
         assert runtime.pid.state is not None
         assert runtime.pid.state.i_term > initial_integral
 
-    def test_pid_runs_normally_in_auto_mode(
+    def test_pid_runs_normally_in_heat_mode(
         self, basic_config: ControllerConfig
     ) -> None:
-        """Test PID runs normally in auto mode with enabled zone and closed window."""
+        """Test PID runs normally in heat mode with enabled zone and closed window."""
         controller = HeatingController(basic_config)
-        assert controller.mode == "auto"
+        assert controller.mode == "heat"
 
         # First update
         setup_zone_pid(controller, "living_room", 20.0, 60.0)
@@ -463,8 +463,8 @@ class TestPIDIntegrationPause:
         integral_while_paused = runtime.pid.state.i_term
         assert integral_while_paused == integral_after_first
 
-        # Resume by switching back to auto
-        controller.mode = "auto"
+        # Resume by switching back to heat
+        controller.mode = "heat"
         setup_zone_pid(controller, "living_room", 19.0, 60.0)
         assert runtime.pid.state is not None
         integral_after_resume = runtime.pid.state.i_term
@@ -606,12 +606,12 @@ class TestUpdateZoneHistorical:
 class TestHeatRequestFromEvaluate:
     """Test heat_request values returned by evaluate()."""
 
-    def test_disabled_mode_no_action(self, basic_config: ControllerConfig) -> None:
-        """Test disabled mode returns no heat request action (None)."""
+    def test_off_mode_no_action(self, basic_config: ControllerConfig) -> None:
+        """Test off mode returns no heat request action (None)."""
         controller = HeatingController(basic_config)
-        controller.mode = "disabled"
+        controller.mode = "off"
         actions = controller.evaluate(now=datetime.now(UTC))
-        # Disabled mode: empty heat_requests dict (no actions)
+        # Off mode: empty heat_requests dict (no actions)
         assert actions.heat_requests == {}
 
     def test_all_off_mode_no_request(self, basic_config: ControllerConfig) -> None:
@@ -635,10 +635,10 @@ class TestHeatRequestFromEvaluate:
         actions = controller.evaluate(now=datetime.now(UTC))
         assert not any(actions.heat_requests.values())
 
-    def test_auto_mode_with_valve_open_and_ready(
+    def test_heat_mode_with_valve_open_and_ready(
         self, basic_config: ControllerConfig
     ) -> None:
-        """Test auto mode returns heat_request=True when valve is open and ready."""
+        """Test heat mode returns heat_request=True when valve is open and ready."""
         controller = HeatingController(basic_config)
 
         # Set up zone with valve on and fully open
@@ -670,8 +670,8 @@ class TestGetSummerModeValue:
         controller = HeatingController(basic_config)
         assert controller.get_summer_mode_value(heat_request=True) is None
 
-    def test_disabled_mode_returns_none(self) -> None:
-        """Test disabled mode returns None."""
+    def test_off_mode_returns_none(self) -> None:
+        """Test off mode returns None."""
         config = ControllerConfig(
             controller_id="heating",
             name="Heating",
@@ -679,7 +679,7 @@ class TestGetSummerModeValue:
             zones=[],
         )
         controller = HeatingController(config)
-        controller.mode = "disabled"
+        controller.mode = "off"
         assert controller.get_summer_mode_value(heat_request=True) is None
 
     def test_flush_mode_returns_summer(self) -> None:
@@ -718,8 +718,8 @@ class TestGetSummerModeValue:
         controller.mode = "all_on"
         assert controller.get_summer_mode_value(heat_request=True) == SummerMode.WINTER
 
-    def test_auto_mode_with_heat_request(self) -> None:
-        """Test auto mode with heat request returns winter."""
+    def test_heat_mode_with_heat_request(self) -> None:
+        """Test heat mode with heat request returns winter."""
         config = ControllerConfig(
             controller_id="heating",
             name="Heating",
@@ -729,8 +729,8 @@ class TestGetSummerModeValue:
         controller = HeatingController(config)
         assert controller.get_summer_mode_value(heat_request=True) == SummerMode.WINTER
 
-    def test_auto_mode_without_heat_request(self) -> None:
-        """Test auto mode without heat request returns summer."""
+    def test_heat_mode_without_heat_request(self) -> None:
+        """Test heat mode without heat request returns summer."""
         config = ControllerConfig(
             controller_id="heating",
             name="Heating",

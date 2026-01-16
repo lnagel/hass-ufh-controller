@@ -22,12 +22,12 @@ SUBENTRY_TYPE_ZONE = "zone"
 class OperationMode(StrEnum):
     """Controller operation modes."""
 
-    AUTO = "auto"
+    HEAT = "heat"
     FLUSH = "flush"
     CYCLE = "cycle"
     ALL_ON = "all_on"
     ALL_OFF = "all_off"
-    DISABLED = "disabled"
+    OFF = "off"
 
 
 class SummerMode(StrEnum):

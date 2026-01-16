@@ -24,7 +24,7 @@ async def test_mode_select_created(
 
     state = hass.states.get("select.test_controller_mode")
     assert state is not None
-    assert state.state == OperationMode.AUTO
+    assert state.state == OperationMode.HEAT
 
 
 async def test_mode_select_options(

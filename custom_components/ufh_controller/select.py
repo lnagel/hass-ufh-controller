@@ -55,7 +55,7 @@ class UFHModeSelect(UFHControllerEntity, SelectEntity):
     @property
     def current_option(self) -> str:
         """Return the current mode."""
-        return self.coordinator.data.get("mode", OperationMode.AUTO)
+        return self.coordinator.data.get("mode", OperationMode.HEAT)
 
     async def async_select_option(self, option: str) -> None:
         """Set the operation mode."""

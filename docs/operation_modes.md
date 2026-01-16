@@ -1,7 +1,7 @@
 # Operation Modes
 
 
-### Automatic Mode (`auto`)
+### Heat Mode (`heat`)
 
 Default mode. Full PID control with quota-based scheduling.
 
@@ -42,7 +42,7 @@ Manual override - heating disabled.
 - Boiler summer_mode set to "summer"
 - Heat request OFF
 
-### Disabled Mode (`disabled`)
+### Off Mode (`off`)
 
 Controller inactive. No actions taken, entities remain in last state.
 

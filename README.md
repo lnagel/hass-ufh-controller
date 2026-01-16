@@ -38,12 +38,12 @@ Most underfloor heating systems either run valves in simple on/off mode (ineffic
 ### Multiple Operation Modes
 | Mode | Description |
 |------|-------------|
-| **Automatic** | Normal PID-based control with quota scheduling |
+| **Heat** | Normal PID-based control with quota scheduling |
 | **Flush** | All valves open for system flushing (circulation only, no firing) |
 | **Cycle** | Diagnostic mode - rotates through zones on 8-hour schedule |
 | **All On** | Maximum heating - all valves open |
 | **All Off** | Heating disabled - all valves closed |
-| **Disabled** | Controller inactive, no actions taken |
+| **Off** | Controller inactive, no actions taken |
 
 ### Home Assistant Integration
 - Native climate entities with HVAC modes and presets

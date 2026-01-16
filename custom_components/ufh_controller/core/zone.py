@@ -180,7 +180,7 @@ class ZoneRuntime:
 
         PID integration is paused (no update called) when:
         - Temperature reading is unavailable
-        - Controller mode is not 'auto' (PID only meaningful in auto mode)
+        - Controller mode is not 'heat' (PID only meaningful in heat mode)
         - Zone is disabled
         - Window was open recently (within blocking period)
 
@@ -218,8 +218,8 @@ class ZoneRuntime:
             True if PID should be paused.
 
         """
-        # Only auto mode uses PID-based control
-        if controller_mode != OperationMode.AUTO:
+        # Only heat mode uses PID-based control
+        if controller_mode != OperationMode.HEAT:
             return True
 
         # Disabled zones shouldn't accumulate integral

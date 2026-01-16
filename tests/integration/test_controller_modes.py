@@ -44,8 +44,8 @@ def basic_config() -> ControllerConfig:
     )
 
 
-class TestEvaluateZonesAutoMode:
-    """Test evaluate_zones in auto mode."""
+class TestEvaluateZonesHeatMode:
+    """Test evaluate_zones in heat mode."""
 
     def test_zone_with_quota_turns_on(self, basic_config: ControllerConfig) -> None:
         """Test zone with remaining quota turns on."""
@@ -148,11 +148,11 @@ class TestEvaluateZonesFlushMode:
         assert actions["bedroom"] == ZoneAction.TURN_ON
 
 
-class TestEvaluateZonesDisabledMode:
-    """Test evaluate_zones in disabled mode."""
+class TestEvaluateZonesOffMode:
+    """Test evaluate_zones in off mode."""
 
     def test_no_actions_returned(self, basic_config: ControllerConfig) -> None:
-        """Test disabled mode returns no actions - no state detection, no changes."""
+        """Test off mode returns no actions - no state detection, no changes."""
         controller = HeatingController(basic_config)
 
         # Simulate valve already being on (as if previously executed in all_on mode)
@@ -160,11 +160,11 @@ class TestEvaluateZonesDisabledMode:
         assert zone_state is not None
         zone_state.valve_state = ValveState.ON
 
-        # Switch to disabled
-        controller.mode = "disabled"
+        # Switch to off
+        controller.mode = "off"
         actions = controller.evaluate(now=datetime.now(UTC)).valve_actions
 
-        # Disabled mode returns empty actions
+        # Off mode returns empty actions
         assert actions == {}
 
 

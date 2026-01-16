@@ -34,7 +34,7 @@ from .zone import (
 class ControllerState:
     """Runtime state for the entire controller."""
 
-    mode: OperationMode = OperationMode.AUTO
+    mode: OperationMode = OperationMode.HEAT
     observation_start: datetime = field(default_factory=datetime.now)
     period_elapsed: float = 0.0  # Seconds elapsed in current observation period
     heat_requests: dict[str, bool] = field(default_factory=dict)
@@ -132,7 +132,7 @@ class HeatingController:
 
         """
         self.config = config
-        self._state = ControllerState(mode=OperationMode.AUTO)
+        self._state = ControllerState(mode=OperationMode.HEAT)
         self._zones: dict[str, ZoneRuntime] = {}
 
         # Initialize zones from config
@@ -218,9 +218,9 @@ class HeatingController:
     # Mode-specific evaluation functions
     # -------------------------------------------------------------------------
 
-    def _evaluate_disabled_mode(self) -> ControllerActions:
+    def _evaluate_off_mode(self) -> ControllerActions:
         """
-        Disabled mode - no changes whatsoever.
+        Off mode - no changes whatsoever.
 
         Returns empty valve actions - no state detection, no changes.
         """
@@ -324,9 +324,9 @@ class HeatingController:
             heat_requests=heat_requests,
         )
 
-    def _evaluate_auto_mode(self, now: datetime) -> ControllerActions:
+    def _evaluate_heat_mode(self, now: datetime) -> ControllerActions:
         """
-        Auto mode - quota-based scheduling with flush circuit logic.
+        Heat mode - quota-based scheduling with flush circuit logic.
 
         Uses PID-based quota scheduling for regular zones, then evaluates
         flush circuits based on whether any regular zones are running.
@@ -392,18 +392,17 @@ class HeatingController:
 
         """
         mode = self._state.mode
-        if mode == OperationMode.DISABLED:
-            return self._evaluate_disabled_mode()
-        if mode == OperationMode.ALL_ON:
-            return self._evaluate_all_on_mode()
-        if mode == OperationMode.ALL_OFF:
-            return self._evaluate_all_off_mode()
+        if mode == OperationMode.HEAT:
+            return self._evaluate_heat_mode(now)
         if mode == OperationMode.FLUSH:
             return self._evaluate_flush_mode()
         if mode == OperationMode.CYCLE:
             return self._evaluate_cycle_mode(now)
-        # Default: auto mode
-        return self._evaluate_auto_mode(now)
+        if mode == OperationMode.ALL_ON:
+            return self._evaluate_all_on_mode()
+        if mode == OperationMode.ALL_OFF:
+            return self._evaluate_all_off_mode()
+        return self._evaluate_off_mode()
 
     def get_summer_mode_value(self, *, heat_request: bool) -> str | None:
         """
@@ -422,7 +421,7 @@ class HeatingController:
 
         mode = self._state.mode
 
-        if mode == OperationMode.DISABLED:
+        if mode == OperationMode.OFF:
             return None
 
         if mode in (OperationMode.FLUSH, OperationMode.ALL_OFF):
@@ -431,7 +430,7 @@ class HeatingController:
         if mode == OperationMode.ALL_ON:
             return SummerMode.WINTER
 
-        # Auto and cycle modes depend on heat request
+        # Heat and cycle modes depend on heat request
         return SummerMode.WINTER if heat_request else SummerMode.SUMMER
 
     @property

@@ -31,7 +31,7 @@ To prevent integral windup during periods when heating is blocked or irrelevant,
 | Condition | Reason |
 |-----------|--------|
 | Temperature unavailable | Cannot calculate meaningful error without current temperature |
-| Controller mode ≠ `auto` | PID control only applies in automatic mode |
+| Controller mode ≠ `heat` | PID control only applies in heat mode |
 | Zone disabled | Disabled zones don't participate in heating |
 | Window open (above threshold) | Heating blocked, would cause integral windup |
 
