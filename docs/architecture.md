@@ -40,10 +40,12 @@ Coordinator._async_update_data()
     │       ├─► Evaluate regular zones first
     │       ├─► Compute flush_request
     │       ├─► Evaluate flush zones
-    │       ├─► Compute heat_request action (if changed)
-    │       └─► Compute summer_mode action (if changed)
+    │       ├─► Compute per-zone heat_requests (dict[str, bool])
+    │       ├─► Compute aggregate heat_request from heat_requests
+    │       └─► Return actions (valves, heat_request, heat_requests, flush_request)
     │
     ├─► Execute returned actions:
+    │       ├─► Store heat_requests in controller state
     │       ├─► Valve actions via switch services
     │       ├─► Heat request via switch service (if present)
     │       └─► Summer mode via select service (if present)

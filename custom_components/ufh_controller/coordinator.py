@@ -36,7 +36,6 @@ from .core.zone import (
     ZoneAction,
     ZoneConfig,
     ZoneStatusTransition,
-    should_request_heat,
 )
 from .recorder import get_state_average, was_any_window_open_recently
 
@@ -367,6 +366,9 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # Update flush_request state for binary_sensor exposure
         self._controller.state.flush_request = actions.flush_request
+
+        # Update per-zone heat requests from controller output
+        self._controller.state.heat_requests = actions.heat_requests
 
         # Execute valve actions with zone-level isolation
         await self._execute_valve_actions_with_isolation(actions.valve_actions)
@@ -830,9 +832,13 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 elif runtime.state.zone_status == ZoneStatus.FAIL_SAFE:
                     zones_fail_safe += 1
 
+        # Count zones requesting heat from controller state
+        zones_requesting_heat = sum(self._controller.state.heat_requests.values())
+
         result: dict[str, Any] = {
             "mode": self._controller.mode,
             "heat_request": self._controller.state.heat_request,
+            "zones_requesting_heat": zones_requesting_heat,
             "observation_start": self._controller.state.observation_start,
             "controller_status": self._status.value,
             "zones_degraded": zones_degraded,
@@ -860,8 +866,8 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "valve_state": state.valve_state.value,
                     "enabled": state.enabled,
                     "blocked": blocked,
-                    "heat_request": should_request_heat(
-                        state, self._controller.config.timing
+                    "heat_request": self._controller.state.heat_requests.get(
+                        zone_id, False
                     ),
                     "preset_mode": self._zone_presets.get(zone_id),
                     "zone_status": state.zone_status.value,
