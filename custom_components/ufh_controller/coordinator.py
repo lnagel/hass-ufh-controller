@@ -18,6 +18,7 @@ from .const import (
     DEFAULT_TIMING,
     DOMAIN,
     FAIL_SAFE_TIMEOUT,
+    INITIALIZING_UPDATE_INTERVAL,
     LOGGER,
     SUBENTRY_TYPE_CONTROLLER,
     SUBENTRY_TYPE_ZONE,
@@ -62,13 +63,13 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Initialize the coordinator."""
         # Build controller first to get timing config
         self._controller = self._build_controller(entry)
-        self._loop_interval = self._controller.config.timing.controller_loop_interval
+        self._status: ControllerStatus = ControllerStatus.INITIALIZING
 
         super().__init__(
             hass,
             LOGGER,
             name=DOMAIN,
-            update_interval=timedelta(seconds=self._loop_interval),
+            update_interval=timedelta(seconds=INITIALIZING_UPDATE_INTERVAL),
         )
         self.config_entry = entry
         self._last_update: datetime | None = None
@@ -83,9 +84,6 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # Track preset modes per zone (not part of core controller state)
         self._zone_presets: dict[str, str | None] = {}
-
-        # Controller status (derived from zone statuses)
-        self._status: ControllerStatus = ControllerStatus.INITIALIZING
 
         # Track previous DHW state for transition detection
         self._prev_dhw_active: bool = False
@@ -328,7 +326,7 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             await self.async_load_stored_state()
 
         now = datetime.now(UTC)
-        dt = self._loop_interval
+        dt = self._controller.config.timing.controller_loop_interval
         if self._last_update is not None:
             dt = (now - self._last_update).total_seconds()
         self._last_update = now
@@ -353,8 +351,19 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         for zone_id in self._controller.zone_ids:
             await self._update_zone(zone_id, now, dt)
 
+        previous_status = self._status
+
         # Update controller status from zone statuses
         self._update_controller_status_from_zones()
+
+        # Detect initialization finished
+        if (
+            previous_status == ControllerStatus.INITIALIZING
+            and previous_status != self._status
+        ):
+            self.update_interval = timedelta(
+                seconds=self._controller.config.timing.controller_loop_interval
+            )
 
         # If ALL zones are in fail-safe, execute controller-level fail-safe
         if self._status == ControllerStatus.FAIL_SAFE:

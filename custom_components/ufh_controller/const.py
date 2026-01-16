@@ -92,6 +92,9 @@ FAILURE_NOTIFICATION_THRESHOLD = (
 )
 FAIL_SAFE_TIMEOUT = 3600  # 1 hour in seconds before activating fail-safe mode
 
+# Coordinator update intervals
+INITIALIZING_UPDATE_INTERVAL = 10  # Fast updates (seconds) during initialization
+
 
 class TimingDefaults(TypedDict):
     """Type for DEFAULT_TIMING dictionary."""
