@@ -41,8 +41,7 @@ Coordinator._async_update_data()
     │       ├─► Compute flush_request
     │       ├─► Evaluate flush zones
     │       ├─► Compute per-zone heat_requests (dict[str, bool])
-    │       ├─► Compute aggregate heat_request from heat_requests
-    │       └─► Return actions (valves, heat_request, heat_requests, flush_request)
+    │       └─► Return actions (valves, heat_requests, flush_request)
     │
     ├─► Execute returned actions:
     │       ├─► Store heat_requests in controller state
