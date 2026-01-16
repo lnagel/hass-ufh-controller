@@ -224,8 +224,7 @@ class HeatingController:
 
         Returns empty valve actions - no state detection, no changes.
         """
-        heat_requests = dict.fromkeys(self._zones, False)
-        return ControllerActions(valve_actions={}, heat_requests=heat_requests)
+        return ControllerActions(valve_actions={}, heat_requests={})
 
     def _evaluate_all_on_mode(self) -> ControllerActions:
         """
