@@ -67,9 +67,9 @@ class ControllerActions:
     The coordinator executes these actions via Home Assistant services.
     """
 
-    valve_actions: dict[str, ZoneAction]
-    flush_request: bool = False  # Whether flush circuits should activate
+    valve_actions: dict[str, ZoneAction] = field(default_factory=dict)
     heat_requests: dict[str, bool] = field(default_factory=dict)
+    flush_request: bool = False
 
 
 def compute_flush_request(
@@ -224,7 +224,7 @@ class HeatingController:
 
         Returns empty valve actions - no state detection, no changes.
         """
-        return ControllerActions(valve_actions={}, heat_requests={})
+        return ControllerActions()
 
     def _evaluate_all_on_mode(self) -> ControllerActions:
         """
@@ -373,8 +373,8 @@ class HeatingController:
 
         return ControllerActions(
             valve_actions=valve_actions,
-            flush_request=flush_request,
             heat_requests=heat_requests,
+            flush_request=flush_request,
         )
 
     def evaluate(self, *, now: datetime) -> ControllerActions:
