@@ -611,8 +611,8 @@ class TestHeatRequestFromEvaluate:
         controller = HeatingController(basic_config)
         controller.mode = "disabled"
         actions = controller.evaluate(now=datetime.now(UTC))
-        # Disabled mode: all zones have heat_request=False
-        assert all(not hr for hr in actions.heat_requests.values())
+        # Disabled mode: empty heat_requests dict (no actions)
+        assert actions.heat_requests == {}
 
     def test_all_off_mode_no_request(self, basic_config: ControllerConfig) -> None:
         """Test all_off mode returns heat_request=False."""
