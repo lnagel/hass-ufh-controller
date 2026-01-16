@@ -74,8 +74,8 @@ The `hvac_action` attribute communicates the current operational state of each z
 | Action | Condition |
 |--------|-----------|
 | `HVACAction.OFF` | Heating is disabled (zone HVAC mode is OFF) |
-| `HVACAction.IDLE` | Heating enabled but valve is closed (not currently heating) |
-| `HVACAction.HEATING` | Valve is open (actively heating) |
+| `HVACAction.IDLE` | Zone is not requesting heat |
+| `HVACAction.HEATING` | Zone is requesting heat |
 
 **Attributes:**
 

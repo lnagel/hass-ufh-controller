@@ -611,29 +611,29 @@ class TestHeatRequestFromEvaluate:
         controller = HeatingController(basic_config)
         controller.mode = "disabled"
         actions = controller.evaluate(now=datetime.now(UTC))
-        # Disabled mode takes no action on heat_request
-        assert actions.heat_request is None
+        # Disabled mode: empty heat_requests dict (no actions)
+        assert actions.heat_requests == {}
 
     def test_all_off_mode_no_request(self, basic_config: ControllerConfig) -> None:
         """Test all_off mode returns heat_request=False."""
         controller = HeatingController(basic_config)
         controller.mode = "all_off"
         actions = controller.evaluate(now=datetime.now(UTC))
-        assert actions.heat_request is False
+        assert not any(actions.heat_requests.values())
 
     def test_all_on_mode_requests_heat(self, basic_config: ControllerConfig) -> None:
         """Test all_on mode returns heat_request=True."""
         controller = HeatingController(basic_config)
         controller.mode = "all_on"
         actions = controller.evaluate(now=datetime.now(UTC))
-        assert actions.heat_request is True
+        assert any(actions.heat_requests.values())
 
     def test_flush_mode_no_heat_request(self, basic_config: ControllerConfig) -> None:
         """Test flush mode returns heat_request=False."""
         controller = HeatingController(basic_config)
         controller.mode = "flush"
         actions = controller.evaluate(now=datetime.now(UTC))
-        assert actions.heat_request is False
+        assert not any(actions.heat_requests.values())
 
     def test_auto_mode_with_valve_open_and_ready(
         self, basic_config: ControllerConfig
@@ -659,7 +659,7 @@ class TestHeatRequestFromEvaluate:
         runtime.state.used_duration = 0.0
 
         actions = controller.evaluate(now=datetime.now(UTC))
-        assert actions.heat_request is True
+        assert any(actions.heat_requests.values())
 
 
 class TestGetSummerModeValue:
