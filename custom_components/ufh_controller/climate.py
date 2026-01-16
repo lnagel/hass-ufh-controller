@@ -152,16 +152,16 @@ class UFHZoneClimate(UFHControllerZoneEntity, ClimateEntity):
     async def async_set_temperature(self, **kwargs: Any) -> None:
         """Set the target temperature."""
         if (temperature := kwargs.get("temperature")) is not None:
-            self.coordinator.set_zone_setpoint(self._zone_id, temperature)
+            await self.coordinator.set_zone_setpoint(self._zone_id, temperature)
             # Clear preset when manually setting temperature
-            self.coordinator.set_zone_preset_mode(self._zone_id, None)
+            await self.coordinator.set_zone_preset_mode(self._zone_id, None)
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         """Set the HVAC mode."""
         if hvac_mode == HVACMode.HEAT:
-            self.coordinator.set_zone_enabled(self._zone_id, enabled=True)
+            await self.coordinator.set_zone_enabled(self._zone_id, enabled=True)
         elif hvac_mode == HVACMode.OFF:
-            self.coordinator.set_zone_enabled(self._zone_id, enabled=False)
+            await self.coordinator.set_zone_enabled(self._zone_id, enabled=False)
 
     async def async_turn_on(self) -> None:
         """Turn the zone on."""
@@ -178,8 +178,8 @@ class UFHZoneClimate(UFHControllerZoneEntity, ClimateEntity):
 
         # Presets are stored as simple floats (temperature values)
         setpoint = self._presets[preset_mode]
-        self.coordinator.set_zone_setpoint(self._zone_id, setpoint)
-        self.coordinator.set_zone_preset_mode(self._zone_id, preset_mode)
+        await self.coordinator.set_zone_setpoint(self._zone_id, setpoint)
+        await self.coordinator.set_zone_preset_mode(self._zone_id, preset_mode)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:

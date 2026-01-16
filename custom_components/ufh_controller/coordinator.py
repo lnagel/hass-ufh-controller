@@ -873,26 +873,27 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         return result
 
-    def set_zone_setpoint(self, zone_id: str, setpoint: float) -> None:
-        """Set zone setpoint and trigger update."""
+    async def set_zone_setpoint(self, zone_id: str, setpoint: float) -> None:
+        """Set zone setpoint and trigger refresh."""
         if self._controller.set_zone_setpoint(zone_id, setpoint):
-            self.async_set_updated_data(self._build_state_dict())
-            self.hass.async_create_task(self.async_save_state())
+            await self.async_request_refresh()
 
-    def set_zone_enabled(self, zone_id: str, *, enabled: bool) -> None:
-        """Enable or disable a zone and trigger update."""
+    async def set_zone_enabled(self, zone_id: str, *, enabled: bool) -> None:
+        """Enable or disable a zone and trigger refresh."""
         if self._controller.set_zone_enabled(zone_id, enabled=enabled):
-            self.async_set_updated_data(self._build_state_dict())
-            self.hass.async_create_task(self.async_save_state())
+            await self.async_request_refresh()
 
-    def set_mode(self, mode: str) -> None:
-        """Set controller operation mode and trigger update."""
+    async def set_mode(self, mode: str) -> None:
+        """Set controller operation mode and trigger refresh."""
         self._controller.mode = mode
-        self.async_set_updated_data(self._build_state_dict())
-        self.hass.async_create_task(self.async_save_state())
+        await self.async_request_refresh()
 
-    def set_zone_preset_mode(self, zone_id: str, preset_mode: str | None) -> None:
-        """Set zone preset mode and trigger update."""
+    async def set_zone_preset_mode(self, zone_id: str, preset_mode: str | None) -> None:
+        """Set zone preset mode and trigger refresh."""
         self._zone_presets[zone_id] = preset_mode
-        self.async_set_updated_data(self._build_state_dict())
-        self.hass.async_create_task(self.async_save_state())
+        await self.async_request_refresh()
+
+    async def set_flush_enabled(self, *, enabled: bool) -> None:
+        """Enable or disable flush and trigger refresh."""
+        self._controller.state.flush_enabled = enabled
+        await self.async_request_refresh()

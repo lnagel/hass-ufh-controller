@@ -59,4 +59,4 @@ class UFHModeSelect(UFHControllerEntity, SelectEntity):
 
     async def async_select_option(self, option: str) -> None:
         """Set the operation mode."""
-        self.coordinator.set_mode(option)
+        await self.coordinator.set_mode(option)

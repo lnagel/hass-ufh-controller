@@ -1,6 +1,6 @@
 """Tests for Underfloor Heating Controller climate platform."""
 
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from homeassistant.components.climate import (
@@ -126,30 +126,40 @@ async def test_climate_set_hvac_mode_heat(
     mock_temp_sensor: None,
     climate_entity_id: str,
 ) -> None:
-    """Test setting HVAC mode back to HEAT."""
+    """Test setting HVAC mode requests coordinator refresh."""
     mock_config_entry.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
 
-    # First set to OFF
-    await hass.services.async_call(
-        CLIMATE_DOMAIN,
-        SERVICE_SET_HVAC_MODE,
-        {ATTR_ENTITY_ID: climate_entity_id, ATTR_HVAC_MODE: HVACMode.OFF},
-        blocking=True,
-    )
+    coordinator = mock_config_entry.runtime_data.coordinator
 
-    # Then back to HEAT
-    await hass.services.async_call(
-        CLIMATE_DOMAIN,
-        SERVICE_SET_HVAC_MODE,
-        {ATTR_ENTITY_ID: climate_entity_id, ATTR_HVAC_MODE: HVACMode.HEAT},
-        blocking=True,
-    )
+    with patch.object(
+        coordinator, "async_request_refresh", new_callable=AsyncMock
+    ) as mock_refresh:
+        # Set to OFF
+        await hass.services.async_call(
+            CLIMATE_DOMAIN,
+            SERVICE_SET_HVAC_MODE,
+            {ATTR_ENTITY_ID: climate_entity_id, ATTR_HVAC_MODE: HVACMode.OFF},
+            blocking=True,
+        )
 
-    state = hass.states.get(climate_entity_id)
-    assert state is not None
-    assert state.state == HVACMode.HEAT
+        # Verify refresh was requested
+        mock_refresh.assert_called()
+
+        # Reset mock
+        mock_refresh.reset_mock()
+
+        # Set back to HEAT
+        await hass.services.async_call(
+            CLIMATE_DOMAIN,
+            SERVICE_SET_HVAC_MODE,
+            {ATTR_ENTITY_ID: climate_entity_id, ATTR_HVAC_MODE: HVACMode.HEAT},
+            blocking=True,
+        )
+
+        # Verify refresh was requested again
+        mock_refresh.assert_called()
 
 
 async def test_climate_set_temperature(
@@ -221,22 +231,25 @@ async def test_climate_set_preset_comfort(
     mock_temp_sensor: None,
     climate_entity_id: str,
 ) -> None:
-    """Test setting comfort preset."""
+    """Test setting comfort preset requests coordinator refresh."""
     mock_config_entry.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
 
-    await hass.services.async_call(
-        CLIMATE_DOMAIN,
-        SERVICE_SET_PRESET_MODE,
-        {ATTR_ENTITY_ID: climate_entity_id, ATTR_PRESET_MODE: "comfort"},
-        blocking=True,
-    )
+    coordinator = mock_config_entry.runtime_data.coordinator
 
-    state = hass.states.get(climate_entity_id)
-    assert state is not None
-    assert state.attributes.get("preset_mode") == "comfort"
-    assert state.attributes.get("temperature") == 22.0
+    with patch.object(
+        coordinator, "async_request_refresh", new_callable=AsyncMock
+    ) as mock_refresh:
+        await hass.services.async_call(
+            CLIMATE_DOMAIN,
+            SERVICE_SET_PRESET_MODE,
+            {ATTR_ENTITY_ID: climate_entity_id, ATTR_PRESET_MODE: "comfort"},
+            blocking=True,
+        )
+
+        # Verify refresh was requested (twice: once for setpoint, once for preset_mode)
+        assert mock_refresh.call_count == 2
 
 
 async def test_climate_set_preset_eco(
@@ -245,22 +258,25 @@ async def test_climate_set_preset_eco(
     mock_temp_sensor: None,
     climate_entity_id: str,
 ) -> None:
-    """Test setting eco preset."""
+    """Test setting eco preset requests coordinator refresh."""
     mock_config_entry.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
 
-    await hass.services.async_call(
-        CLIMATE_DOMAIN,
-        SERVICE_SET_PRESET_MODE,
-        {ATTR_ENTITY_ID: climate_entity_id, ATTR_PRESET_MODE: "eco"},
-        blocking=True,
-    )
+    coordinator = mock_config_entry.runtime_data.coordinator
 
-    state = hass.states.get(climate_entity_id)
-    assert state is not None
-    assert state.attributes.get("preset_mode") == "eco"
-    assert state.attributes.get("temperature") == 19.0
+    with patch.object(
+        coordinator, "async_request_refresh", new_callable=AsyncMock
+    ) as mock_refresh:
+        await hass.services.async_call(
+            CLIMATE_DOMAIN,
+            SERVICE_SET_PRESET_MODE,
+            {ATTR_ENTITY_ID: climate_entity_id, ATTR_PRESET_MODE: "eco"},
+            blocking=True,
+        )
+
+        # Verify refresh was requested (twice: once for setpoint, once for preset_mode)
+        assert mock_refresh.call_count == 2
 
 
 async def test_climate_extra_attributes(

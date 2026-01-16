@@ -63,10 +63,8 @@ class UFHFlushEnabledSwitch(UFHControllerEntity, SwitchEntity):
 
     async def async_turn_on(self, **_kwargs: Any) -> None:
         """Enable DHW latent heat capture."""
-        self.coordinator.controller.state.flush_enabled = True
-        self.async_write_ha_state()
+        await self.coordinator.set_flush_enabled(enabled=True)
 
     async def async_turn_off(self, **_kwargs: Any) -> None:
         """Disable DHW latent heat capture."""
-        self.coordinator.controller.state.flush_enabled = False
-        self.async_write_ha_state()
+        await self.coordinator.set_flush_enabled(enabled=False)
