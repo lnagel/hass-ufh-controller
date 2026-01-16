@@ -7,6 +7,7 @@ import pytest
 from custom_components.ufh_controller.const import (
     DEFAULT_PID,
     DEFAULT_SETPOINT,
+    OperationMode,
     ValveState,
 )
 from custom_components.ufh_controller.core.controller import (
@@ -97,7 +98,7 @@ class TestEvaluateZonesAllOnMode:
     def test_all_valves_turn_on(self, basic_config: ControllerConfig) -> None:
         """Test all valves turn on in all_on mode."""
         controller = HeatingController(basic_config)
-        controller.mode = "all_on"
+        controller.mode = OperationMode.ALL_ON
 
         actions = controller.evaluate(now=datetime.now(UTC)).valve_actions
 
@@ -107,7 +108,7 @@ class TestEvaluateZonesAllOnMode:
     def test_valve_stays_on(self, basic_config: ControllerConfig) -> None:
         """Test valve that's already on stays on."""
         controller = HeatingController(basic_config)
-        controller.mode = "all_on"
+        controller.mode = OperationMode.ALL_ON
 
         # Simulate valve already being on (as if previously executed)
         zone_state = controller.get_zone_state("living_room")
@@ -126,7 +127,7 @@ class TestEvaluateZonesAllOffMode:
     def test_all_valves_stay_off(self, basic_config: ControllerConfig) -> None:
         """Test all valves stay off in all_off mode."""
         controller = HeatingController(basic_config)
-        controller.mode = "all_off"
+        controller.mode = OperationMode.ALL_OFF
 
         actions = controller.evaluate(now=datetime.now(UTC)).valve_actions
 
@@ -140,7 +141,7 @@ class TestEvaluateZonesFlushMode:
     def test_all_valves_turn_on(self, basic_config: ControllerConfig) -> None:
         """Test all valves turn on in flush mode."""
         controller = HeatingController(basic_config)
-        controller.mode = "flush"
+        controller.mode = OperationMode.FLUSH
 
         actions = controller.evaluate(now=datetime.now(UTC)).valve_actions
 
@@ -161,7 +162,7 @@ class TestEvaluateZonesOffMode:
         zone_state.valve_state = ValveState.ON
 
         # Switch to off
-        controller.mode = "off"
+        controller.mode = OperationMode.OFF
         actions = controller.evaluate(now=datetime.now(UTC)).valve_actions
 
         # Off mode returns empty actions
@@ -174,7 +175,7 @@ class TestEvaluateZonesCycleMode:
     def test_cycle_mode_hour_0_all_off(self, basic_config: ControllerConfig) -> None:
         """Test all zones off during rest hour (hour 0)."""
         controller = HeatingController(basic_config)
-        controller.mode = "cycle"
+        controller.mode = OperationMode.CYCLE
 
         # Pass time directly - no mocking needed with new architecture
         now = datetime(2024, 1, 15, 0, 30, 0, tzinfo=UTC)
@@ -186,7 +187,7 @@ class TestEvaluateZonesCycleMode:
     def test_cycle_mode_first_zone_active(self, basic_config: ControllerConfig) -> None:
         """Test first zone active during hour 1."""
         controller = HeatingController(basic_config)
-        controller.mode = "cycle"
+        controller.mode = OperationMode.CYCLE
 
         # Pass time directly - no mocking needed with new architecture
         now = datetime(2024, 1, 15, 1, 30, 0, tzinfo=UTC)
@@ -201,7 +202,7 @@ class TestEvaluateZonesCycleMode:
     ) -> None:
         """Test second zone active during hour 2."""
         controller = HeatingController(basic_config)
-        controller.mode = "cycle"
+        controller.mode = OperationMode.CYCLE
 
         # Pass time directly - no mocking needed with new architecture
         now = datetime(2024, 1, 15, 2, 30, 0, tzinfo=UTC)

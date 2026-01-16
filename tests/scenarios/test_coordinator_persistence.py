@@ -11,6 +11,7 @@ from custom_components.ufh_controller.const import (
     DEFAULT_TIMING,
     DOMAIN,
     SUBENTRY_TYPE_ZONE,
+    OperationMode,
     ValveState,
 )
 from custom_components.ufh_controller.core.pid import PIDState
@@ -71,7 +72,7 @@ async def test_coordinator_loads_stored_state(
     coordinator = mock_config_entry.runtime_data.coordinator
 
     # Check mode was restored
-    assert coordinator.controller.mode == "flush"
+    assert coordinator.controller.mode == OperationMode.FLUSH
 
     # Check full PID state was restored (prevents sensors being unavailable)
     runtime = coordinator.controller.get_zone_runtime("zone1")
@@ -100,7 +101,7 @@ async def test_coordinator_save_state_format(
     coordinator = mock_config_entry.runtime_data.coordinator
 
     # Set some state
-    coordinator.controller.mode = "cycle"
+    coordinator.controller.mode = OperationMode.CYCLE
     runtime = coordinator.controller.get_zone_runtime("zone1")
     assert runtime is not None
 
@@ -125,7 +126,7 @@ async def test_coordinator_save_state_format(
 
     assert saved_data is not None
     assert saved_data["version"] == 1
-    assert saved_data["controller_mode"] == "cycle"
+    assert saved_data["controller_mode"] == OperationMode.CYCLE
     assert "zones" in saved_data
     assert "zone1" in saved_data["zones"]
 
@@ -156,7 +157,7 @@ async def test_coordinator_no_stored_state(
     coordinator = mock_config_entry.runtime_data.coordinator
 
     # Should use default mode
-    assert coordinator.controller.mode == "heat"
+    assert coordinator.controller.mode == OperationMode.HEAT
 
     # PID state should be None (no stored state, no updates yet)
     runtime = coordinator.controller.get_zone_runtime("zone1")
@@ -619,7 +620,13 @@ async def test_crash_recovery_mode_preserved_across_restart(
     Scenario: Mode was set to 'flush' before crash.
     Expected: Mode should be 'flush' after restart.
     """
-    for test_mode in ["heat", "flush", "cycle", "all_on", "all_off"]:
+    for test_mode in [
+        OperationMode.HEAT,
+        OperationMode.FLUSH,
+        OperationMode.CYCLE,
+        OperationMode.ALL_ON,
+        OperationMode.ALL_OFF,
+    ]:
         stored_data = {
             "version": 1,
             "controller_mode": test_mode,

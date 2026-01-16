@@ -2,7 +2,11 @@
 
 import pytest
 
-from custom_components.ufh_controller.const import TimingParams, ValveState
+from custom_components.ufh_controller.const import (
+    OperationMode,
+    TimingParams,
+    ValveState,
+)
 from custom_components.ufh_controller.core.controller import ControllerState
 from custom_components.ufh_controller.core.zone import (
     CircuitType,
@@ -171,7 +175,7 @@ class TestControllerState:
     def test_default_values(self) -> None:
         """Test default values are set correctly."""
         controller = ControllerState()
-        assert controller.mode == "heat"
+        assert controller.mode == OperationMode.HEAT
         assert controller.period_elapsed == 0.0
         assert controller.heat_requests == {}
         assert controller.flush_enabled is False

@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 import pytest
 
 from custom_components.ufh_controller.const import (
+    OperationMode,
     SummerMode,
     ValveState,
 )
@@ -82,7 +83,7 @@ class TestHeatingControllerInit:
     def test_init_default_mode(self, basic_config: ControllerConfig) -> None:
         """Test controller starts in heat mode."""
         controller = HeatingController(basic_config)
-        assert controller.mode == "heat"
+        assert controller.mode == OperationMode.HEAT
 
     def test_init_zone_state(self, basic_config: ControllerConfig) -> None:
         """Test zone state is initialized correctly."""
@@ -102,13 +103,13 @@ class TestModeProperty:
     def test_get_mode(self, basic_config: ControllerConfig) -> None:
         """Test getting mode."""
         controller = HeatingController(basic_config)
-        assert controller.mode == "heat"
+        assert controller.mode == OperationMode.HEAT
 
     def test_set_mode(self, basic_config: ControllerConfig) -> None:
         """Test setting mode."""
         controller = HeatingController(basic_config)
-        controller.mode = "flush"
-        assert controller.mode == "flush"
+        controller.mode = OperationMode.FLUSH
+        assert controller.mode == OperationMode.FLUSH
 
 
 class TestSetZoneSetpoint:
@@ -240,7 +241,7 @@ class TestPIDIntegrationPause:
         initial_integral = runtime.pid.state.i_term
 
         # Switch to all_off mode
-        controller.mode = "all_off"
+        controller.mode = OperationMode.ALL_OFF
 
         # PID update should NOT accumulate integral
         setup_zone_pid(controller, "living_room", 19.0, 60.0)  # Larger error
@@ -261,7 +262,7 @@ class TestPIDIntegrationPause:
         initial_integral = runtime.pid.state.i_term
 
         # Switch to flush mode
-        controller.mode = "flush"
+        controller.mode = OperationMode.FLUSH
 
         # PID update should NOT accumulate integral
         setup_zone_pid(controller, "living_room", 19.0, 60.0)
@@ -278,7 +279,7 @@ class TestPIDIntegrationPause:
         assert runtime.pid.state is not None
         initial_integral = runtime.pid.state.i_term
 
-        controller.mode = "all_on"
+        controller.mode = OperationMode.ALL_ON
         setup_zone_pid(controller, "living_room", 19.0, 60.0)
         assert runtime.pid.state is not None
         assert runtime.pid.state.i_term == initial_integral
@@ -293,7 +294,7 @@ class TestPIDIntegrationPause:
         assert runtime.pid.state is not None
         initial_integral = runtime.pid.state.i_term
 
-        controller.mode = "off"
+        controller.mode = OperationMode.OFF
         setup_zone_pid(controller, "living_room", 19.0, 60.0)
         assert runtime.pid.state is not None
         assert runtime.pid.state.i_term == initial_integral
@@ -308,7 +309,7 @@ class TestPIDIntegrationPause:
         assert runtime.pid.state is not None
         initial_integral = runtime.pid.state.i_term
 
-        controller.mode = "cycle"
+        controller.mode = OperationMode.CYCLE
         setup_zone_pid(controller, "living_room", 19.0, 60.0)
         assert runtime.pid.state is not None
         assert runtime.pid.state.i_term == initial_integral
@@ -381,7 +382,7 @@ class TestPIDIntegrationPause:
     ) -> None:
         """Test PID runs normally in heat mode with enabled zone and closed window."""
         controller = HeatingController(basic_config)
-        assert controller.mode == "heat"
+        assert controller.mode == OperationMode.HEAT
 
         # First update
         setup_zone_pid(controller, "living_room", 20.0, 60.0)
@@ -411,7 +412,7 @@ class TestPIDIntegrationPause:
         assert initial_duty_cycle > 0  # Should have some duty cycle from error
 
         # Switch to mode that pauses PID
-        controller.mode = "all_off"
+        controller.mode = OperationMode.ALL_OFF
 
         # Update with different temperature - duty cycle should be maintained
         returned_duty = setup_zone_pid(controller, "living_room", 15.0, 60.0)
@@ -436,7 +437,7 @@ class TestPIDIntegrationPause:
         assert runtime.pid.state.error == 2.0
 
         # Switch to mode that pauses PID
-        controller.mode = "all_off"
+        controller.mode = OperationMode.ALL_OFF
 
         # Update with new temperature - PID is paused so state should not change
         setup_zone_pid(controller, "living_room", 18.0, 60.0)
@@ -457,14 +458,14 @@ class TestPIDIntegrationPause:
         integral_after_first = runtime.pid.state.i_term
 
         # Pause by switching mode
-        controller.mode = "all_off"
+        controller.mode = OperationMode.ALL_OFF
         setup_zone_pid(controller, "living_room", 19.0, 60.0)
         assert runtime.pid.state is not None
         integral_while_paused = runtime.pid.state.i_term
         assert integral_while_paused == integral_after_first
 
         # Resume by switching back to heat
-        controller.mode = "heat"
+        controller.mode = OperationMode.HEAT
         setup_zone_pid(controller, "living_room", 19.0, 60.0)
         assert runtime.pid.state is not None
         integral_after_resume = runtime.pid.state.i_term
@@ -609,7 +610,7 @@ class TestHeatRequestFromEvaluate:
     def test_off_mode_no_action(self, basic_config: ControllerConfig) -> None:
         """Test off mode returns no heat request action (None)."""
         controller = HeatingController(basic_config)
-        controller.mode = "off"
+        controller.mode = OperationMode.OFF
         actions = controller.evaluate(now=datetime.now(UTC))
         # Off mode: empty heat_requests dict (no actions)
         assert actions.heat_requests == {}
@@ -617,21 +618,21 @@ class TestHeatRequestFromEvaluate:
     def test_all_off_mode_no_request(self, basic_config: ControllerConfig) -> None:
         """Test all_off mode returns heat_request=False."""
         controller = HeatingController(basic_config)
-        controller.mode = "all_off"
+        controller.mode = OperationMode.ALL_OFF
         actions = controller.evaluate(now=datetime.now(UTC))
         assert not any(actions.heat_requests.values())
 
     def test_all_on_mode_requests_heat(self, basic_config: ControllerConfig) -> None:
         """Test all_on mode returns heat_request=True."""
         controller = HeatingController(basic_config)
-        controller.mode = "all_on"
+        controller.mode = OperationMode.ALL_ON
         actions = controller.evaluate(now=datetime.now(UTC))
         assert any(actions.heat_requests.values())
 
     def test_flush_mode_no_heat_request(self, basic_config: ControllerConfig) -> None:
         """Test flush mode returns heat_request=False."""
         controller = HeatingController(basic_config)
-        controller.mode = "flush"
+        controller.mode = OperationMode.FLUSH
         actions = controller.evaluate(now=datetime.now(UTC))
         assert not any(actions.heat_requests.values())
 
@@ -679,7 +680,7 @@ class TestGetSummerModeValue:
             zones=[],
         )
         controller = HeatingController(config)
-        controller.mode = "off"
+        controller.mode = OperationMode.OFF
         assert controller.get_summer_mode_value(heat_request=True) is None
 
     def test_flush_mode_returns_summer(self) -> None:
@@ -691,7 +692,7 @@ class TestGetSummerModeValue:
             zones=[],
         )
         controller = HeatingController(config)
-        controller.mode = "flush"
+        controller.mode = OperationMode.FLUSH
         assert controller.get_summer_mode_value(heat_request=True) == SummerMode.SUMMER
 
     def test_all_off_mode_returns_summer(self) -> None:
@@ -703,7 +704,7 @@ class TestGetSummerModeValue:
             zones=[],
         )
         controller = HeatingController(config)
-        controller.mode = "all_off"
+        controller.mode = OperationMode.ALL_OFF
         assert controller.get_summer_mode_value(heat_request=False) == SummerMode.SUMMER
 
     def test_all_on_mode_returns_winter(self) -> None:
@@ -715,7 +716,7 @@ class TestGetSummerModeValue:
             zones=[],
         )
         controller = HeatingController(config)
-        controller.mode = "all_on"
+        controller.mode = OperationMode.ALL_ON
         assert controller.get_summer_mode_value(heat_request=True) == SummerMode.WINTER
 
     def test_heat_mode_with_heat_request(self) -> None:
