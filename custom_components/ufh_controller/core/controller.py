@@ -37,7 +37,6 @@ class ControllerState:
     mode: OperationMode = OperationMode.AUTO
     observation_start: datetime = field(default_factory=datetime.now)
     period_elapsed: float = 0.0  # Seconds elapsed in current observation period
-    heat_request: bool = False
     heat_requests: dict[str, bool] = field(default_factory=dict)
     flush_enabled: bool = False
     dhw_active: bool = False
@@ -66,12 +65,9 @@ class ControllerActions:
     All actions computed by the controller for execution.
 
     The coordinator executes these actions via Home Assistant services.
-    heat_request is None when no change is needed (e.g., disabled mode).
-    The coordinator derives summer_mode from heat_request.
     """
 
     valve_actions: dict[str, ZoneAction]
-    heat_request: bool | None = None  # True/False, or None if no change
     flush_request: bool = False  # Whether flush circuits should activate
     heat_requests: dict[str, bool] = field(default_factory=dict)
 
@@ -248,7 +244,6 @@ class HeatingController:
         heat_requests = dict.fromkeys(self._zones, True)
         return ControllerActions(
             valve_actions=valve_actions,
-            heat_request=True,
             heat_requests=heat_requests,
         )
 
@@ -269,7 +264,6 @@ class HeatingController:
         heat_requests = dict.fromkeys(self._zones, False)
         return ControllerActions(
             valve_actions=valve_actions,
-            heat_request=False,
             heat_requests=heat_requests,
         )
 
@@ -290,7 +284,6 @@ class HeatingController:
         heat_requests = dict.fromkeys(self._zones, False)
         return ControllerActions(
             valve_actions=valve_actions,
-            heat_request=False,
             heat_requests=heat_requests,
         )
 
@@ -329,7 +322,6 @@ class HeatingController:
         heat_requests = dict.fromkeys(self._zones, False)
         return ControllerActions(
             valve_actions=valve_actions,
-            heat_request=False,
             heat_requests=heat_requests,
         )
 
@@ -380,12 +372,8 @@ class HeatingController:
             for zone_id, rt in self._zones.items()
         }
 
-        # Calculate aggregate heat request from per-zone requests
-        heat_request = any(heat_requests.values())
-
         return ControllerActions(
             valve_actions=valve_actions,
-            heat_request=heat_request,
             flush_request=flush_request,
             heat_requests=heat_requests,
         )

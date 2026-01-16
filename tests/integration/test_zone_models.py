@@ -173,7 +173,7 @@ class TestControllerState:
         controller = ControllerState()
         assert controller.mode == "auto"
         assert controller.period_elapsed == 0.0
-        assert controller.heat_request is False
+        assert controller.heat_requests == {}
         assert controller.flush_enabled is False
         assert controller.dhw_active is False
         assert controller.zones == {}

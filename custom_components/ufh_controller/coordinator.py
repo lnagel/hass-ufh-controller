@@ -367,21 +367,22 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Update flush_request state for binary_sensor exposure
         self._controller.state.flush_request = actions.flush_request
 
+        # Compute aggregate heat request from per-zone requests
+        prev_heat_request = any(self._controller.state.heat_requests.values())
+        new_heat_request = any(actions.heat_requests.values())
+
         # Update per-zone heat requests from controller output
         self._controller.state.heat_requests = actions.heat_requests
 
         # Execute valve actions with zone-level isolation
         await self._execute_valve_actions_with_isolation(actions.valve_actions)
 
-        # Execute heat request and summer mode
-        if actions.heat_request is not None:
-            self._controller.state.heat_request = actions.heat_request
-            await self._execute_heat_request(heat_request=actions.heat_request)
+        # Execute heat request and summer mode if changed
+        if new_heat_request != prev_heat_request:
+            await self._execute_heat_request(heat_request=new_heat_request)
 
             # Derive and update summer mode from heat_request
-            summer_mode = (
-                SummerMode.WINTER if actions.heat_request else SummerMode.SUMMER
-            )
+            summer_mode = SummerMode.WINTER if new_heat_request else SummerMode.SUMMER
             await self._set_summer_mode(summer_mode)
 
         # Save state after every update for crash resilience
@@ -834,10 +835,12 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # Count zones requesting heat from controller state
         zones_requesting_heat = sum(self._controller.state.heat_requests.values())
+        # Compute aggregate heat request from per-zone requests
+        heat_request = any(self._controller.state.heat_requests.values())
 
         result: dict[str, Any] = {
             "mode": self._controller.mode,
-            "heat_request": self._controller.state.heat_request,
+            "heat_request": heat_request,
             "zones_requesting_heat": zones_requesting_heat,
             "observation_start": self._controller.state.observation_start,
             "controller_status": self._status.value,
