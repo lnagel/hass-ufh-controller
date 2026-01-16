@@ -1,6 +1,7 @@
 """Tests for Underfloor Heating Controller switch platform."""
 
 from typing import Any
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from homeassistant.components.switch import DOMAIN as SWITCH_DOMAIN
@@ -9,7 +10,6 @@ from homeassistant.const import (
     SERVICE_TURN_OFF,
     SERVICE_TURN_ON,
     STATE_OFF,
-    STATE_ON,
 )
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -79,25 +79,28 @@ async def test_flush_switch_turn_on(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
 ) -> None:
-    """Test turning on flush switch."""
+    """Test turning on flush switch requests coordinator refresh."""
     mock_config_entry.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
 
+    coordinator = mock_config_entry.runtime_data.coordinator
     entity_id = "switch.test_controller_flush_enabled"
 
-    await hass.services.async_call(
-        SWITCH_DOMAIN,
-        SERVICE_TURN_ON,
-        {ATTR_ENTITY_ID: entity_id},
-        blocking=True,
-    )
+    with patch.object(
+        coordinator, "async_request_refresh", new_callable=AsyncMock
+    ) as mock_refresh:
+        await hass.services.async_call(
+            SWITCH_DOMAIN,
+            SERVICE_TURN_ON,
+            {ATTR_ENTITY_ID: entity_id},
+            blocking=True,
+        )
 
-    state = hass.states.get(entity_id)
-    assert state is not None
-    assert state.state == STATE_ON
+        # Verify refresh was requested
+        mock_refresh.assert_called()
 
-    coordinator = mock_config_entry.runtime_data.coordinator
+    # Verify state was updated
     assert coordinator.controller.state.flush_enabled is True
 
 
@@ -105,34 +108,43 @@ async def test_flush_switch_turn_off(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
 ) -> None:
-    """Test turning off flush switch."""
+    """Test turning off flush switch requests coordinator refresh."""
     mock_config_entry.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
 
+    coordinator = mock_config_entry.runtime_data.coordinator
     entity_id = "switch.test_controller_flush_enabled"
 
-    # First turn on
-    await hass.services.async_call(
-        SWITCH_DOMAIN,
-        SERVICE_TURN_ON,
-        {ATTR_ENTITY_ID: entity_id},
-        blocking=True,
-    )
+    with patch.object(
+        coordinator, "async_request_refresh", new_callable=AsyncMock
+    ) as mock_refresh:
+        # First turn on
+        await hass.services.async_call(
+            SWITCH_DOMAIN,
+            SERVICE_TURN_ON,
+            {ATTR_ENTITY_ID: entity_id},
+            blocking=True,
+        )
 
-    # Then turn off
-    await hass.services.async_call(
-        SWITCH_DOMAIN,
-        SERVICE_TURN_OFF,
-        {ATTR_ENTITY_ID: entity_id},
-        blocking=True,
-    )
+        # Verify refresh was requested
+        mock_refresh.assert_called()
 
-    state = hass.states.get(entity_id)
-    assert state is not None
-    assert state.state == STATE_OFF
+        # Reset mock
+        mock_refresh.reset_mock()
 
-    coordinator = mock_config_entry.runtime_data.coordinator
+        # Then turn off
+        await hass.services.async_call(
+            SWITCH_DOMAIN,
+            SERVICE_TURN_OFF,
+            {ATTR_ENTITY_ID: entity_id},
+            blocking=True,
+        )
+
+        # Verify refresh was requested again
+        mock_refresh.assert_called()
+
+    # Verify state was updated
     assert coordinator.controller.state.flush_enabled is False
 
 
