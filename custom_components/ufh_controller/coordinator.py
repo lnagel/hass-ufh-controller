@@ -201,15 +201,8 @@ class UFHControllerDataUpdateCoordinator(
                 # Invalid timestamp format, start fresh
                 self.last_update_success_time = None
 
-        # Restore controller mode
-        if "controller_mode" in stored_data:
-            stored_mode = stored_data["controller_mode"]
-            if stored_mode in [mode.value for mode in OperationMode]:
-                self._controller.mode = stored_mode
-
-        # Restore flush_enabled state
-        if "flush_enabled" in stored_data:
-            self._controller.state.flush_enabled = stored_data["flush_enabled"]
+        # Restore controller-level state using shared method
+        self._restore_controller_state(stored_data)
 
         # Restore zone state
         zones_data = stored_data.get("zones", {})
@@ -259,8 +252,8 @@ class UFHControllerDataUpdateCoordinator(
         if "display_temp" in zone_state:
             runtime.state.display_temp = zone_state["display_temp"]
 
-    async def async_save_state(self) -> None:
-        """Save current state to storage."""
+    def _build_storage_state(self) -> dict[str, Any]:
+        """Build state dictionary for persistent storage."""
         zones_data: dict[str, dict[str, Any]] = {}
 
         for zone_id in self._controller.zone_ids:
@@ -300,6 +293,11 @@ class UFHControllerDataUpdateCoordinator(
         if self.last_update_success_time is not None:
             data["last_update_success_time"] = self.last_update_success_time.isoformat()
 
+        return data
+
+    async def async_save_state(self) -> None:
+        """Save current state to storage."""
+        data = self._build_storage_state()
         await self._store.async_save(data)
 
     def _async_refresh_finished(self) -> None:
@@ -950,4 +948,61 @@ class UFHControllerDataUpdateCoordinator(
     async def set_flush_enabled(self, *, enabled: bool) -> None:
         """Enable or disable flush and trigger refresh."""
         self._controller.state.flush_enabled = enabled
+        await self.async_request_refresh()
+
+    def _restore_controller_state(self, stored_data: dict[str, Any]) -> None:
+        """Restore controller-level state from stored data."""
+        # Restore controller mode
+        if "controller_mode" in stored_data:
+            stored_mode = stored_data["controller_mode"]
+            if stored_mode in [mode.value for mode in OperationMode]:
+                self._controller.mode = stored_mode
+
+        # Restore flush_enabled state
+        if "flush_enabled" in stored_data:
+            self._controller.state.flush_enabled = stored_data["flush_enabled"]
+
+    async def async_reload_config(self) -> None:
+        """
+        Reload controller configuration in-place without entity recreation.
+
+        This method rebuilds the controller from updated config entry data while
+        preserving runtime state (PID state, setpoints, enabled flags). This allows
+        parameter tuning (PID, timing, setpoints) without entity state resets.
+
+        Uses the same state management infrastructure as async_save_state() and
+        async_load_stored_state() to ensure consistency and avoid duplication.
+        """
+        LOGGER.debug("Reloading controller config in-place")
+
+        # Capture current state using existing state management
+        old_zone_ids = set(self._controller.zone_ids)
+        saved_state = self._build_storage_state()
+
+        # Preserve flush_until separately (not persisted to storage)
+        saved_flush_until = self._controller.state.flush_until
+
+        # Rebuild controller with updated config
+        self._controller = self._build_controller(self.config_entry)
+
+        # Restore controller-level state using existing method
+        self._restore_controller_state(saved_state)
+
+        # Restore flush_until (runtime-only state)
+        self._controller.state.flush_until = saved_flush_until
+
+        # Restore zone state for zones that still exist using existing method
+        new_zone_ids = set(self._controller.zone_ids)
+        zones_data = saved_state.get("zones", {})
+        for zone_id in new_zone_ids & old_zone_ids:  # Intersection
+            if zone_id in zones_data:
+                self._restore_zone_state(zone_id, zones_data[zone_id])
+
+        LOGGER.debug(
+            "Config reloaded in-place: zones_before=%d, zones_after=%d",
+            len(old_zone_ids),
+            len(new_zone_ids),
+        )
+
+        # Trigger refresh to update entities with new config
         await self.async_request_refresh()
