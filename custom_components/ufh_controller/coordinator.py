@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING, Any
 from homeassistant.components.select import SERVICE_SELECT_OPTION
 from homeassistant.const import SERVICE_TURN_OFF, SERVICE_TURN_ON, Platform
 from homeassistant.helpers.storage import Store
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from sqlalchemy.exc import SQLAlchemyError
 
 from .const import (
@@ -39,6 +38,7 @@ from .core.zone import (
     ZoneStatusTransition,
 )
 from .recorder import get_state_average, was_any_window_open_recently
+from .timestamp_coordinator import TimestampCoordinator
 
 # Storage constants
 STORAGE_VERSION = 1
@@ -50,7 +50,7 @@ if TYPE_CHECKING:
     from .data import UFHControllerConfigEntry
 
 
-class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
+class UFHControllerDataUpdateCoordinator(TimestampCoordinator[dict[str, Any]]):
     """Class to manage fetching Underfloor Heating Controller data."""
 
     config_entry: UFHControllerConfigEntry
@@ -72,7 +72,6 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             update_interval=timedelta(seconds=INITIALIZING_UPDATE_INTERVAL),
         )
         self.config_entry = entry
-        self._last_update: datetime | None = None
 
         # Storage for crash resilience
         self._store: Store[dict[str, Any]] = Store(
@@ -193,6 +192,9 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._state_restored = True
             return
 
+        # Restore last update timestamp from base class
+        await self.restore_last_update_time(stored_data)
+
         # Restore controller mode
         if "controller_mode" in stored_data:
             stored_mode = stored_data["controller_mode"]
@@ -282,7 +284,21 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "zones": zones_data,
         }
 
+        # Include last update timestamp from base class
+        if self.last_update_time is not None:
+            data["last_update_time"] = self.last_update_time.isoformat()
+
         await self._store.async_save(data)
+
+    async def _async_post_update_save(self) -> None:
+        """
+        Save state after successful update.
+
+        This hook is called automatically by the TimestampCoordinator base class
+        after each successful coordinator refresh. It ensures crash resilience by
+        persisting state (including the last update timestamp) after every update.
+        """
+        await self.async_save_state()
 
     @property
     def status(self) -> ControllerStatus:
@@ -326,10 +342,8 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             await self.async_load_stored_state()
 
         now = datetime.now(UTC)
-        dt = self._controller.config.timing.controller_loop_interval
-        if self._last_update is not None:
-            dt = (now - self._last_update).total_seconds()
-        self._last_update = now
+        # Calculate time since last update using base class
+        dt = self.get_time_since_last_update(now)
 
         # Skip if no zones configured
         if not self._controller.zone_ids:
@@ -392,8 +406,8 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             summer_mode = SummerMode.WINTER if heat_request else SummerMode.SUMMER
             await self._set_summer_mode(summer_mode)
 
-        # Save state after every update for crash resilience
-        await self.async_save_state()
+        # Note: State persistence now handled by _async_post_update_save() hook
+        # which is called automatically after successful updates
 
         return self._build_state_dict()
 
