@@ -57,17 +57,20 @@ async def async_setup_entry(
     entry.runtime_data = UFHControllerData(coordinator=coordinator)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    entry.async_on_unload(entry.add_update_listener(async_reload_entry))
+    entry.async_on_unload(entry.add_update_listener(_async_handle_config_update))
 
-    # Listen for subentry updates and reload when zone subentries change
+    # Listen for subentry updates and handle intelligently
     async def _async_handle_subentry_update(event: Any) -> None:
         """Handle subentry update event."""
         if event.data.get("entry_id") != entry.entry_id:
             return
         subentry_type = event.data.get("subentry_type")
-        if subentry_type == SUBENTRY_TYPE_ZONE:
-            LOGGER.debug("Zone subentry updated, scheduling reload")
-            await hass.config_entries.async_reload(entry.entry_id)
+        if subentry_type in (SUBENTRY_TYPE_ZONE, SUBENTRY_TYPE_CONTROLLER):
+            LOGGER.debug(
+                "%s subentry updated, handling config update",
+                subentry_type,
+            )
+            await _async_handle_config_update(hass, entry)
 
     entry.async_on_unload(
         hass.bus.async_listen("config_subentry_updated", _async_handle_subentry_update)
@@ -117,12 +120,50 @@ async def async_unload_entry(
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
 
-async def async_reload_entry(
+async def _async_handle_config_update(
     hass: HomeAssistant,
     entry: UFHControllerConfigEntry,
 ) -> None:
-    """Reload config entry."""
-    await hass.config_entries.async_reload(entry.entry_id)
+    """
+    Handle config entry update intelligently.
+
+    Detects structural changes (zones added/removed) vs parameter changes
+    (timing, PID, setpoints). Structural changes require full reload, while
+    parameter changes can be applied in-place without entity recreation.
+    """
+    # Check if entry has runtime data (might not during initial setup)
+    if not hasattr(entry, "runtime_data") or entry.runtime_data is None:
+        LOGGER.debug("No runtime data, performing full reload")
+        await hass.config_entries.async_reload(entry.entry_id)
+        return
+
+    coordinator = entry.runtime_data.coordinator
+
+    # Get current zone IDs from coordinator
+    old_zone_ids = set(coordinator.controller.zone_ids)
+
+    # Get new zone IDs from updated config entry subentries
+    new_zone_ids = {
+        subentry.data["id"]
+        for subentry in entry.subentries.values()
+        if subentry.subentry_type == SUBENTRY_TYPE_ZONE
+    }
+
+    # Detect structural change: zones added or removed
+    if old_zone_ids != new_zone_ids:
+        added = new_zone_ids - old_zone_ids
+        removed = old_zone_ids - new_zone_ids
+        LOGGER.info(
+            "Structural change detected: zones added=%s, removed=%s, "
+            "performing full reload",
+            added or "none",
+            removed or "none",
+        )
+        await hass.config_entries.async_reload(entry.entry_id)
+    else:
+        # Just parameter changes: update in-place
+        LOGGER.debug("Parameter change detected, updating config in-place")
+        await coordinator.async_reload_config()
 
 
 async def async_remove_config_entry_device(

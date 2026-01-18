@@ -138,9 +138,8 @@ async def test_coordinator_save_state_format(
         nonlocal saved_data
         saved_data = data
 
-    with patch(
-        "homeassistant.helpers.storage.Store.async_save", side_effect=capture_save
-    ):
+    # Patch the coordinator's store instance directly
+    with patch.object(coordinator._store, "async_save", side_effect=capture_save):
         await coordinator.async_save_state()
 
     assert saved_data is not None
@@ -874,9 +873,8 @@ async def test_flush_enabled_saved_in_state(
         nonlocal saved_data
         saved_data = data
 
-    with patch(
-        "homeassistant.helpers.storage.Store.async_save", side_effect=capture_save
-    ):
+    # Patch the coordinator's store instance directly
+    with patch.object(coordinator._store, "async_save", side_effect=capture_save):
         await coordinator.async_save_state()
 
     assert saved_data is not None
@@ -886,11 +884,11 @@ async def test_flush_enabled_saved_in_state(
     # Also test with False
     coordinator.controller.state.flush_enabled = False
 
-    with patch(
-        "homeassistant.helpers.storage.Store.async_save", side_effect=capture_save
-    ):
+    # Patch the coordinator's store instance directly
+    with patch.object(coordinator._store, "async_save", side_effect=capture_save):
         await coordinator.async_save_state()
 
+    assert saved_data is not None
     assert saved_data["flush_enabled"] is False
 
 
