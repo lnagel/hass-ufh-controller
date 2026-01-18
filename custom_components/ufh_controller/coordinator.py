@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import suppress
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
@@ -31,6 +32,7 @@ from .const import (
 )
 from .core.controller import ControllerConfig, HeatingController
 from .core.history import get_observation_start, get_valve_open_window
+from .core.hysteresis import round_with_hysteresis
 from .core.pid import PIDState
 from .core.zone import (
     CircuitType,
@@ -246,6 +248,27 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Restore temperature (EMA value) for smooth continuity across restarts
         if "temperature" in zone_state:
             runtime.state.current = zone_state["temperature"]
+            # Also set display_temp so climate entity remains available during init
+            runtime.state.display_temp = round_with_hysteresis(
+                runtime.state.current,
+                runtime.state.display_temp,  # None on first restore
+            )
+
+        # Restore zone status from storage (or default to NORMAL if we have valid state)
+        if "zone_status" in zone_state:
+            stored_status = zone_state["zone_status"]
+            if stored_status in [status.value for status in ZoneStatus]:
+                runtime.state.zone_status = ZoneStatus(stored_status)
+        elif "duty_cycle" in zone_state and runtime.pid.state is not None:
+            # Legacy: No zone_status saved, but we have valid state -> assume NORMAL
+            runtime.state.zone_status = ZoneStatus.NORMAL
+
+        # Restore last successful update timestamp
+        if "last_successful_update" in zone_state:
+            with suppress(ValueError, TypeError):
+                runtime.state.last_successful_update = datetime.fromisoformat(
+                    zone_state["last_successful_update"]
+                )
 
     async def async_save_state(self) -> None:
         """Save current state to storage."""
@@ -257,6 +280,7 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 zone_data: dict[str, Any] = {
                     "setpoint": runtime.state.setpoint,
                     "enabled": runtime.state.enabled,
+                    "zone_status": runtime.state.zone_status.value,
                 }
                 # Save full PID state if available
                 if runtime.pid.state is not None:
@@ -272,6 +296,11 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 # Save temperature (EMA value) for smooth continuity across restarts
                 if runtime.state.current is not None:
                     zone_data["temperature"] = runtime.state.current
+                # Save last successful update timestamp
+                if runtime.state.last_successful_update is not None:
+                    zone_data["last_successful_update"] = (
+                        runtime.state.last_successful_update.isoformat()
+                    )
                 zones_data[zone_id] = zone_data
 
         data = {

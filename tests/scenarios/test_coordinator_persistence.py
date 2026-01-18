@@ -13,6 +13,7 @@ from custom_components.ufh_controller.const import (
     SUBENTRY_TYPE_ZONE,
     OperationMode,
     ValveState,
+    ZoneStatus,
 )
 from custom_components.ufh_controller.core.pid import PIDState
 
@@ -54,12 +55,14 @@ async def test_coordinator_loads_stored_state(
                 "d_term": 1.5,
                 "duty_cycle": 55.0,
                 "temperature": 20.8,  # EMA-filtered temperature
+                "zone_status": "normal",  # Saved zone status
             },
         },
     }
 
     # Set raw sensor to a different value to verify EMA restoration works
     hass.states.async_set("sensor.zone1_temp", "21.5")
+    hass.states.async_set("switch.zone1_valve", "off")
 
     with patch(
         "homeassistant.helpers.storage.Store.async_load",
@@ -87,6 +90,29 @@ async def test_coordinator_loads_stored_state(
     # Check EMA temperature was restored (value between stored and raw)
     assert runtime.state.current is not None
     assert 20.8 <= runtime.state.current <= 21.5
+
+    # Check display_temp was also initialized (prevents entity unavailability)
+    assert runtime.state.display_temp is not None
+
+    # CRITICAL: Verify zone status transitioned to NORMAL (not INITIALIZING)
+    assert runtime.state.zone_status == ZoneStatus.NORMAL
+
+    # CRITICAL: Verify ALL entities are available (not Unknown)
+    climate_state = hass.states.get("climate.test_zone_1_thermostat")
+    assert climate_state is not None
+    assert climate_state.state != "unavailable"
+    assert climate_state.attributes.get("current_temperature") is not None
+
+    # Verify sensors are available (duty_cycle, PID terms)
+    duty_cycle_state = hass.states.get("sensor.test_zone_1_duty_cycle")
+    assert duty_cycle_state is not None
+    assert duty_cycle_state.state != "unavailable"
+    assert duty_cycle_state.state == "55.0"
+
+    # Verify binary sensors are available (heat_request, blocked)
+    heat_request_state = hass.states.get("binary_sensor.test_zone_1_heat_request")
+    assert heat_request_state is not None
+    assert heat_request_state.state != "unavailable"
 
 
 async def test_coordinator_save_state_format(
@@ -139,6 +165,12 @@ async def test_coordinator_save_state_format(
 
     # Verify EMA temperature is saved
     assert saved_data["zones"]["zone1"]["temperature"] == 21.5
+
+    # Verify zone_status is saved
+    assert "zone_status" in saved_data["zones"]["zone1"]
+    assert saved_data["zones"]["zone1"]["zone_status"] in [
+        status.value for status in ZoneStatus
+    ]
 
 
 async def test_coordinator_no_stored_state(
