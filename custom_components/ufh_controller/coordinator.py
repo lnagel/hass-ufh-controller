@@ -83,9 +83,6 @@ class UFHControllerDataUpdateCoordinator(
         )
         self._state_restored: bool = False
 
-        # Track preset modes per zone (not part of core controller state)
-        self._zone_presets: dict[str, str | None] = {}
-
         # Track previous DHW state for transition detection
         self._prev_dhw_active: bool = False
 
@@ -252,7 +249,7 @@ class UFHControllerDataUpdateCoordinator(
 
         # Restore preset mode
         if "preset_mode" in zone_state:
-            self._zone_presets[zone_id] = zone_state["preset_mode"]
+            runtime.state.preset_mode = zone_state["preset_mode"]
 
         # Restore temperature (EMA value) for smooth continuity across restarts
         if "temperature" in zone_state:
@@ -281,9 +278,8 @@ class UFHControllerDataUpdateCoordinator(
                     zone_data["d_term"] = runtime.pid.state.d_term
                     zone_data["duty_cycle"] = runtime.pid.state.duty_cycle
                 # Include preset_mode if set
-                preset_mode = self._zone_presets.get(zone_id)
-                if preset_mode is not None:
-                    zone_data["preset_mode"] = preset_mode
+                if runtime.state.preset_mode is not None:
+                    zone_data["preset_mode"] = runtime.state.preset_mode
                 # Save temperature (EMA value) for smooth continuity across restarts
                 if runtime.state.current is not None:
                     zone_data["temperature"] = runtime.state.current
@@ -919,7 +915,7 @@ class UFHControllerDataUpdateCoordinator(
                     "heat_request": self._controller.state.heat_requests.get(
                         zone_id, False
                     ),
-                    "preset_mode": self._zone_presets.get(zone_id),
+                    "preset_mode": state.preset_mode,
                     "zone_status": state.zone_status.value,
                 }
 
@@ -942,8 +938,10 @@ class UFHControllerDataUpdateCoordinator(
 
     async def set_zone_preset_mode(self, zone_id: str, preset_mode: str | None) -> None:
         """Set zone preset mode and trigger refresh."""
-        self._zone_presets[zone_id] = preset_mode
-        await self.async_request_refresh()
+        runtime = self._controller.get_zone_runtime(zone_id)
+        if runtime is not None:
+            runtime.state.preset_mode = preset_mode
+            await self.async_request_refresh()
 
     async def set_flush_enabled(self, *, enabled: bool) -> None:
         """Enable or disable flush and trigger refresh."""

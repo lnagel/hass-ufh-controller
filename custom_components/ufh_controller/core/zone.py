@@ -96,6 +96,9 @@ class ZoneState:
     # Zone enabled state
     enabled: bool = True
 
+    # Preset mode (home, away, eco, comfort, boost, or None for manual)
+    preset_mode: str | None = None
+
     # Zone fault isolation state
     zone_status: ZoneStatus = ZoneStatus.INITIALIZING
     last_successful_update: datetime | None = None
