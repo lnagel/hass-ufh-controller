@@ -362,19 +362,23 @@ class UFHControllerDataUpdateCoordinator(
             await self.async_load_stored_state()
 
         now = datetime.now(UTC)
-        # Calculate time since last update using base class timestamp
+        timing = self._controller.config.timing
+
         if self.last_update_success_time is not None:
-            dt = (now - self.last_update_success_time).total_seconds()
+            # Calculate time since last update using base class timestamp
+            # Cap dt to prevent integral windup after long downtime (e.g., restored
+            # timestamp from a day ago). Max dt is 2x normal update interval.
+            max_dt = 2 * timing.controller_loop_interval
+            dt = min((now - self.last_update_success_time).total_seconds(), max_dt)
         else:
             # Use default update interval if no previous update
-            dt = self._controller.config.timing.controller_loop_interval
+            dt = timing.controller_loop_interval
 
         # Skip if no zones configured
         if not self._controller.zone_ids:
             return self._build_state_dict()
 
         # Update observation start and elapsed time
-        timing = self._controller.config.timing
         self._controller.state.observation_start = get_observation_start(
             now, timing.observation_period
         )

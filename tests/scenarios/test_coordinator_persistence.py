@@ -167,6 +167,92 @@ async def test_coordinator_save_state_format(
     assert saved_data["zones"]["zone1"]["preset_mode"] == "eco"
 
 
+async def test_coordinator_handles_invalid_timestamp_format(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Test coordinator handles invalid timestamp format gracefully."""
+    stored_data = {
+        "version": 1,
+        "controller_mode": "heat",
+        "last_update_success_time": "not-a-valid-timestamp",
+        "zones": {
+            "zone1": {
+                "setpoint": 21.0,
+                "enabled": True,
+            },
+        },
+    }
+
+    with patch(
+        "homeassistant.helpers.storage.Store.async_load",
+        return_value=stored_data,
+    ):
+        mock_config_entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    coordinator = mock_config_entry.runtime_data.coordinator
+
+    # Invalid timestamp should be handled gracefully - coordinator starts fresh
+    # (timestamp will be set after first successful refresh)
+    assert coordinator.controller.mode == OperationMode.HEAT
+
+
+async def test_coordinator_caps_dt_after_long_downtime(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """
+    Test dt is capped to prevent integral windup after long downtime.
+
+    When restoring state from a timestamp that is very old (e.g., 1 day ago),
+    dt should be capped to 2x the normal update interval to prevent massive
+    integral accumulation in PID controllers.
+    """
+    hass.states.async_set("sensor.zone1_temp", "20.0")
+
+    # Stored timestamp from 1 day ago
+    stored_data = {
+        "version": 1,
+        "controller_mode": "heat",
+        "last_update_success_time": "2020-01-01T00:00:00+00:00",  # Very old
+        "zones": {
+            "zone1": {
+                "error": 1.0,
+                "p_term": 10.0,
+                "i_term": 5.0,  # Some existing integral
+                "d_term": 0.0,
+                "duty_cycle": 50.0,
+                "setpoint": 22.0,
+                "enabled": True,
+                "temperature": 20.0,
+                "display_temp": 20.0,
+            },
+        },
+    }
+
+    with patch(
+        "homeassistant.helpers.storage.Store.async_load",
+        return_value=stored_data,
+    ):
+        mock_config_entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    coordinator = mock_config_entry.runtime_data.coordinator
+    runtime = coordinator.controller.get_zone_runtime("zone1")
+
+    # With a 1-day-old timestamp and uncapped dt, integral would explode
+    # (error * ki * dt = 2.0 * 0.001 * 86400 = 172.8 added to integral)
+    # With capped dt (2 * 60 = 120 seconds), max addition is 2.0 * 0.001 * 120 = 0.24
+
+    # Verify integral hasn't exploded (should be close to restored value)
+    # Restored i_term was 5.0, max addition with capped dt is ~0.24
+    assert runtime.pid.state is not None
+    assert runtime.pid.state.i_term < 10.0  # Would be ~177 if uncapped
+
+
 async def test_coordinator_no_stored_state(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
