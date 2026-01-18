@@ -95,14 +95,13 @@ Entity availability is determined by a combination of coordinator status and zon
 
 | Entity Type | Available When |
 |-------------|----------------|
-| Climate (zone) | Coordinator updated AND current temperature known |
-| Sensor (zone) | Zone NORMAL or DEGRADED AND native value not None |
-| Binary Sensor (zone) | Zone NORMAL or DEGRADED |
+| Climate (zone) | Coordinator updated |
+| Sensor (zone) | Zone not FAIL_SAFE AND native value not None |
+| Binary Sensor (zone) | Zone not FAIL_SAFE |
 | Controller entities | Coordinator updated |
 
 **Design Rationale:**
 - **Climate unavailable when temp sensor fails:** Prevents "unknown" states from being recorded to history
-- **Zone sensors/binary sensors unavailable during INITIALIZING:** Values not meaningful before first PID calculation
 - **Zone sensors/binary sensors unavailable during FAIL_SAFE:** Zone not participating in control, values would be misleading
 
 **Note:** Controller-level entities (mode select, requesting zones sensor, status binary sensor) remain available regardless of individual zone status.

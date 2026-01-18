@@ -126,16 +126,14 @@ class UFHZoneBinarySensor(UFHControllerZoneEntity, BinarySensorEntity):
         """
         Return True if entity is available.
 
-        Binary sensors are unavailable when zone is INITIALIZING or FAIL_SAFE.
+        Binary sensors are unavailable when zone is FAIL_SAFE,
+        or when they have no valid value.
         """
         if not super().available:
             return False
         zone_data = self.coordinator.data.get("zones", {}).get(self._zone_id, {})
         zone_status = zone_data.get("zone_status", "initializing")
-        return zone_status not in (
-            ZoneStatus.INITIALIZING.value,
-            ZoneStatus.FAIL_SAFE.value,
-        )
+        return zone_status != ZoneStatus.FAIL_SAFE.value
 
 
 class UFHControllerStatusSensor(UFHControllerEntity, BinarySensorEntity):

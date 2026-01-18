@@ -8,9 +8,12 @@ Each zone tracks its own operational status:
 
 | Status | Description |
 |--------|-------------|
+| `initializing` | Zone starting up; awaiting first successful temperature reading |
 | `normal` | Zone operating normally with valid temperature readings |
 | `degraded` | Temperature sensor unavailable; using last-known duty cycle |
 | `fail_safe` | No successful update for >1 hour; valve forced closed |
+
+**Initializing:** No valve actions are taken until all zones have valid readings and exit initialization. Entities remain available using restored state from storage.
 
 **Degraded:** PID continues with cached demand, zone still responds to setpoint changes.
 

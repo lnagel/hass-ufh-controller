@@ -152,14 +152,14 @@ class UFHZoneSensor(UFHControllerZoneEntity, SensorEntity):
         """
         Return True if entity is available.
 
-        Sensors are unavailable when zone is INITIALIZING or FAIL_SAFE,
+        Sensors are unavailable when zone is FAIL_SAFE,
         or when they have no valid value.
         """
         if not super().available:
             return False
         zone_data = self.coordinator.data.get("zones", {}).get(self._zone_id, {})
         zone_status = zone_data.get("zone_status", "initializing")
-        if zone_status in (ZoneStatus.INITIALIZING.value, ZoneStatus.FAIL_SAFE.value):
+        if zone_status == ZoneStatus.FAIL_SAFE.value:
             return False
         return self.native_value is not None
 

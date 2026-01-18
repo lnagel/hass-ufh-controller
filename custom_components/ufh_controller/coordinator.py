@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 from homeassistant.components.select import SERVICE_SELECT_OPTION
 from homeassistant.const import SERVICE_TURN_OFF, SERVICE_TURN_ON, Platform
 from homeassistant.helpers.storage import Store
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from homeassistant.helpers.update_coordinator import TimestampDataUpdateCoordinator
 from sqlalchemy.exc import SQLAlchemyError
 
 from .const import (
@@ -50,7 +50,9 @@ if TYPE_CHECKING:
     from .data import UFHControllerConfigEntry
 
 
-class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
+class UFHControllerDataUpdateCoordinator(
+    TimestampDataUpdateCoordinator[dict[str, Any]]
+):
     """Class to manage fetching Underfloor Heating Controller data."""
 
     config_entry: UFHControllerConfigEntry
@@ -72,7 +74,6 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             update_interval=timedelta(seconds=INITIALIZING_UPDATE_INTERVAL),
         )
         self.config_entry = entry
-        self._last_update: datetime | None = None
 
         # Storage for crash resilience
         self._store: Store[dict[str, Any]] = Store(
@@ -81,9 +82,6 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             f"{STORAGE_KEY}.{entry.entry_id}",
         )
         self._state_restored: bool = False
-
-        # Track preset modes per zone (not part of core controller state)
-        self._zone_presets: dict[str, str | None] = {}
 
         # Track previous DHW state for transition detection
         self._prev_dhw_active: bool = False
@@ -193,6 +191,16 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._state_restored = True
             return
 
+        # Restore last update timestamp from base class
+        if "last_update_success_time" in stored_data:
+            try:
+                self.last_update_success_time = datetime.fromisoformat(
+                    stored_data["last_update_success_time"]
+                )
+            except (ValueError, TypeError):
+                # Invalid timestamp format, start fresh
+                self.last_update_success_time = None
+
         # Restore controller mode
         if "controller_mode" in stored_data:
             stored_mode = stored_data["controller_mode"]
@@ -241,11 +249,15 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # Restore preset mode
         if "preset_mode" in zone_state:
-            self._zone_presets[zone_id] = zone_state["preset_mode"]
+            runtime.state.preset_mode = zone_state["preset_mode"]
 
         # Restore temperature (EMA value) for smooth continuity across restarts
         if "temperature" in zone_state:
             runtime.state.current = zone_state["temperature"]
+
+        # Restore display temperature for immediate climate entity availability
+        if "display_temp" in zone_state:
+            runtime.state.display_temp = zone_state["display_temp"]
 
     async def async_save_state(self) -> None:
         """Save current state to storage."""
@@ -266,12 +278,14 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     zone_data["d_term"] = runtime.pid.state.d_term
                     zone_data["duty_cycle"] = runtime.pid.state.duty_cycle
                 # Include preset_mode if set
-                preset_mode = self._zone_presets.get(zone_id)
-                if preset_mode is not None:
-                    zone_data["preset_mode"] = preset_mode
+                if runtime.state.preset_mode is not None:
+                    zone_data["preset_mode"] = runtime.state.preset_mode
                 # Save temperature (EMA value) for smooth continuity across restarts
                 if runtime.state.current is not None:
                     zone_data["temperature"] = runtime.state.current
+                # Save display temperature for immediate availability on restore
+                if runtime.state.display_temp is not None:
+                    zone_data["display_temp"] = runtime.state.display_temp
                 zones_data[zone_id] = zone_data
 
         data = {
@@ -282,7 +296,29 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "zones": zones_data,
         }
 
+        # Include last update timestamp from base class
+        if self.last_update_success_time is not None:
+            data["last_update_success_time"] = self.last_update_success_time.isoformat()
+
         await self._store.async_save(data)
+
+    def _async_refresh_finished(self) -> None:
+        """
+        Handle when a refresh has finished - persist state after successful updates.
+
+        This hook is called after a coordinator refresh completes but before
+        listeners are notified. The TimestampDataUpdateCoordinator base class
+        automatically updates last_update_success_time on successful refreshes.
+
+        We use this hook to trigger state persistence (including the timestamp)
+        for crash resilience.
+        """
+        # Call parent hook first (updates last_update_success_time)
+        super()._async_refresh_finished()
+
+        # Only persist state after successful updates
+        if self.last_update_success:
+            self.hass.async_create_task(self.async_save_state())
 
     @property
     def status(self) -> ControllerStatus:
@@ -326,17 +362,23 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             await self.async_load_stored_state()
 
         now = datetime.now(UTC)
-        dt = self._controller.config.timing.controller_loop_interval
-        if self._last_update is not None:
-            dt = (now - self._last_update).total_seconds()
-        self._last_update = now
+        timing = self._controller.config.timing
+
+        if self.last_update_success_time is not None:
+            # Calculate time since last update using base class timestamp
+            # Cap dt to prevent integral windup after long downtime (e.g., restored
+            # timestamp from a day ago). Max dt is 2x normal update interval.
+            max_dt = 2 * timing.controller_loop_interval
+            dt = min((now - self.last_update_success_time).total_seconds(), max_dt)
+        else:
+            # Use default update interval if no previous update
+            dt = timing.controller_loop_interval
 
         # Skip if no zones configured
         if not self._controller.zone_ids:
             return self._build_state_dict()
 
         # Update observation start and elapsed time
-        timing = self._controller.config.timing
         self._controller.state.observation_start = get_observation_start(
             now, timing.observation_period
         )
@@ -370,6 +412,10 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             await self._execute_fail_safe_actions()
             return self._build_state_dict()
 
+        # Skip zone evaluation while initializing
+        if self._status == ControllerStatus.INITIALIZING:
+            return self._build_state_dict()
+
         # Evaluate all zones and get all actions
         actions = self._controller.evaluate(now=now)
 
@@ -391,9 +437,6 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # Derive and update summer mode from heat_request
             summer_mode = SummerMode.WINTER if heat_request else SummerMode.SUMMER
             await self._set_summer_mode(summer_mode)
-
-        # Save state after every update for crash resilience
-        await self.async_save_state()
 
         return self._build_state_dict()
 
@@ -876,7 +919,7 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "heat_request": self._controller.state.heat_requests.get(
                         zone_id, False
                     ),
-                    "preset_mode": self._zone_presets.get(zone_id),
+                    "preset_mode": state.preset_mode,
                     "zone_status": state.zone_status.value,
                 }
 
@@ -899,8 +942,10 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def set_zone_preset_mode(self, zone_id: str, preset_mode: str | None) -> None:
         """Set zone preset mode and trigger refresh."""
-        self._zone_presets[zone_id] = preset_mode
-        await self.async_request_refresh()
+        runtime = self._controller.get_zone_runtime(zone_id)
+        if runtime is not None:
+            runtime.state.preset_mode = preset_mode
+            await self.async_request_refresh()
 
     async def set_flush_enabled(self, *, enabled: bool) -> None:
         """Enable or disable flush and trigger refresh."""
