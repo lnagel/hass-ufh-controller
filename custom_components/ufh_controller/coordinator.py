@@ -412,6 +412,10 @@ class UFHControllerDataUpdateCoordinator(
             await self._execute_fail_safe_actions()
             return self._build_state_dict()
 
+        # Skip zone evaluation while initializing
+        if self._status == ControllerStatus.INITIALIZING:
+            return self._build_state_dict()
+
         # Evaluate all zones and get all actions
         actions = self._controller.evaluate(now=now)
 
