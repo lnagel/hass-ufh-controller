@@ -1146,3 +1146,130 @@ async def test_crash_recovery_stale_zone_in_stored_state(
 
     # Cleanup
     await hass.config_entries.async_unload(config_entry.entry_id)
+
+
+async def test_coordinator_handles_timestamp_type_error(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Test coordinator handles TypeError in timestamp restoration (None)."""
+    stored_data = {
+        "version": 1,
+        "controller_mode": "heat",
+        "last_update_success_time": None,  # None causes TypeError in fromisoformat
+        "zones": {
+            "zone1": {
+                "setpoint": 21.0,
+                "enabled": True,
+            },
+        },
+    }
+
+    with patch(
+        "homeassistant.helpers.storage.Store.async_load",
+        return_value=stored_data,
+    ):
+        mock_config_entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    coordinator = mock_config_entry.runtime_data.coordinator
+
+    # TypeError from None should be handled gracefully - coordinator starts fresh
+    assert coordinator.controller.mode == OperationMode.HEAT
+    # last_update_success_time should remain None (not set from invalid value)
+
+
+async def test_no_state_save_on_failed_refresh(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """
+    Test that state is NOT saved when a refresh fails.
+
+    The _async_refresh_finished hook should only trigger async_save_state
+    when last_update_success is True. This prevents corrupting saved state
+    with error data.
+    """
+    hass.states.async_set("sensor.zone1_temp", "20.0")
+
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = mock_config_entry.runtime_data.coordinator
+
+    # Track calls to async_save_state
+    save_call_count = 0
+    original_save = coordinator.async_save_state
+
+    async def counting_save() -> None:
+        nonlocal save_call_count
+        save_call_count += 1
+        await original_save()
+
+    with patch.object(coordinator, "async_save_state", side_effect=counting_save):
+        # Simulate a failed refresh by making _async_update_data raise
+        with patch.object(
+            coordinator,
+            "_async_update_data",
+            side_effect=Exception("Simulated failure"),
+        ):
+            # Reset counter before the failed refresh
+            save_call_count = 0
+
+            # This refresh should fail
+            await coordinator.async_refresh()
+
+            # State should NOT be saved on failed refresh
+            assert save_call_count == 0
+
+        # Now do a successful refresh
+        save_call_count = 0
+        await coordinator.async_refresh()
+
+        # State SHOULD be saved on successful refresh
+        assert save_call_count == 1
+
+
+async def test_load_stored_state_skipped_when_already_restored(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """
+    Test that async_load_stored_state returns early if already restored.
+
+    This tests the early return at line 187 when _state_restored is True.
+    """
+    stored_data = {
+        "version": 1,
+        "controller_mode": "flush",
+        "zones": {
+            "zone1": {
+                "setpoint": 25.0,
+                "enabled": True,
+            },
+        },
+    }
+
+    with patch(
+        "homeassistant.helpers.storage.Store.async_load",
+        return_value=stored_data,
+    ) as mock_load:
+        mock_config_entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+        coordinator = mock_config_entry.runtime_data.coordinator
+
+        # State should be restored (flush mode from stored data)
+        assert coordinator.controller.mode == OperationMode.FLUSH
+
+        # async_load was called once during first _async_update_data
+        initial_call_count = mock_load.call_count
+
+        # Call async_load_stored_state again - should return early
+        await coordinator.async_load_stored_state()
+
+        # async_load should NOT have been called again (early return)
+        assert mock_load.call_count == initial_call_count
