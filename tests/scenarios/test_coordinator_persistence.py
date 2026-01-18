@@ -11,6 +11,7 @@ from custom_components.ufh_controller.const import (
     DEFAULT_TIMING,
     DOMAIN,
     SUBENTRY_TYPE_ZONE,
+    ControllerStatus,
     OperationMode,
     ValveState,
 )
@@ -45,6 +46,7 @@ async def test_coordinator_loads_stored_state(
     stored_data = {
         "version": 1,
         "controller_mode": "flush",
+        "last_update_success_time": "2025-06-15T12:30:00+00:00",
         "zones": {
             "zone1": {
                 # Full PID state to be restored
@@ -55,6 +57,7 @@ async def test_coordinator_loads_stored_state(
                 "duty_cycle": 55.0,
                 "temperature": 20.8,  # EMA-filtered temperature
                 "display_temp": 20.8,  # Display temperature for climate availability
+                "preset_mode": "comfort",
             },
         },
     }
@@ -92,17 +95,25 @@ async def test_coordinator_loads_stored_state(
     # Check display temperature was restored (for climate entity availability)
     assert runtime.state.display_temp is not None
 
+    # Check preset_mode was restored into ZoneState
+    assert runtime.state.preset_mode == "comfort"
+
 
 async def test_coordinator_save_state_format(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
 ) -> None:
     """Test coordinator saves state in expected format."""
+    hass.states.async_set("sensor.zone1_temp", "21.5")
+
     mock_config_entry.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
 
     coordinator = mock_config_entry.runtime_data.coordinator
+
+    # Trigger refresh to set last_update_success_time
+    await coordinator.async_refresh()
 
     # Set some state
     coordinator.controller.mode = OperationMode.CYCLE
@@ -118,6 +129,8 @@ async def test_coordinator_save_state_format(
     runtime.state.current = 21.5
     # Set display temperature that should be persisted
     runtime.state.display_temp = 21.5
+    # Set preset_mode that should be persisted
+    runtime.state.preset_mode = "eco"
 
     saved_data = None
 
@@ -136,6 +149,9 @@ async def test_coordinator_save_state_format(
     assert "zones" in saved_data
     assert "zone1" in saved_data["zones"]
 
+    # Verify last_update_success_time is saved
+    assert "last_update_success_time" in saved_data
+
     # Verify full PID state is saved
     assert saved_data["zones"]["zone1"]["error"] == 1.5
     assert saved_data["zones"]["zone1"]["p_term"] == 25.0
@@ -147,6 +163,8 @@ async def test_coordinator_save_state_format(
     assert saved_data["zones"]["zone1"]["temperature"] == 21.5
     # Verify display temperature is saved
     assert saved_data["zones"]["zone1"]["display_temp"] == 21.5
+    # Verify preset_mode is saved
+    assert saved_data["zones"]["zone1"]["preset_mode"] == "eco"
 
 
 async def test_coordinator_no_stored_state(
@@ -856,6 +874,97 @@ async def test_flush_enabled_defaults_to_false_when_not_stored(
 
     # flush_enabled should remain at default (False)
     assert coordinator.controller.state.flush_enabled is False
+
+
+async def test_no_valve_actions_during_initializing(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """
+    Test that no valve actions are executed while controller is initializing.
+
+    When the controller first starts and zones don't have temperature readings
+    yet, the controller should skip valve actions to avoid spurious actuations.
+    """
+    # NOTE: No temperature sensor set up - zone will stay in INITIALIZING
+
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = mock_config_entry.runtime_data.coordinator
+
+    # Verify controller is in INITIALIZING state
+    assert coordinator.status == ControllerStatus.INITIALIZING
+
+    # Mock the _execute_valve_actions_with_isolation method to track calls
+    with patch.object(
+        coordinator,
+        "_execute_valve_actions_with_isolation",
+        new_callable=AsyncMock,
+    ) as mock_execute:
+        await coordinator.async_refresh()
+
+        # No valve actions should have been executed during INITIALIZING
+        mock_execute.assert_not_called()
+
+    # Controller should still be initializing (no temp sensor)
+    assert coordinator.status == ControllerStatus.INITIALIZING
+
+
+async def test_valve_actions_execute_after_initialization(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """
+    Test that valve actions execute once controller exits INITIALIZING state.
+
+    After temperature sensors provide readings and zones transition to NORMAL,
+    the controller should evaluate and execute valve actions.
+    """
+    # Set up temperature sensor - zone will transition to NORMAL
+    hass.states.async_set("sensor.zone1_temp", "18.0")  # Cold room
+
+    # Set up stored state with high duty cycle to ensure valve should turn on
+    stored_data = {
+        "version": 1,
+        "controller_mode": "heat",
+        "zones": {
+            "zone1": {
+                "error": 2.0,
+                "p_term": 100.0,
+                "i_term": 50.0,
+                "d_term": 0.0,
+                "duty_cycle": 100.0,
+                "setpoint": 22.0,
+                "enabled": True,
+            },
+        },
+    }
+
+    with patch(
+        "homeassistant.helpers.storage.Store.async_load",
+        return_value=stored_data,
+    ):
+        mock_config_entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    coordinator = mock_config_entry.runtime_data.coordinator
+
+    # After setup with temp sensor, controller should be NORMAL
+    assert coordinator.status == ControllerStatus.NORMAL
+
+    # Mock the _execute_valve_actions_with_isolation method to track calls
+    with patch.object(
+        coordinator,
+        "_execute_valve_actions_with_isolation",
+        new_callable=AsyncMock,
+    ) as mock_execute:
+        await coordinator.async_refresh()
+
+        # Valve actions should have been executed now that we're out of INITIALIZING
+        mock_execute.assert_called_once()
 
 
 async def test_crash_recovery_stale_zone_in_stored_state(
