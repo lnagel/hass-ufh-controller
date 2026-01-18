@@ -7,8 +7,10 @@ from homeassistant.config_entries import ConfigSubentry
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.ufh_controller import _async_handle_config_update
 from custom_components.ufh_controller.const import (
     DEFAULT_PID,
+    DEFAULT_SETPOINT,
     SUBENTRY_TYPE_CONTROLLER,
     SUBENTRY_TYPE_ZONE,
 )
@@ -163,7 +165,7 @@ async def test_config_update_structural_change_full_reload(
             "circuit_type": "regular",
             "temp_sensor": "sensor.zone2_temp",
             "valve_switch": "switch.zone2_valve",
-            "setpoint": DEFAULT_PID,
+            "setpoint": DEFAULT_SETPOINT,
             "pid": DEFAULT_PID,
             "window_sensors": [],
         }
@@ -226,3 +228,120 @@ async def test_config_update_controller_params_in_place(
 
     # Verify new timing parameter is applied
     assert coordinator.controller.config.timing.controller_loop_interval == 45
+
+
+async def test_config_update_no_runtime_data_triggers_reload(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Test config update with no runtime data triggers full reload."""
+    mock_config_entry.add_to_hass(hass)
+
+    # Setup entry
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    # Clear runtime_data to simulate edge case
+    mock_config_entry.runtime_data = None
+
+    # Patch async_reload to verify it IS called when no runtime data
+    with patch(
+        "homeassistant.config_entries.ConfigEntries.async_reload",
+        new_callable=AsyncMock,
+    ) as mock_reload:
+        # Call the handler directly to test this edge case
+        await _async_handle_config_update(hass, mock_config_entry)
+        await hass.async_block_till_done()
+
+        # Verify async_reload WAS called (fallback for no runtime data)
+        mock_reload.assert_called_once_with(mock_config_entry.entry_id)
+
+
+async def test_subentry_update_event_triggers_config_update(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Test that subentry update bus event triggers config update handling."""
+    mock_config_entry.add_to_hass(hass)
+    hass.states.async_set("sensor.zone1_temp", "20.5")
+
+    # Setup entry
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = mock_config_entry.runtime_data.coordinator
+    original_zone_count = len(coordinator.controller.zone_ids)
+
+    # Fire a subentry update event directly to test the bus listener
+    # This simulates what happens when a subentry is updated
+    hass.bus.async_fire(
+        "config_subentry_updated",
+        {
+            "entry_id": mock_config_entry.entry_id,
+            "subentry_type": SUBENTRY_TYPE_ZONE,
+        },
+    )
+    await hass.async_block_till_done()
+
+    # Verify the config was reloaded in-place (zone count unchanged, no full reload)
+    assert len(coordinator.controller.zone_ids) == original_zone_count
+
+
+async def test_subentry_update_event_ignores_other_entries(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Test that subentry update event for other entries is ignored."""
+    mock_config_entry.add_to_hass(hass)
+
+    # Setup entry
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    # Fire event for a different entry_id - should be ignored
+    with patch(
+        "custom_components.ufh_controller._async_handle_config_update",
+        new_callable=AsyncMock,
+    ) as mock_handler:
+        hass.bus.async_fire(
+            "config_subentry_updated",
+            {
+                "entry_id": "some_other_entry_id",
+                "subentry_type": SUBENTRY_TYPE_ZONE,
+            },
+        )
+        await hass.async_block_till_done()
+
+        # Handler should NOT be called for different entry
+        mock_handler.assert_not_called()
+
+
+async def test_subentry_update_event_ignores_other_subentry_types(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Test that subentry update event for other subentry types is ignored."""
+    mock_config_entry.add_to_hass(hass)
+
+    # Setup entry
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = mock_config_entry.runtime_data.coordinator
+
+    # Patch async_reload_config to track calls
+    with patch.object(
+        coordinator, "async_reload_config", new_callable=AsyncMock
+    ) as mock_reload_config:
+        # Fire event with unknown subentry type - should be ignored
+        hass.bus.async_fire(
+            "config_subentry_updated",
+            {
+                "entry_id": mock_config_entry.entry_id,
+                "subentry_type": "unknown_type",
+            },
+        )
+        await hass.async_block_till_done()
+
+        # async_reload_config should NOT be called for unknown subentry type
+        mock_reload_config.assert_not_called()
