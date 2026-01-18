@@ -139,24 +139,24 @@ async def test_controller_status_off_when_initializing(
     assert state.attributes["controller_status"] == "initializing"
 
 
-async def test_zone_binary_sensor_unavailable_during_initializing(
+async def test_zone_binary_sensor_available_during_initializing(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
 ) -> None:
-    """Test zone binary sensors are unavailable during INITIALIZING status."""
+    """Test zone binary sensors are available during INITIALIZING status."""
     # Note: No mock_temp_sensor fixture, so zone stays in INITIALIZING
     mock_config_entry.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
 
-    # Both zone binary sensors should be unavailable
+    # Both zone binary sensors should be available during initialization
     blocked_state = hass.states.get("binary_sensor.test_zone_1_blocked")
     assert blocked_state is not None
-    assert blocked_state.state == STATE_UNAVAILABLE
+    assert blocked_state.state in ("on", "off")
 
     heat_request_state = hass.states.get("binary_sensor.test_zone_1_heat_request")
     assert heat_request_state is not None
-    assert heat_request_state.state == STATE_UNAVAILABLE
+    assert heat_request_state.state in ("on", "off")
 
 
 async def test_zone_binary_sensor_available_during_normal(

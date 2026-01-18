@@ -54,6 +54,7 @@ async def test_coordinator_loads_stored_state(
                 "d_term": 1.5,
                 "duty_cycle": 55.0,
                 "temperature": 20.8,  # EMA-filtered temperature
+                "display_temp": 20.8,  # Display temperature for climate availability
             },
         },
     }
@@ -88,6 +89,9 @@ async def test_coordinator_loads_stored_state(
     assert runtime.state.current is not None
     assert 20.8 <= runtime.state.current <= 21.5
 
+    # Check display temperature was restored (for climate entity availability)
+    assert runtime.state.display_temp is not None
+
 
 async def test_coordinator_save_state_format(
     hass: HomeAssistant,
@@ -112,6 +116,8 @@ async def test_coordinator_save_state_format(
 
     # Set EMA-filtered temperature that should be persisted
     runtime.state.current = 21.5
+    # Set display temperature that should be persisted
+    runtime.state.display_temp = 21.5
 
     saved_data = None
 
@@ -139,6 +145,8 @@ async def test_coordinator_save_state_format(
 
     # Verify EMA temperature is saved
     assert saved_data["zones"]["zone1"]["temperature"] == 21.5
+    # Verify display temperature is saved
+    assert saved_data["zones"]["zone1"]["display_temp"] == 21.5
 
 
 async def test_coordinator_no_stored_state(

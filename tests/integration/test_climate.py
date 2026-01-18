@@ -16,7 +16,7 @@ from homeassistant.components.climate import (
 from homeassistant.components.climate import (
     DOMAIN as CLIMATE_DOMAIN,
 )
-from homeassistant.const import ATTR_ENTITY_ID, ATTR_TEMPERATURE, STATE_UNAVAILABLE
+from homeassistant.const import ATTR_ENTITY_ID, ATTR_TEMPERATURE
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -42,23 +42,19 @@ async def test_climate_entity_created(
     assert state is not None
 
 
-async def test_climate_unavailable_without_temperature(
+async def test_climate_available_during_initializing(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
     climate_entity_id: str,
 ) -> None:
-    """
-    Test climate entity is unavailable when no temperature reading.
-
-    This prevents 'unknown' states from being recorded to history.
-    """
+    """Test climate entity is available during initialization."""
     mock_config_entry.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
 
     state = hass.states.get(climate_entity_id)
     assert state is not None
-    assert state.state == STATE_UNAVAILABLE
+    assert state.state in (HVACMode.HEAT, HVACMode.OFF)
 
 
 async def test_climate_default_state(
@@ -357,6 +353,8 @@ async def test_climate_restore_setpoint_from_store(
                 "last_error": 0.0,
                 "setpoint": 23.5,
                 "enabled": True,
+                "temperature": 20.0,
+                "display_temp": 20.0,
             },
         },
     }
@@ -390,6 +388,8 @@ async def test_climate_restore_hvac_mode_off_from_store(
                 "last_error": 0.0,
                 "setpoint": 21.0,
                 "enabled": False,
+                "temperature": 20.0,
+                "display_temp": 20.0,
             },
         },
     }
@@ -424,6 +424,8 @@ async def test_climate_restore_preset_mode_from_store(
                 "setpoint": 22.0,  # comfort preset temperature
                 "enabled": True,
                 "preset_mode": "comfort",
+                "temperature": 20.0,
+                "display_temp": 20.0,
             },
         },
     }
@@ -458,6 +460,8 @@ async def test_climate_preset_cleared_when_none_stored(
                 "last_error": 0.0,
                 "setpoint": 23.5,  # manual temperature, not a preset
                 "enabled": True,
+                "temperature": 20.0,
+                "display_temp": 20.0,
                 # No preset_mode key - indicates manual temperature
             },
         },

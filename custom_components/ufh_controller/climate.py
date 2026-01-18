@@ -139,16 +139,6 @@ class UFHZoneClimate(UFHControllerZoneEntity, ClimateEntity):
         zone_data = self.coordinator.data.get("zones", {}).get(self._zone_id, {})
         return zone_data.get("setpoint")
 
-    @property
-    def available(self) -> bool:
-        """
-        Return True if entity is available.
-
-        Climate entity is unavailable when current temperature is not known.
-        This prevents 'unknown' states from being recorded to history.
-        """
-        return super().available and self.current_temperature is not None
-
     async def async_set_temperature(self, **kwargs: Any) -> None:
         """Set the target temperature."""
         if (temperature := kwargs.get("temperature")) is not None:

@@ -258,6 +258,10 @@ class UFHControllerDataUpdateCoordinator(
         if "temperature" in zone_state:
             runtime.state.current = zone_state["temperature"]
 
+        # Restore display temperature for immediate climate entity availability
+        if "display_temp" in zone_state:
+            runtime.state.display_temp = zone_state["display_temp"]
+
     async def async_save_state(self) -> None:
         """Save current state to storage."""
         zones_data: dict[str, dict[str, Any]] = {}
@@ -283,6 +287,9 @@ class UFHControllerDataUpdateCoordinator(
                 # Save temperature (EMA value) for smooth continuity across restarts
                 if runtime.state.current is not None:
                     zone_data["temperature"] = runtime.state.current
+                # Save display temperature for immediate availability on restore
+                if runtime.state.display_temp is not None:
+                    zone_data["display_temp"] = runtime.state.display_temp
                 zones_data[zone_id] = zone_data
 
         data = {
