@@ -740,3 +740,77 @@ class TestGetSummerModeValue:
         )
         controller = HeatingController(config)
         assert controller.get_summer_mode_value(heat_request=False) == SummerMode.SUMMER
+
+
+class TestComputeActionsWithFlushZones:
+    """Test compute_actions method with flush circuit zones."""
+
+    def test_evaluate_includes_flush_zone_actions(
+        self, flush_config: ControllerConfig
+    ) -> None:
+        """Test that evaluate() returns actions for flush zones."""
+        controller = HeatingController(flush_config)
+
+        # Set up both zones with PID data
+        setup_zone_pid(controller, "living_room", 20.0, 60.0)
+        setup_zone_pid(controller, "bathroom", 22.0, 60.0)
+
+        # Set up historical data for both zones
+        setup_zone_historical(
+            controller,
+            "living_room",
+            period_state_avg=0.0,
+            open_state_avg=0.0,
+            window_recently_open=False,
+            elapsed_time=7200.0,
+        )
+        setup_zone_historical(
+            controller,
+            "bathroom",
+            period_state_avg=0.0,
+            open_state_avg=0.0,
+            window_recently_open=False,
+            elapsed_time=7200.0,
+        )
+
+        actions = controller.evaluate(now=datetime.now(UTC))
+
+        # Both zones should have actions computed
+        assert "living_room" in actions.valve_actions
+        assert "bathroom" in actions.valve_actions
+
+    def test_flush_zone_receives_flush_request(
+        self, flush_config: ControllerConfig
+    ) -> None:
+        """Test that flush zone evaluation receives flush_request parameter."""
+        controller = HeatingController(flush_config)
+
+        # Enable flush
+        controller.state.flush_enabled = True
+
+        # Set up zones
+        setup_zone_pid(controller, "living_room", 20.0, 60.0)
+        setup_zone_pid(controller, "bathroom", 22.0, 60.0)
+
+        # Set up historical data with no regular zones running
+        setup_zone_historical(
+            controller,
+            "living_room",
+            period_state_avg=0.0,
+            open_state_avg=0.0,
+            window_recently_open=False,
+            elapsed_time=7200.0,
+        )
+        setup_zone_historical(
+            controller,
+            "bathroom",
+            period_state_avg=0.0,
+            open_state_avg=0.0,
+            window_recently_open=False,
+            elapsed_time=7200.0,
+        )
+
+        actions = controller.evaluate(now=datetime.now(UTC))
+
+        # Flush zone should be in valve_actions (was evaluated via phase 3)
+        assert "bathroom" in actions.valve_actions
