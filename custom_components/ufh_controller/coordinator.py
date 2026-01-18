@@ -195,10 +195,10 @@ class UFHControllerDataUpdateCoordinator(
             return
 
         # Restore last update timestamp from base class
-        if "last_update_time" in stored_data:
+        if "last_update_success_time" in stored_data:
             try:
                 self.last_update_success_time = datetime.fromisoformat(
-                    stored_data["last_update_time"]
+                    stored_data["last_update_success_time"]
                 )
             except (ValueError, TypeError):
                 # Invalid timestamp format, start fresh
@@ -295,7 +295,7 @@ class UFHControllerDataUpdateCoordinator(
 
         # Include last update timestamp from base class
         if self.last_update_success_time is not None:
-            data["last_update_time"] = self.last_update_success_time.isoformat()
+            data["last_update_success_time"] = self.last_update_success_time.isoformat()
 
         await self._store.async_save(data)
 
@@ -426,9 +426,6 @@ class UFHControllerDataUpdateCoordinator(
             # Derive and update summer mode from heat_request
             summer_mode = SummerMode.WINTER if heat_request else SummerMode.SUMMER
             await self._set_summer_mode(summer_mode)
-
-        # Note: State persistence now handled by _async_refresh_finished() hook
-        # which is called automatically after successful updates
 
         return self._build_state_dict()
 
