@@ -32,7 +32,6 @@ from .const import (
 )
 from .core.controller import ControllerConfig, HeatingController
 from .core.history import get_observation_start, get_valve_open_window
-from .core.hysteresis import round_with_hysteresis
 from .core.pid import PIDState
 from .core.zone import (
     CircuitType,
@@ -245,23 +244,17 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if "preset_mode" in zone_state:
             self._zone_presets[zone_id] = zone_state["preset_mode"]
 
-        # Restore temperature (EMA value) for smooth continuity across restarts
+        # Restore temperature state for smooth continuity across restarts
         if "temperature" in zone_state:
             runtime.state.current = zone_state["temperature"]
-            # Also set display_temp so climate entity remains available during init
-            runtime.state.display_temp = round_with_hysteresis(
-                runtime.state.current,
-                runtime.state.display_temp,  # None on first restore
-            )
+        if "display_temp" in zone_state:
+            runtime.state.display_temp = zone_state["display_temp"]
 
-        # Restore zone status from storage (or default to NORMAL if we have valid state)
+        # Restore zone status from storage
         if "zone_status" in zone_state:
             stored_status = zone_state["zone_status"]
             if stored_status in [status.value for status in ZoneStatus]:
                 runtime.state.zone_status = ZoneStatus(stored_status)
-        elif "duty_cycle" in zone_state and runtime.pid.state is not None:
-            # Legacy: No zone_status saved, but we have valid state -> assume NORMAL
-            runtime.state.zone_status = ZoneStatus.NORMAL
 
         # Restore last successful update timestamp
         if "last_successful_update" in zone_state:
@@ -293,9 +286,11 @@ class UFHControllerDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 preset_mode = self._zone_presets.get(zone_id)
                 if preset_mode is not None:
                     zone_data["preset_mode"] = preset_mode
-                # Save temperature (EMA value) for smooth continuity across restarts
+                # Save temperature state for smooth continuity across restarts
                 if runtime.state.current is not None:
                     zone_data["temperature"] = runtime.state.current
+                if runtime.state.display_temp is not None:
+                    zone_data["display_temp"] = runtime.state.display_temp
                 # Save last successful update timestamp
                 if runtime.state.last_successful_update is not None:
                     zone_data["last_successful_update"] = (

@@ -1,5 +1,6 @@
 """Tests for Underfloor Heating Controller coordinator persistence."""
 
+from typing import Any
 from unittest.mock import AsyncMock, patch
 
 from homeassistant.core import HomeAssistant
@@ -14,6 +15,9 @@ from custom_components.ufh_controller.const import (
     OperationMode,
     ValveState,
     ZoneStatus,
+)
+from custom_components.ufh_controller.coordinator import (
+    UFHControllerDataUpdateCoordinator,
 )
 from custom_components.ufh_controller.core.pid import PIDState
 
@@ -55,7 +59,9 @@ async def test_coordinator_loads_stored_state(
                 "d_term": 1.5,
                 "duty_cycle": 55.0,
                 "temperature": 20.8,  # EMA-filtered temperature
+                "display_temp": 20.8,  # Display temperature
                 "zone_status": "normal",  # Saved zone status
+                "last_successful_update": "2026-01-18T00:00:00+00:00",
             },
         },
     }
@@ -91,11 +97,14 @@ async def test_coordinator_loads_stored_state(
     assert runtime.state.current is not None
     assert 20.8 <= runtime.state.current <= 21.5
 
-    # Check display_temp was also initialized (prevents entity unavailability)
-    assert runtime.state.display_temp is not None
+    # Check display_temp was restored directly (prevents entity unavailability)
+    assert runtime.state.display_temp == 20.8
 
-    # CRITICAL: Verify zone status transitioned to NORMAL (not INITIALIZING)
+    # Check zone status was restored
     assert runtime.state.zone_status == ZoneStatus.NORMAL
+
+    # Check last_successful_update was restored
+    assert runtime.state.last_successful_update is not None
 
     # CRITICAL: Verify ALL entities are available (not Unknown)
     climate_state = hass.states.get("climate.test_zone_1_thermostat")
@@ -136,8 +145,9 @@ async def test_coordinator_save_state_format(
         PIDState(error=1.5, p_term=25.0, i_term=75.0, d_term=0.8, duty_cycle=65.0)
     )
 
-    # Set EMA-filtered temperature that should be persisted
+    # Set temperature state that should be persisted
     runtime.state.current = 21.5
+    runtime.state.display_temp = 21.5
 
     saved_data = None
 
@@ -163,14 +173,18 @@ async def test_coordinator_save_state_format(
     assert saved_data["zones"]["zone1"]["d_term"] == 0.8
     assert saved_data["zones"]["zone1"]["duty_cycle"] == 65.0
 
-    # Verify EMA temperature is saved
+    # Verify temperature state is saved
     assert saved_data["zones"]["zone1"]["temperature"] == 21.5
+    assert saved_data["zones"]["zone1"]["display_temp"] == 21.5
 
     # Verify zone_status is saved
     assert "zone_status" in saved_data["zones"]["zone1"]
     assert saved_data["zones"]["zone1"]["zone_status"] in [
         status.value for status in ZoneStatus
     ]
+
+    # Verify last_successful_update is saved
+    assert "last_successful_update" in saved_data["zones"]["zone1"]
 
 
 async def test_coordinator_no_stored_state(
@@ -975,3 +989,159 @@ async def test_crash_recovery_stale_zone_in_stored_state(
 
     # Cleanup
     await hass.config_entries.async_unload(config_entry.entry_id)
+
+
+async def test_restore_with_invalid_zone_status(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Test coordinator handles invalid zone_status gracefully."""
+    stored_data = {
+        "version": 1,
+        "controller_mode": "heat",
+        "zones": {
+            "zone1": {
+                "error": 1.0,
+                "p_term": 25.0,
+                "i_term": 30.0,
+                "d_term": 0.5,
+                "duty_cycle": 50.0,
+                "zone_status": "invalid_status",  # Invalid status
+            },
+        },
+    }
+
+    with patch(
+        "homeassistant.helpers.storage.Store.async_load",
+        return_value=stored_data,
+    ):
+        mock_config_entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    coordinator = mock_config_entry.runtime_data.coordinator
+    runtime = coordinator.controller.get_zone_runtime("zone1")
+    assert runtime is not None
+
+    # Should remain INITIALIZING when invalid status provided
+    assert runtime.state.zone_status == ZoneStatus.INITIALIZING
+
+
+async def test_restore_with_invalid_timestamp(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Test coordinator handles invalid last_successful_update gracefully."""
+    stored_data = {
+        "version": 1,
+        "controller_mode": "heat",
+        "zones": {
+            "zone1": {
+                "error": 1.0,
+                "p_term": 25.0,
+                "i_term": 30.0,
+                "d_term": 0.5,
+                "duty_cycle": 50.0,
+                "zone_status": "normal",
+                "temperature": 21.0,
+                "display_temp": 21.0,
+                "last_successful_update": "invalid-timestamp",  # Invalid format
+            },
+        },
+    }
+
+    # Set up sensors so zone doesn't go into degraded mode
+    hass.states.async_set("sensor.zone1_temp", "21.0")
+    hass.states.async_set("switch.zone1_valve", "off")
+
+    # Capture state immediately after restoration, before first update
+    original_restore_method = UFHControllerDataUpdateCoordinator._restore_zone_state
+
+    restored_timestamp = None
+
+    def capture_restore(self: Any, zone_id: str, zone_state: dict[str, Any]) -> None:
+        nonlocal restored_timestamp
+        original_restore_method(self, zone_id, zone_state)
+        runtime = self._controller.get_zone_runtime(zone_id)
+        if runtime:
+            restored_timestamp = runtime.state.last_successful_update
+
+    with (
+        patch(
+            "homeassistant.helpers.storage.Store.async_load",
+            return_value=stored_data,
+        ),
+        patch.object(
+            UFHControllerDataUpdateCoordinator,
+            "_restore_zone_state",
+            capture_restore,
+        ),
+    ):
+        mock_config_entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    # Verify invalid timestamp was not restored (remained None after restore)
+    assert restored_timestamp is None
+
+
+async def test_restore_without_optional_fields(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Test coordinator handles missing optional fields gracefully."""
+    stored_data = {
+        "version": 1,
+        "controller_mode": "heat",
+        "zones": {
+            "zone1": {
+                # Only PID state, no optional fields
+                "error": 1.0,
+                "p_term": 25.0,
+                "i_term": 30.0,
+                "d_term": 0.5,
+                "duty_cycle": 50.0,
+                # Missing: temperature, display_temp, zone_status,
+                # last_successful_update
+            },
+        },
+    }
+
+    # Capture state immediately after restoration, before first update
+    original_restore_method = UFHControllerDataUpdateCoordinator._restore_zone_state
+
+    restored_state = None
+
+    def capture_restore(self: Any, zone_id: str, zone_state: dict[str, Any]) -> None:
+        nonlocal restored_state
+        original_restore_method(self, zone_id, zone_state)
+        runtime = self._controller.get_zone_runtime(zone_id)
+        if runtime:
+            restored_state = {
+                "current": runtime.state.current,
+                "display_temp": runtime.state.display_temp,
+                "zone_status": runtime.state.zone_status,
+                "last_successful_update": runtime.state.last_successful_update,
+            }
+
+    with (
+        patch(
+            "homeassistant.helpers.storage.Store.async_load",
+            return_value=stored_data,
+        ),
+        patch.object(
+            UFHControllerDataUpdateCoordinator,
+            "_restore_zone_state",
+            capture_restore,
+        ),
+    ):
+        mock_config_entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    # Verify optional fields remained as defaults when not in storage
+    assert restored_state is not None
+    assert restored_state["current"] is None
+    assert restored_state["display_temp"] is None
+    assert restored_state["zone_status"] == ZoneStatus.INITIALIZING
+    assert restored_state["last_successful_update"] is None
