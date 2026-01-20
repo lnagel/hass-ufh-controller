@@ -99,6 +99,7 @@ class UFHZoneBinarySensor(UFHControllerZoneEntity, BinarySensorEntity):
     """Binary sensor entity for zone status."""
 
     entity_description: UFHZoneBinarySensorEntityDescription
+    _attr_entity_registry_visible_default = False
 
     def __init__(
         self,
@@ -146,6 +147,7 @@ class UFHControllerStatusSensor(UFHControllerEntity, BinarySensorEntity):
 
     _attr_translation_key = "status"
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
+    _attr_entity_registry_visible_default = False
 
     def __init__(
         self,
@@ -188,6 +190,7 @@ class UFHFlushRequestSensor(UFHControllerEntity, BinarySensorEntity):
     _attr_translation_key = "flush_request"
     _attr_device_class = BinarySensorDeviceClass.HEAT
     _attr_name = "Flush Request"
+    _attr_entity_registry_visible_default = False
 
     def __init__(
         self,

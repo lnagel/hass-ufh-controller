@@ -44,6 +44,7 @@ class UFHFlushEnabledSwitch(UFHControllerEntity, SwitchEntity):
 
     _attr_translation_key = "flush_enabled"
     _attr_device_class = SwitchDeviceClass.SWITCH
+    _attr_entity_registry_visible_default = False
 
     def __init__(
         self,
