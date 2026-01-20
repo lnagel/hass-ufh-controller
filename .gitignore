@@ -19,6 +19,7 @@ coverage.json
 .aider*
 .env
 .env.*
+notes/
 
 # Home Assistant configuration
 config/*
