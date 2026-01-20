@@ -6,60 +6,77 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/lnagel/hass-ufh-controller/checks.yml?branch=main&style=flat-square&label=tests)](https://github.com/lnagel/hass-ufh-controller/actions)
 [![codecov](https://codecov.io/gh/lnagel/hass-ufh-controller/branch/main/graph/badge.svg)](https://codecov.io/gh/lnagel/hass-ufh-controller)
 
-A Home Assistant custom integration for intelligent multi-zone underfloor heating control. Uses PID-based temperature regulation with coordinated valve scheduling to keep your home comfortable while minimizing energy waste and valve wear.
+**The only Home Assistant integration designed specifically for hydronic underfloor heating systems.**
 
-## Why Use This?
+While other thermostats adapt radiator or TRV logic to UFH, this integration is built from the ground up to handle UFH's unique characteristics: high thermal mass, slow response times, and the need to coordinate multiple zones sharing a single heat source.
 
-Most underfloor heating systems either run valves in simple on/off mode (inefficient, causes temperature swings) or require expensive proprietary controllers. This integration gives you:
+## Why This Exists
 
-- **Precise temperature control** - PID algorithm maintains stable room temperatures without overshooting
-- **Smart valve scheduling** - Coordinates multiple zones to prevent valve rapid-cycling and reduce wear
-- **Energy savings** - Pauses PID control when windows are open to let rooms stabilize, captures waste heat from hot water cycles
-- **Full Home Assistant integration** - Climate entities, presets, automations, and dashboards work just like any other HA device
+The Home Assistant thermostat ecosystem has excellent options for TRVs ([Better Thermostat](https://github.com/KartoffelToby/better_thermostat)), general climate control ([Versatile Thermostat](https://github.com/jmcollin78/versatile_thermostat)), and precise PID control ([Smart Thermostat PID](https://github.com/ScratMan/smart-thermostat-pid)). But hydronic UFH has specific requirements that none address together:
 
-## Features
+| Requirement | Generic Solutions | This Integration |
+|-------------|-------------------|------------------|
+| **Multi-zone heat aggregation** | Each zone fires boiler independently | Zones coordinate through shared heat request |
+| **Boiler/heat pump signaling** | Basic on/off or none | Valve pre-opening, quota-aware requests |
+| **EMS-ESP boiler integration** | Manual automations required | Native summer mode, DHW detection |
+| **DHW priority handling** | Not supported | Blocks new heating during DHW, captures latent heat |
+| **UFH thermal response** | Adapted from radiator/TRV logic | Native PID tuned for slow thermal mass |
 
-### Intelligent Temperature Control
-- **PID regulation** for each zone - no more temperature swings from simple thermostats
-- **Duty cycle scheduling** - zones get proportional heating time based on demand
-- **Minimum run times** - prevents short valve cycles that cause wear and inefficiency
+## Key Differentiators
 
-### Energy Efficiency
-- **Window/door detection** - pauses PID control when windows are open to let room temperature stabilize
-- **DHW latent heat capture** - flush circuits can use waste heat from hot water heating
-- **Boiler summer mode** - disables heating circuit when not needed
+### Purpose-Built for Hydronic UFH
 
-### Fault Tolerance
-- **Zone isolation** - sensor failures in one zone don't affect other zones
-- **Graceful degradation** - zones continue operating with last-known demand for 1 hour
-- **Visual status** - climate entities show zone status (normal, degraded, fail-safe)
-- **Physical fallback support** - summer mode forced to "auto" when zones fail, enabling physical fallback valves
+The control algorithm accounts for:
 
-### Multiple Operation Modes
-| Mode | Description |
-|------|-------------|
-| **Heat** | Normal PID-based control with quota scheduling |
-| **Flush** | All valves open for system flushing (circulation only, no firing) |
-| **Cycle** | Diagnostic mode - rotates through zones on 8-hour schedule |
-| **All On** | Maximum heating - all valves open |
-| **All Off** | Heating disabled - all valves closed |
-| **Off** | Controller inactive, no actions taken |
+- **Slow thermal response** - PID tuning defaults optimized for concrete screed
+- **Valve scheduling** - 2-hour observation periods prevent rapid cycling
+- **Minimum run times** - Protects valves from wear while maintaining efficiency
+- **Sensor noise filtering** - EMA smoothing handles noisy wireless sensors (Zigbee, etc.)
 
-### Home Assistant Integration
-- Native climate entities with HVAC modes and presets
-- Sensors for duty cycle, PID values, and controller status
-- Binary sensors for zone blocked state and heat requests
-- Full UI configuration - no YAML required
-- Multi-instance support - run multiple controllers for different heat sources
+### Native Boiler Coordination
+
+Multiple zones sharing one heat source need coordination. The controller:
+
+- **Aggregates zone demands** into a single heat request signal
+- **Waits for valves to open** before firing the boiler (configurable delay)
+- **Manages quota intelligently** - stops requesting heat before a zone's time expires
+- **Supports summer mode** - automatically enables/disables the boiler's heating circuit
+
+### EMS-ESP Integration
+
+For users with Bosch, Buderus, Nefit, Junkers, or Worcester boilers running [EMS-ESP](https://github.com/emsesp/EMS-ESP32):
+
+- **Summer mode control** - Disables heating circuit when no zones need heat
+- **DHW priority detection** - Blocks new heating cycles during hot water, existing zones continue circulating
+- **Latent heat capture** - Zones configured as flush circuits capture residual boiler heat after DHW
+
+### Zone Fault Isolation
+
+Sensor failures in one zone don't bring down your heating:
+
+- **Independent zones** - Each zone evaluates and fails separately
+- **Graceful degradation** - Failed zones use last-known demand for 1 hour before fail-safe
+- **Safe initialization** - No valve actions until all zones have valid temperature readings
+- **Clear status reporting** - Controller and zone health visible as entities
+- **PID diagnostics** - Per-zone sensors for duty cycle, error, and PID terms
+
+### Production-Grade Engineering
+
+- **State persistence** - All control variables survive Home Assistant restarts and crashes
+- **90%+ test coverage** - Enforced minimum with 100% target for core control logic
+- **Strict type checking** - Full type annotations verified by ty
+- **Automated CI** - Every PR runs tests, linting (ruff), formatting, and type checks
+- **HACS compliant** - Validated against hassfest and HACS requirements
 
 ## Requirements
 
 - Home Assistant 2025.10 or newer
-- A hydronic (water-based) underfloor heating system with:
-  - Temperature sensor for each zone
-  - Controllable valve switch for each zone
+- A hydronic underfloor heating system with:
+  - Temperature sensor per zone
+  - Valve switch per zone
   - (Optional) Boiler heat request switch or summer mode control
-  - (Optional) Window/door sensors
+  - (Optional) DHW active sensor for latent heat capture
+  - (Optional) Window/door sensors (pauses PID integration, prevents integral windup)
 
 ## Installation
 
@@ -79,160 +96,29 @@ Most underfloor heating systems either run valves in simple on/off mode (ineffic
 
 ## Quick Start
 
-### 1. Add the Integration
+1. **Add Integration**: Settings → Devices & Services → Add Integration → "Underfloor Heating Controller"
+2. **Configure Boiler** (optional): Connect heat request switch, DHW sensor, summer mode select
+3. **Add Zones**: Each zone needs a temperature sensor and valve switch
+4. **Set Presets**: Configure Home/Away/Eco/Comfort/Boost temperatures per zone
 
-1. Go to **Settings → Devices & Services**
-2. Click **Add Integration**
-3. Search for "Underfloor Heating Controller"
-4. Enter a name for your controller (e.g., "Ground Floor Heating")
+## Operation Modes
 
-### 2. Configure Boiler Connection (Optional)
-
-You can optionally connect the controller to your boiler:
-
-| Setting | Purpose |
-|---------|---------|
-| Heat Request Switch | Tells boiler when heat is needed |
-| DHW Active Sensor | Enables DHW priority and flush circuit heat capture |
-| Summer Mode Select | Automatically enables/disables boiler heating circuit |
-
-### 3. Add Heating Zones
-
-1. Go to **Settings → Devices & Services → Underfloor Heating Controller**
-2. Click **Add Heating Zone**
-3. Configure each zone with:
-   - Name (e.g., "Living Room")
-   - Temperature sensor entity
-   - Valve switch entity
-   - (Optional) Window sensors for that room
-
-### 4. Set Up Presets
-
-Each zone supports temperature presets:
-
-| Preset | Default | Use Case |
-|--------|---------|----------|
-| Home | 21°C | Normal occupancy |
-| Away | 16°C | Extended absence |
-| Eco | 19°C | Energy saving (overnight, workday) |
-| Comfort | 22°C | Extra warmth |
-| Boost | 25°C | Quick warm-up |
-
-## How It Works
-
-### PID Temperature Control
-
-Each zone runs an independent PID controller that calculates a **duty cycle** (0-100%) based on temperature error. A zone with 50% duty cycle should have its valve open for half of each observation period.
-
-### Observation Periods
-
-Time is divided into 2-hour observation periods (aligned to even hours: 00:00, 02:00, etc.). The controller ensures each zone's valve is open for its quota of time within each period, preventing rapid valve cycling while maintaining comfort.
-
-### Heat Request Coordination
-
-The controller aggregates zone demands and signals the boiler:
-1. Waits for valve to fully open (configurable delay)
-2. Checks that zone has enough quota remaining
-3. Only requests heat when zones are ready to use it
-
-This prevents short boiler cycles and improves efficiency.
-
-## Entities Created
-
-### Per Controller
-| Entity | Description |
-|--------|-------------|
-| `select.*_mode` | Operation mode selector |
-| `switch.*_flush_enabled` | DHW latent heat capture toggle (only when DHW entity configured) |
-| `sensor.*_requesting_zones` | Count of zones currently heating |
-| `binary_sensor.*_status` | Controller health (problem when degraded) |
-| `binary_sensor.*_flush_request` | Flush is actively running (only when DHW entity configured) |
-
-### Per Zone
-| Entity | Description |
-|--------|-------------|
-| `climate.*` | Main control - temperature, mode, presets |
-| `sensor.*_duty_cycle` | Current heating demand (0-100%) |
-| `sensor.*_pid_error` | Temperature error (setpoint - current) |
-| `sensor.*_pid_proportional` | PID proportional term (Kp × error) |
-| `sensor.*_pid_integral` | PID integral term (Ki × accumulated error) |
-| `sensor.*_pid_derivative` | PID derivative term (Kd × rate of change) |
-| `binary_sensor.*_blocked` | Whether zone is blocked (window open, etc.) |
-| `binary_sensor.*_heat_request` | Whether zone is contributing to heat demand |
-
-## Configuration Options
-
-### Timing Parameters
-
-Access via **Settings → Devices & Services → [Controller] → Configure**:
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| Observation Period | 2 hours | Scheduling window for valve quotas |
-| Minimum Run Time | 9 min | Shortest allowed valve run |
-| Valve Open Time | 3.5 min | Delay before requesting heat |
-| Closing Warning | 4 min | Stop requesting heat before quota ends |
-| Window Block Time | 10 min | Time after window closes before resuming PID control |
-| Controller Loop Interval | 60 sec | How often the control loop runs |
-| Flush Duration | 8 min | Post-DHW flush period for latent heat capture |
-
-### PID Tuning
-
-Configure per zone via the zone device's **Configure** button:
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| Kp | 50.0 | Proportional gain - response strength |
-| Ki | 0.001 | Integral gain - eliminates steady-state error |
-| Kd | 0.0 | Derivative gain - damping (usually 0 for UFH) |
-| EMA Time Constant | 10 min | Temperature smoothing filter (0 to disable) |
-
-The defaults work well for most underfloor heating systems. Increase Kp if rooms heat too slowly; decrease if you see overshooting.
-The EMA filter smooths noisy temperature readings before they reach the PID controller, reducing unnecessary valve cycling.
-
-## Troubleshooting
-
-### Zone Won't Heat
-
-1. Check the zone's `blocked` binary sensor - if ON, a window may be open
-2. Verify the valve switch entity is working
-3. Check the controller mode is set to "Heat"
-4. Look at the duty cycle sensor - 0% means the room is at or above setpoint
-
-### Temperature Oscillating
-
-1. Reduce Kp (proportional gain) to slow the response
-2. Ensure your temperature sensor isn't affected by drafts or direct sunlight
-3. Check that valve open time allows the valve to fully open before heat is requested
-
-### Controller or Zone Status Shows Problem
-
-The controller tracks failures at both zone and controller level:
-
-**Zone Status** (visible in climate entity attributes):
-- **Initializing**: Zone starting up, awaiting first successful temperature reading
-- **Normal**: Zone operating correctly
-- **Degraded**: Temperature sensor unavailable, using last-known demand
-- **Fail-safe**: No valid data for >1 hour, zone valve closed
-
-**Controller Status**:
-- **Initializing**: Controller starting up, zones awaiting first readings
-- **Normal**: All zones operating correctly
-- **Degraded**: One or more zones have issues, but others continue
-- **Fail-safe**: All zones in fail-safe (rare - requires all sensors to fail)
-
-Key point: A failing sensor in one zone won't affect your other zones. Check Home Assistant logs for specific error details.
+| Mode | Purpose |
+|------|---------|
+| **Heat** | Normal PID control with zone scheduling |
+| **Flush** | All valves open for circulation (no boiler firing) |
+| **Cycle** | Diagnostic 8-hour rotation through zones |
+| **All On** | Maximum heating - all valves open |
+| **All Off** | All valves closed |
+| **Off** | Controller inactive |
 
 ## Documentation
 
-For detailed technical documentation, see:
-- [Documentation Index](docs/index.md) - Full system design and algorithm details
-- [Contributing Guide](CONTRIBUTING.md) - Development setup and coding standards
+- **[Full Documentation](docs/index.md)** - Architecture, algorithms, configuration reference
+- **[Control Algorithm](docs/control_algorithm.md)** - PID controller and scheduling details
+- **[Fault Isolation](docs/fault_isolation.md)** - How zone failures are handled
+- **[Configuration](docs/configuration.md)** - All parameters explained
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-Based on a proven OpenHAB implementation, redesigned from the ground up for Home Assistant with native integrations, modern Python practices, and comprehensive testing.
+MIT License - see [LICENSE](LICENSE) for details.
