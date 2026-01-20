@@ -156,6 +156,7 @@ This prevents short boiler cycles and improves efficiency.
 | `sensor.*_pid_error` | Temperature error (setpoint - current) |
 | `sensor.*_pid_proportional` | PID proportional term (Kp × error) |
 | `sensor.*_pid_integral` | PID integral term (Ki × accumulated error) |
+| `sensor.*_pid_derivative` | PID derivative term (Kd × rate of change) |
 | `binary_sensor.*_blocked` | Whether zone is blocked (window open, etc.) |
 | `binary_sensor.*_heat_request` | Whether zone is contributing to heat demand |
 
@@ -184,8 +185,10 @@ Configure per zone via the zone device's **Configure** button:
 | Kp | 50.0 | Proportional gain - response strength |
 | Ki | 0.001 | Integral gain - eliminates steady-state error |
 | Kd | 0.0 | Derivative gain - damping (usually 0 for UFH) |
+| EMA Time Constant | 10 min | Temperature smoothing filter (0 to disable) |
 
 The defaults work well for most underfloor heating systems. Increase Kp if rooms heat too slowly; decrease if you see overshooting.
+The EMA filter smooths noisy temperature readings before they reach the PID controller, reducing unnecessary valve cycling.
 
 ## Troubleshooting
 
@@ -193,7 +196,7 @@ The defaults work well for most underfloor heating systems. Increase Kp if rooms
 
 1. Check the zone's `blocked` binary sensor - if ON, a window may be open
 2. Verify the valve switch entity is working
-3. Check the controller mode is set to "Automatic"
+3. Check the controller mode is set to "Heat"
 4. Look at the duty cycle sensor - 0% means the room is at or above setpoint
 
 ### Temperature Oscillating
