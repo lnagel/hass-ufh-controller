@@ -40,6 +40,7 @@ class UFHModeSelect(UFHControllerEntity, SelectEntity):
 
     _attr_translation_key = "mode"
     _attr_options: ClassVar[list[str]] = [mode.value for mode in OperationMode]
+    _attr_entity_registry_visible_default = False
 
     def __init__(
         self,

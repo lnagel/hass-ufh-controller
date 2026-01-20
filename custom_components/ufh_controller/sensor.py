@@ -125,6 +125,7 @@ class UFHZoneSensor(UFHControllerZoneEntity, SensorEntity):
     """Sensor entity for zone metrics."""
 
     entity_description: UFHZoneSensorEntityDescription
+    _attr_entity_registry_visible_default = False
 
     def __init__(
         self,
@@ -170,6 +171,7 @@ class UFHRequestingZonesSensor(UFHControllerEntity, SensorEntity):
     _attr_translation_key = "requesting_zones"
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = "zones"
+    _attr_entity_registry_visible_default = False
 
     def __init__(
         self,
