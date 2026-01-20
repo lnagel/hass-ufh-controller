@@ -210,11 +210,13 @@ The EMA filter smooths noisy temperature readings before they reach the PID cont
 The controller tracks failures at both zone and controller level:
 
 **Zone Status** (visible in climate entity attributes):
+- **Initializing**: Zone starting up, awaiting first successful temperature reading
 - **Normal**: Zone operating correctly
 - **Degraded**: Temperature sensor unavailable, using last-known demand
 - **Fail-safe**: No valid data for >1 hour, zone valve closed
 
 **Controller Status**:
+- **Initializing**: Controller starting up, zones awaiting first readings
 - **Normal**: All zones operating correctly
 - **Degraded**: One or more zones have issues, but others continue
 - **Fail-safe**: All zones in fail-safe (rare - requires all sensors to fail)
