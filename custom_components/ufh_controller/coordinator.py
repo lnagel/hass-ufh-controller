@@ -96,9 +96,6 @@ class UFHControllerDataUpdateCoordinator(
             if subentry.subentry_type == SUBENTRY_TYPE_CONTROLLER:
                 timing_opts = subentry.data.get("timing", {})
                 break
-        if not timing_opts:
-            # Fallback to options for backwards compatibility
-            timing_opts = entry.options.get("timing", {})
 
         timing = TimingParams(
             observation_period=timing_opts.get(
