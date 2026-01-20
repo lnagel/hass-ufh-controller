@@ -658,6 +658,15 @@ wheels = [
 ]
 
 [[package]]
+name = "chardet"
+version = "5.2.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/f3/0d/f7b6ab21ec75897ed80c17d79b15951a719226b9fababf1e40ea74d69079/chardet-5.2.0.tar.gz", hash = "sha256:1b3b6ff479a8c414bc3fa2c0852995695c4a026dcd6d0633b2dd092ca39c1cf7", size = 2069618, upload-time = "2023-08-01T19:23:02.662Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/38/6f/f5fbc992a329ee4e0f288c1fe0e2ad9485ed064cac731ed2fe47dcc38cbf/chardet-5.2.0-py3-none-any.whl", hash = "sha256:e1cf59446890a00105fe7b7912492ea04b6e6f06d4b742b2c788469e34c82970", size = 199385, upload-time = "2023-08-01T19:23:00.661Z" },
+]
+
+[[package]]
 name = "charset-normalizer"
 version = "3.4.4"
 source = { registry = "https://pypi.org/simple" }
@@ -891,6 +900,21 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/1b/4f/0e0b0359d41ffaa652b066759321d8f2608246090c827061c43b72dcefae/dbus_fast-3.1.2-cp314-cp314t-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:8a78eb3f19ff81fb7a8b16075160ebd1edc6135c59c929da0832511f315b5ede", size = 1606236, upload-time = "2025-11-17T03:49:56.667Z" },
     { url = "https://files.pythonhosted.org/packages/8e/18/1ad08968773f1d1822a1e147dbc98c9af220b582d2c8b95705c7e8f8019f/dbus_fast-3.1.2-cp314-cp314t-musllinux_1_2_aarch64.whl", hash = "sha256:366550946b281a5b4bb8d70815667d24565141e3c23dc7d40267a315b16def2c", size = 1545417, upload-time = "2025-11-17T03:49:58.111Z" },
     { url = "https://files.pythonhosted.org/packages/89/94/b7ff6279e642b014cd4aef4d914b9fca3917c2c9c35df49db062023cbdfc/dbus_fast-3.1.2-cp314-cp314t-musllinux_1_2_x86_64.whl", hash = "sha256:1d7cc1315586e4c50875c9a2d56b9ad2e056ec75e2f27c43cd80392f72d0f6e3", size = 1623709, upload-time = "2025-11-17T03:49:59.571Z" },
+]
+
+[[package]]
+name = "diff-cover"
+version = "10.2.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "chardet" },
+    { name = "jinja2" },
+    { name = "pluggy" },
+    { name = "pygments" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/99/b4/eee71d1e338bc1f9bd3539b46b70e303dac061324b759c9a80fa3c96d90d/diff_cover-10.2.0.tar.gz", hash = "sha256:61bf83025f10510c76ef6a5820680cf61b9b974e8f81de70c57ac926fa63872a", size = 102473, upload-time = "2026-01-09T01:59:07.605Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b3/2c/61eeb887055a37150db824b6bf830e821a736580769ac2fea4eadb0d613f/diff_cover-10.2.0-py3-none-any.whl", hash = "sha256:59c328595e0b8948617cc5269af9e484c86462e2844bfcafa3fb37f8fca0af87", size = 56748, upload-time = "2026-01-09T01:59:06.028Z" },
 ]
 
 [[package]]
@@ -1277,6 +1301,7 @@ dependencies = [
 [package.optional-dependencies]
 dev = [
     { name = "bump-my-version" },
+    { name = "diff-cover" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
@@ -1295,6 +1320,7 @@ test = [
 requires-dist = [
     { name = "bump-my-version", marker = "extra == 'dev'", specifier = ">=1.1.0" },
     { name = "colorlog", specifier = ">=6.10.1" },
+    { name = "diff-cover", marker = "extra == 'dev'", specifier = ">=9.0.0" },
     { name = "hass-ufh-controller", extras = ["test"], marker = "extra == 'dev'" },
     { name = "homeassistant", specifier = ">=2025.10.0" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=7.0.0" },
