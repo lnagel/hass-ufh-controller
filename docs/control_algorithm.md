@@ -55,7 +55,7 @@ This prevents the common problem of integral windup where the integral term accu
 
 The zone evaluation follows a priority-based decision tree:
 
-1. **Flush circuit priority:** If flush is enabled and DHW has recently ended (within `flush_duration`, default 8 minutes) with no regular circuits currently running, flush circuits turn on to capture latent heat from the pipes. Flush circuits do NOT activate while DHW is active — only after DHW switches from active to inactive.
+1. **Flush circuit priority:** If flush is enabled and DHW has recently ended with no regular circuits currently running, flush circuits turn on to capture latent heat from the boiler.
 
 2. **End-of-period freeze:** When less than `min_run_time` remains in the observation period, valve positions are frozen to prevent unnecessary cycling at period boundaries.
 

@@ -297,19 +297,14 @@ async def test_flush_request_off_during_dhw_with_flush_enabled(
     mock_config_entry: MockConfigEntry,
     mock_temp_sensor: None,
 ) -> None:
-    """
-    Test flush_request is OFF during DHW active.
-
-    Flush only activates AFTER DHW ends, not during DHW.
-    """
+    """Test flush_request is OFF during DHW active."""
     mock_config_entry.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
 
     coordinator = mock_config_entry.runtime_data.coordinator
 
-    # Set DHW active and flush enabled - flush should still be OFF
-    # because flush only activates AFTER DHW switches from active to inactive
+    # Set DHW active and flush enabled
     hass.states.async_set("binary_sensor.dhw_active", "on")
     coordinator.controller.state.flush_enabled = True
     await coordinator.async_refresh()

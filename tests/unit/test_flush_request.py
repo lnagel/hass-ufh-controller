@@ -19,12 +19,12 @@ FLUSH_UNTIL_EXPIRED = "expired"
         (False, False, FLUSH_UNTIL_FUTURE, False, False),
         # No post-DHW timer returns False (even if flush enabled)
         (True, False, None, False, False),
-        # DHW currently active returns False (flush only starts AFTER DHW ends)
+        # DHW currently active returns False
         (True, True, None, False, False),
         (True, True, FLUSH_UNTIL_FUTURE, False, False),
         # Post-DHW period (timer active) + no regular ON = True
         (True, False, FLUSH_UNTIL_FUTURE, False, True),
-        # Post-DHW period + regular ON = False (regular zones block flush)
+        # Post-DHW period + regular ON = False
         (True, False, FLUSH_UNTIL_FUTURE, True, False),
         # Post-DHW period expired = False
         (True, False, FLUSH_UNTIL_EXPIRED, False, False),

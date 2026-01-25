@@ -85,8 +85,8 @@ def compute_flush_request(
 
     Flush circuits activate when:
     - flush_enabled is True (user has enabled the feature)
-    - DHW is NOT currently active (flush only starts AFTER DHW ends)
-    - Post-DHW timer is active (within flush_until period)
+    - DHW is NOT currently active
+    - Post-DHW timer is active
     - No regular circuits are currently ON
 
     Args:
@@ -103,11 +103,9 @@ def compute_flush_request(
     if not flush_enabled:
         return False
 
-    # Flush only activates AFTER DHW ends, not during DHW
     if dhw_active:
         return False
 
-    # Check if within post-DHW flush period
     if flush_until is None or now >= flush_until:
         return False
 

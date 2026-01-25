@@ -457,7 +457,7 @@ class UFHControllerDataUpdateCoordinator(
                     self._controller.state.flush_until,
                 )
 
-        # Clear flush_until when DHW starts (flush only happens after DHW ends)
+        # Clear flush_until when DHW starts
         if current_dhw_active and not self._prev_dhw_active:
             self._controller.state.flush_until = None
 
