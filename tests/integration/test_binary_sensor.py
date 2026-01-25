@@ -292,19 +292,24 @@ async def test_flush_request_off_when_flush_disabled(
     assert state.state == "off"
 
 
-async def test_flush_request_on_during_dhw_with_flush_enabled(
+async def test_flush_request_off_during_dhw_with_flush_enabled(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
     mock_temp_sensor: None,
 ) -> None:
-    """Test flush_request is ON when DHW is active and flush_enabled is True."""
+    """
+    Test flush_request is OFF during DHW active.
+
+    Flush only activates AFTER DHW ends, not during DHW.
+    """
     mock_config_entry.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
 
     coordinator = mock_config_entry.runtime_data.coordinator
 
-    # Set DHW active and flush enabled
+    # Set DHW active and flush enabled - flush should still be OFF
+    # because flush only activates AFTER DHW switches from active to inactive
     hass.states.async_set("binary_sensor.dhw_active", "on")
     coordinator.controller.state.flush_enabled = True
     await coordinator.async_refresh()
@@ -312,7 +317,7 @@ async def test_flush_request_on_during_dhw_with_flush_enabled(
 
     state = hass.states.get("binary_sensor.test_controller_flush_request")
     assert state is not None
-    assert state.state == "on"
+    assert state.state == "off"
 
 
 async def test_flush_request_on_during_post_dhw_period(
