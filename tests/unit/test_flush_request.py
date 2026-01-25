@@ -15,33 +15,29 @@ FLUSH_UNTIL_EXPIRED = "expired"
     ("flush_enabled", "dhw_active", "flush_until", "any_regular_on", "expected"),
     [
         # flush_enabled=False always returns False
-        (False, True, None, False, False),
-        (False, True, FLUSH_UNTIL_FUTURE, False, False),
-        # No DHW activity (not active, no timer) returns False
+        (False, False, None, False, False),
+        (False, False, FLUSH_UNTIL_FUTURE, False, False),
+        # No post-DHW timer returns False (even if flush enabled)
         (True, False, None, False, False),
-        # DHW active + no regular ON = True
-        (True, True, None, False, True),
-        # DHW active + regular ON = False
-        (True, True, None, True, False),
+        # DHW currently active returns False
+        (True, True, None, False, False),
+        (True, True, FLUSH_UNTIL_FUTURE, False, False),
         # Post-DHW period (timer active) + no regular ON = True
         (True, False, FLUSH_UNTIL_FUTURE, False, True),
         # Post-DHW period + regular ON = False
         (True, False, FLUSH_UNTIL_FUTURE, True, False),
         # Post-DHW period expired = False
         (True, False, FLUSH_UNTIL_EXPIRED, False, False),
-        # DHW active overrides expired timer
-        (True, True, FLUSH_UNTIL_EXPIRED, False, True),
     ],
     ids=[
         "disabled_returns_false",
         "disabled_with_timer_returns_false",
-        "no_dhw_activity_returns_false",
-        "dhw_active_no_regular_returns_true",
-        "dhw_active_regular_on_returns_false",
+        "no_post_dhw_timer_returns_false",
+        "dhw_active_returns_false",
+        "dhw_active_with_timer_returns_false",
         "post_dhw_no_regular_returns_true",
         "post_dhw_regular_on_returns_false",
         "post_dhw_expired_returns_false",
-        "dhw_active_overrides_expired_timer",
     ],
 )
 def test_compute_flush_request(

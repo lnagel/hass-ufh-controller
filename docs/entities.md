@@ -16,14 +16,14 @@ All controller entities belong to a device named after the controller (user-defi
 **Note:** The flush enabled switch and flush request sensor are only created when `dhw_active_entity` is configured, as the DHW latent heat capture feature requires DHW state input to function.
 
 **Flush Enabled Behavior:**
-- **Enabled:** Flush-type circuits can turn on during DHW heating AND for a configurable period after DHW ends (`flush_duration`) to capture latent heat (only when no regular circuits are currently running with valve ON).
+- **Enabled:** Flush-type circuits can turn on for a configurable period after DHW ends (`flush_duration`) to capture latent heat (only when no regular circuits are currently running with valve ON).
 - **Disabled:** Flush-type circuits behave like regular circuits — no special DHW priority.
 - **DHW priority for regular zones is independent of this setting.** Regular zones that are OFF cannot turn ON during DHW heating regardless of the flush enabled state. This switch only controls whether flush circuits get special treatment.
 
 **Flush Request Behavior:**
 The flush request sensor indicates when flush circuits are actively capturing heat:
-- **ON:** During DHW heating (when `dhw_active_entity` is on) OR during the post-DHW flush period
-- **OFF:** When neither DHW is active nor within the post-DHW flush period
+- **ON:** During the post-DHW flush period
+- **OFF:** When DHW is active or not within the post-DHW flush period
 - **Requires flush_enabled:** The sensor only reports ON if `flush_enabled` switch is also on
 
 **Select Options for Mode:**
