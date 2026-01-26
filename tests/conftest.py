@@ -247,6 +247,42 @@ def mock_config_entry_multiple_zones() -> MockConfigEntry:
     )
 
 
+@pytest.fixture
+def mock_config_entry_all_entities() -> MockConfigEntry:
+    """
+    Return a mock config entry with all controller-level entities configured.
+
+    Needed separately from mock_config_entry because adding these entities to
+    the base fixture breaks tests that don't mock all required services.
+    """
+    return MockConfigEntry(
+        domain=DOMAIN,
+        title="Test Controller Full",
+        data={
+            "name": "Test Controller Full",
+            "controller_id": f"{MOCK_CONTROLLER_ID}_full",
+            "heat_request_entity": "switch.heat_request",
+            "summer_mode_entity": "select.summer_mode",
+            "dhw_active_entity": "binary_sensor.dhw_active",
+            "circulation_entity": "binary_sensor.circulation",
+        },
+        options={
+            "timing": DEFAULT_TIMING,
+        },
+        entry_id="test_entry_id_full",
+        unique_id=f"{MOCK_CONTROLLER_ID}_full",
+        subentries_data=[
+            {
+                "data": MOCK_ZONE_DATA,
+                "subentry_id": "subentry_zone1",
+                "subentry_type": SUBENTRY_TYPE_ZONE,
+                "title": "Test Zone 1",
+                "unique_id": "zone1",
+            }
+        ],
+    )
+
+
 @pytest.fixture(autouse=True)
 def auto_enable_custom_integrations(
     enable_custom_integrations: None,

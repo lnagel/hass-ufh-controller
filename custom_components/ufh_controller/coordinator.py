@@ -5,8 +5,16 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
 from homeassistant.components.select import SERVICE_SELECT_OPTION
 from homeassistant.const import SERVICE_TURN_OFF, SERVICE_TURN_ON, Platform
+from homeassistant.core import Event, callback
+from homeassistant.helpers.event import (
+    EventStateChangedData,
+    async_track_state_change_event,
+)
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import TimestampDataUpdateCoordinator
 from sqlalchemy.exc import SQLAlchemyError
@@ -88,6 +96,12 @@ class UFHControllerDataUpdateCoordinator(
 
         # Track last force-update to ensure commands are sent at least once per cycle
         self._last_force_update: datetime | None = None
+
+        # Track expected states for entities we control
+        self._expected_states: dict[str, str | None] = {}
+
+        # Track listener unsubscribe callback for re-setup on config reload
+        self._listener_unsub: Callable[[], None] | None = None
 
     def _build_controller(self, entry: UFHControllerConfigEntry) -> HeatingController:
         """Build HeatingController from config entry."""
@@ -210,6 +224,71 @@ class UFHControllerDataUpdateCoordinator(
             self._restore_zone_state(zone_id, zone_state)
 
         self._state_restored = True
+
+    async def async_config_entry_first_refresh(self) -> None:
+        """Perform first refresh and set up state change listeners."""
+        await super().async_config_entry_first_refresh()
+        self._async_setup_listeners()
+
+    def _async_setup_listeners(self) -> None:
+        """Set up state change listeners for controller-level entities."""
+        # Unsubscribe from old listeners if they exist (for config reload)
+        if self._listener_unsub is not None:
+            self._listener_unsub()
+            self._listener_unsub = None
+
+        # Collect all configured entity IDs (skip None/empty)
+        entity_ids: list[str] = []
+        config = self._controller.config
+
+        if config.heat_request_entity:
+            entity_ids.append(config.heat_request_entity)
+        if config.summer_mode_entity:
+            entity_ids.append(config.summer_mode_entity)
+        if config.dhw_active_entity:
+            entity_ids.append(config.dhw_active_entity)
+        if config.circulation_entity:
+            entity_ids.append(config.circulation_entity)
+
+        if not entity_ids:
+            return
+
+        # Subscribe to state changes
+        self._listener_unsub = async_track_state_change_event(
+            self.hass, entity_ids, self._on_external_entity_change
+        )
+        self.config_entry.async_on_unload(self._listener_unsub)
+        LOGGER.debug(
+            "Subscribed to state changes for controller entities: %s", entity_ids
+        )
+
+    @callback
+    def _on_external_entity_change(self, event: Event[EventStateChangedData]) -> None:
+        """Handle state changes for controller-level entities."""
+        entity_id = event.data["entity_id"]
+        new_state = event.data["new_state"]
+
+        if new_state is None:
+            # entity removed; ignore the event
+            return
+
+        # Check if this state change matches what we expected (self-initiated change)
+        expected = self._expected_states.get(entity_id)
+        if expected is not None and new_state.state == expected:
+            # clear expectation; ignore the event
+            self._expected_states[entity_id] = None
+            return
+
+        # External change - request refresh
+        old_state = event.data.get("old_state")
+        old_state_str = old_state.state if old_state else None
+        LOGGER.debug(
+            "External state change detected for %s: %s -> %s, requesting refresh",
+            entity_id,
+            old_state_str,
+            new_state.state,
+        )
+        self.hass.async_create_task(self.async_request_refresh())
 
     def _restore_zone_state(self, zone_id: str, zone_state: dict[str, Any]) -> None:
         """Restore state for a single zone from storage."""
@@ -341,6 +420,9 @@ class UFHControllerDataUpdateCoordinator(
         # Set summer mode to 'auto' to pass control back to the boiler
         summer_entity = self._controller.config.summer_mode_entity
         if summer_entity:
+            # Track expected state for external change detection
+            self._expected_states[summer_entity] = SummerMode.AUTO
+
             await self.hass.services.async_call(
                 Platform.SELECT,
                 SERVICE_SELECT_OPTION,
@@ -842,6 +924,9 @@ class UFHControllerDataUpdateCoordinator(
             )
             return
 
+        # Track expected state for external change detection
+        self._expected_states[entity_id] = summer_mode
+
         # Call select service to change mode
         await self.hass.services.async_call(
             Platform.SELECT,
@@ -871,6 +956,9 @@ class UFHControllerDataUpdateCoordinator(
                 entity_id,
             )
             return
+
+        # Track expected state for external change detection
+        self._expected_states[entity_id] = "on" if turn_on else "off"
 
         await self.hass.services.async_call(
             Platform.SWITCH,
@@ -1018,6 +1106,9 @@ class UFHControllerDataUpdateCoordinator(
             len(old_zone_ids),
             len(new_zone_ids),
         )
+
+        # Re-setup listeners in case controller entities changed
+        self._async_setup_listeners()
 
         # Trigger refresh to update entities with new config
         await self.async_request_refresh()

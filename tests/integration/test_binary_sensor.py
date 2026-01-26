@@ -275,14 +275,15 @@ async def test_flush_request_off_when_flush_disabled(
     mock_temp_sensor: None,
 ) -> None:
     """Test flush_request is OFF when flush_enabled is False."""
+    hass.states.async_set("binary_sensor.dhw_active", "on")
+
     mock_config_entry.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
 
     coordinator = mock_config_entry.runtime_data.coordinator
 
-    # Set DHW active but flush NOT enabled
-    hass.states.async_set("binary_sensor.dhw_active", "on")
+    # Set flush NOT enabled
     coordinator.controller.state.flush_enabled = False
     await coordinator.async_refresh()
     await hass.async_block_till_done()
@@ -298,14 +299,15 @@ async def test_flush_request_off_during_dhw_with_flush_enabled(
     mock_temp_sensor: None,
 ) -> None:
     """Test flush_request is OFF during DHW active."""
+    hass.states.async_set("binary_sensor.dhw_active", "on")
+
     mock_config_entry.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
 
     coordinator = mock_config_entry.runtime_data.coordinator
 
-    # Set DHW active and flush enabled
-    hass.states.async_set("binary_sensor.dhw_active", "on")
+    # Set flush enabled
     coordinator.controller.state.flush_enabled = True
     await coordinator.async_refresh()
     await hass.async_block_till_done()
@@ -321,6 +323,8 @@ async def test_flush_request_on_during_post_dhw_period(
     mock_temp_sensor: None,
 ) -> None:
     """Test flush_request is ON during post-DHW flush period."""
+    hass.states.async_set("binary_sensor.dhw_active", "off")
+
     mock_config_entry.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
@@ -328,7 +332,6 @@ async def test_flush_request_on_during_post_dhw_period(
     coordinator = mock_config_entry.runtime_data.coordinator
 
     # Set flush_request to True (simulates post-DHW flush period)
-    hass.states.async_set("binary_sensor.dhw_active", "off")
     coordinator.controller.state.flush_enabled = True
     coordinator.controller.state.flush_request = True
     coordinator.async_set_updated_data(coordinator._build_state_dict())
