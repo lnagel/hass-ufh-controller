@@ -15,9 +15,17 @@ Timing parameters control the scheduling, valve operation, and observation windo
 
 The observation period defines the time window used for quota-based valve scheduling. Each zone is allocated a "quota" of valve-on time based on its PID-calculated duty cycle, and this quota is distributed across the observation period.
 
-**How it works:** Observation periods are aligned to even hours (00:00, 02:00, 04:00, etc.). When an observation period ends, a new one begins and all zone quotas reset. The controller calculates how much time each zone's valve has been open during the current period (`used_duration`) and compares it to how much time it should be open (`requested_duration = duty_cycle% × observation_period`).
+**How it works:** Observation periods are aligned to midnight and use the exact configured duration. When an observation period ends, a new one begins and all zone quotas reset. The controller calculates how much time each zone's valve has been open during the current period (`used_duration`) and compares it to how much time it should be open (`requested_duration = duty_cycle% × observation_period`).
 
-**Examples:**
+**Period alignment examples:**
+- 2-hour (7200s): periods start at 00:00, 02:00, 04:00, 06:00, etc.
+- 2.5-hour (9000s): periods start at 00:00, 02:30, 05:00, 07:30, 10:00, etc.
+- 1.5-hour (5400s): periods start at 00:00, 01:30, 03:00, 04:30, 06:00, etc.
+- 30-minute (1800s): periods start at 00:00, 00:30, 01:00, 01:30, etc.
+
+**Note:** When a period doesn't divide evenly into 24 hours, the last period of the day will be shorter (truncated at midnight). The next day starts fresh from midnight.
+
+**Quota example:**
 - With a 2-hour (7200s) observation period and a zone duty cycle of 50%, the zone's valve should be open for 3600 seconds (1 hour) during that period.
 - If a zone has been on for 2000 seconds already and needs 3600 total, it still has 1600 seconds of quota remaining and will be allowed to turn on again.
 
