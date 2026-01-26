@@ -1,6 +1,7 @@
 """Test valve state synchronization with external changes."""
 
 import logging
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -9,11 +10,54 @@ from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant, ServiceCall
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.ufh_controller.const import ValveState
+from custom_components.ufh_controller.const import (
+    DEFAULT_PID,
+    DEFAULT_SETPOINT,
+    DEFAULT_TIMING,
+    DOMAIN,
+    SUBENTRY_TYPE_ZONE,
+    ValveState,
+)
 from custom_components.ufh_controller.coordinator import (
     UFHControllerDataUpdateCoordinator,
 )
 from custom_components.ufh_controller.core.zone import ZoneAction
+
+
+@pytest.fixture
+def mock_config_entry_with_heat_request() -> MockConfigEntry:
+    """Return a config entry with heat_request_entity configured."""
+    zone_data: dict[str, Any] = {
+        "id": "zone1",
+        "name": "Test Zone 1",
+        "circuit_type": "regular",
+        "temp_sensor": "sensor.zone1_temp",
+        "valve_switch": "switch.zone1_valve",
+        "setpoint": DEFAULT_SETPOINT,
+        "pid": DEFAULT_PID,
+        "window_sensors": [],
+    }
+    return MockConfigEntry(
+        domain=DOMAIN,
+        title="Test Controller",
+        data={
+            "name": "Test Controller",
+            "controller_id": "test_controller",
+            "heat_request_entity": "switch.heat_request",
+        },
+        options={"timing": DEFAULT_TIMING},
+        entry_id="test_entry_id_hr",
+        unique_id="test_controller_hr",
+        subentries_data=[
+            {
+                "data": zone_data,
+                "subentry_id": "subentry_zone1",
+                "subentry_type": SUBENTRY_TYPE_ZONE,
+                "title": "Test Zone 1",
+                "unique_id": "zone1",
+            }
+        ],
+    )
 
 
 async def test_valve_restored_when_externally_turned_off(
@@ -126,9 +170,22 @@ async def test_stay_off_updates_valve_state(
         return_value=mock_recorder,
     ):
         # First refresh: valve OFF, zone doesn't need heat → STAY_OFF
+        # Force-update sends command even if state matches (dead-man-switch support)
         await coordinator.async_refresh()
 
-    # No service call - valve already in correct state
+    # First cycle force-update triggers service call even for STAY_OFF
+    assert ("turn_off", "switch.zone1_valve") in switch_calls
+    switch_calls.clear()
+
+    # Second refresh in same observation period - no force-update needed
+    freezer.tick(60)
+    with patch(
+        "homeassistant.components.recorder.get_instance",
+        return_value=mock_recorder,
+    ):
+        await coordinator.async_refresh()
+
+    # No service call - valve already in correct state and force-update done
     assert len(switch_calls) == 0
     # Verify valve_state is tracked as OFF
     runtime = coordinator._controller.get_zone_runtime("zone1")
@@ -332,3 +389,57 @@ async def test_valve_not_found_logs_warning(
         "not found" in record.message.lower() and "switch.zone1_valve" in record.message
         for record in caplog.records
     )
+
+
+async def test_force_update_sends_heat_request_even_when_matching(
+    hass: HomeAssistant,
+    mock_config_entry_with_heat_request: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """Test that force-update sends heat_request command even if state matches."""
+    freezer.move_to("2026-01-14 02:00:00+00:00")
+
+    mock_config_entry_with_heat_request.add_to_hass(hass)
+    # Zone doesn't need heat (temp above setpoint) - heat_request will be off
+    hass.states.async_set("sensor.zone1_temp", "25.0")
+    hass.states.async_set("switch.zone1_valve", "off")
+    # Heat request already off - matches expected state
+    hass.states.async_set("switch.heat_request", "off")
+
+    switch_calls: list[tuple[str, str]] = []
+
+    async def track_switch_call(call: ServiceCall) -> None:
+        switch_calls.append((call.service, call.data.get("entity_id", "")))
+
+    hass.services.async_register("switch", "turn_on", track_switch_call)
+    hass.services.async_register("switch", "turn_off", track_switch_call)
+
+    coordinator = UFHControllerDataUpdateCoordinator(
+        hass, mock_config_entry_with_heat_request
+    )
+
+    mock_recorder = MagicMock()
+    mock_recorder.async_add_executor_job = AsyncMock(return_value={})
+
+    with patch(
+        "homeassistant.components.recorder.get_instance",
+        return_value=mock_recorder,
+    ):
+        # First refresh: force-update sends command even though state matches
+        await coordinator.async_refresh()
+
+    # First cycle force-update triggers service call for heat_request
+    # (turn_off because zone doesn't need heat)
+    assert ("turn_off", "switch.heat_request") in switch_calls
+    switch_calls.clear()
+
+    # Second refresh in same observation period - no force-update
+    freezer.tick(60)
+    with patch(
+        "homeassistant.components.recorder.get_instance",
+        return_value=mock_recorder,
+    ):
+        await coordinator.async_refresh()
+
+    # No heat_request call - state matches and force-update already done
+    assert ("turn_off", "switch.heat_request") not in switch_calls
