@@ -231,24 +231,32 @@ class UFHControllerDataUpdateCoordinator(
         self._async_setup_listeners()
 
     def _async_setup_listeners(self) -> None:
-        """Set up state change listeners for controller-level entities."""
+        """Set up state change listeners for controller and zone entities."""
         # Unsubscribe from old listeners if they exist (for config reload)
         if self._listener_unsub is not None:
             self._listener_unsub()
             self._listener_unsub = None
 
-        # Collect all configured entity IDs (skip None/empty)
+        # Collect all configured entity IDs from config entry (skip None/empty)
         entity_ids: list[str] = []
-        config = self._controller.config
+        entry = self.config_entry
 
-        if config.heat_request_entity:
-            entity_ids.append(config.heat_request_entity)
-        if config.summer_mode_entity:
-            entity_ids.append(config.summer_mode_entity)
-        if config.dhw_active_entity:
-            entity_ids.append(config.dhw_active_entity)
-        if config.circulation_entity:
-            entity_ids.append(config.circulation_entity)
+        # Controller-level entities
+        if heat_request := entry.data.get("heat_request_entity"):
+            entity_ids.append(heat_request)
+        if summer_mode := entry.data.get("summer_mode_entity"):
+            entity_ids.append(summer_mode)
+        if dhw_active := entry.data.get("dhw_active_entity"):
+            entity_ids.append(dhw_active)
+        if circulation := entry.data.get("circulation_entity"):
+            entity_ids.append(circulation)
+
+        # Zone valve switches from subentries
+        entity_ids.extend(
+            subentry.data["valve_switch"]
+            for subentry in entry.subentries.values()
+            if subentry.subentry_type == SUBENTRY_TYPE_ZONE
+        )
 
         if not entity_ids:
             return
@@ -258,13 +266,11 @@ class UFHControllerDataUpdateCoordinator(
             self.hass, entity_ids, self._on_external_entity_change
         )
         self.config_entry.async_on_unload(self._listener_unsub)
-        LOGGER.debug(
-            "Subscribed to state changes for controller entities: %s", entity_ids
-        )
+        LOGGER.debug("Subscribed to state changes for entities: %s", entity_ids)
 
     @callback
     def _on_external_entity_change(self, event: Event[EventStateChangedData]) -> None:
-        """Handle state changes for controller-level entities."""
+        """Handle state changes for monitored entities."""
         entity_id = event.data["entity_id"]
         new_state = event.data["new_state"]
 

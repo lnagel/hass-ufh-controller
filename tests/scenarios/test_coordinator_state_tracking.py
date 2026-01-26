@@ -202,3 +202,78 @@ async def test_external_circulation_state_change_triggers_refresh(
 
         # Should trigger refresh since circulation is a read-only entity
         mock_refresh.assert_called_once()
+
+
+async def test_external_zone_valve_change_triggers_refresh(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """
+    Test that external zone valve state change triggers coordinator refresh.
+
+    When someone manually toggles a zone valve switch, the coordinator should
+    detect this as an external change and request a refresh.
+    """
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = mock_config_entry.runtime_data.coordinator
+
+    # Set initial valve state
+    hass.states.async_set("switch.zone1_valve", "off")
+    await hass.async_block_till_done()
+
+    # No expected state set (simulates external change)
+    coordinator._expected_states["switch.zone1_valve"] = None
+
+    # Monitor refresh calls
+    with patch.object(
+        coordinator, "async_request_refresh", new_callable=AsyncMock
+    ) as mock_refresh:
+        # External change to valve state (someone manually turned it on)
+        hass.states.async_set("switch.zone1_valve", "on")
+        await hass.async_block_till_done()
+
+        # Should trigger refresh since this was an external change
+        mock_refresh.assert_called_once()
+
+
+async def test_self_initiated_zone_valve_change_no_extra_refresh(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """
+    Test that self-initiated zone valve changes don't trigger extra refresh.
+
+    When the coordinator turns a valve on/off, it sets the expected state first.
+    The subsequent state change event should be recognized as our own change
+    and not trigger an additional refresh.
+    """
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = mock_config_entry.runtime_data.coordinator
+
+    # Set initial valve state
+    hass.states.async_set("switch.zone1_valve", "off")
+    await hass.async_block_till_done()
+
+    # Simulate the coordinator setting expected state before calling service
+    # (mimics what _call_switch_service does)
+    coordinator._expected_states["switch.zone1_valve"] = "on"
+
+    # Monitor refresh calls
+    with patch.object(
+        coordinator, "async_request_refresh", new_callable=AsyncMock
+    ) as mock_refresh:
+        # State change that matches our expectation (self-initiated)
+        hass.states.async_set("switch.zone1_valve", "on")
+        await hass.async_block_till_done()
+
+        # Should NOT trigger refresh since this was our own change
+        mock_refresh.assert_not_called()
+
+        # Verify expected state was cleared
+        assert coordinator._expected_states.get("switch.zone1_valve") is None
