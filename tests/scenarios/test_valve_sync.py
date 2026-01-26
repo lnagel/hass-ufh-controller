@@ -443,3 +443,17 @@ async def test_force_update_sends_heat_request_even_when_matching(
 
     # No heat_request call - state matches and force-update already done
     assert ("turn_off", "switch.heat_request") not in switch_calls
+    switch_calls.clear()
+
+    # Third refresh: external change causes state mismatch
+    # Simulate external system turning heat_request on
+    hass.states.async_set("switch.heat_request", "on")
+    freezer.tick(60)
+    with patch(
+        "homeassistant.components.recorder.get_instance",
+        return_value=mock_recorder,
+    ):
+        await coordinator.async_refresh()
+
+    # Service call made because state doesn't match (force_update=False but mismatch)
+    assert ("turn_off", "switch.heat_request") in switch_calls
