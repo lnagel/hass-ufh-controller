@@ -2,20 +2,14 @@
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from homeassistant.helpers.device_registry import DeviceInfo
 
-from .const import DOMAIN
+from .const import DOMAIN, VERSION
 
 if TYPE_CHECKING:
     from .coordinator import UFHControllerDataUpdateCoordinator
-
-# Load version from manifest.json once at module load
-_MANIFEST_PATH = Path(__file__).parent / "manifest.json"
-_VERSION = json.loads(_MANIFEST_PATH.read_text())["version"]
 
 
 def get_controller_device_info(
@@ -27,7 +21,7 @@ def get_controller_device_info(
         name=coordinator.config_entry.data.get("name", "Underfloor Heating Controller"),
         manufacturer="Underfloor Heating Controller",
         model="Heating Controller",
-        sw_version=_VERSION,
+        sw_version=VERSION,
     )
 
 
