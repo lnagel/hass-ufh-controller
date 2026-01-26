@@ -18,8 +18,9 @@ def get_observation_start(
     """
     Get the start time of the current observation period.
 
-    Observation periods are aligned to even hours (00:00, 02:00, 04:00, etc.)
-    for a 2-hour default period.
+    Observation periods are aligned to midnight and use the exact configured
+    duration. For example, with a 2.5-hour (9000s) period, periods start at
+    00:00, 02:30, 05:00, 07:30, etc.
 
     Args:
         now: Current datetime.
@@ -29,13 +30,10 @@ def get_observation_start(
         Start datetime of the current observation period.
 
     """
-    period_hours = observation_period // 3600
-    if period_hours <= 0:
-        period_hours = 2
-
-    hour = now.hour
-    period_hour = hour - (hour % period_hours)
-    return now.replace(hour=period_hour, minute=0, second=0, microsecond=0)
+    midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    seconds_since_midnight = (now - midnight).total_seconds()
+    period_index = int(seconds_since_midnight // observation_period)
+    return midnight + timedelta(seconds=period_index * observation_period)
 
 
 def get_valve_open_window(
