@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from enum import StrEnum
 from logging import Logger, getLogger
+from pathlib import Path
 from typing import TYPE_CHECKING, TypedDict
 
 from homeassistant.const import STATE_OFF, STATE_ON, STATE_UNAVAILABLE, STATE_UNKNOWN
@@ -15,6 +17,12 @@ if TYPE_CHECKING:
 LOGGER: Logger = getLogger(__package__)
 
 DOMAIN = "ufh_controller"
+
+# Load version from manifest.json once at module load
+MANIFEST_PATH = Path(__file__).parent / "manifest.json"
+VERSION = json.loads(MANIFEST_PATH.read_text())["version"]
+
+# Subentry types for config entry organization
 SUBENTRY_TYPE_CONTROLLER = "controller"
 SUBENTRY_TYPE_ZONE = "zone"
 
