@@ -385,7 +385,6 @@ class UFHControllerDataUpdateCoordinator(
         ).total_seconds()
 
         # Determine if force-update is needed (once per observation cycle)
-        # This ensures external dead-man-switches receive commands regularly
         force_update = (
             self._last_force_update is None
             or self._last_force_update < self._controller.state.observation_start
@@ -799,7 +798,6 @@ class UFHControllerDataUpdateCoordinator(
         if entity_id is None:
             return
 
-        # Check current entity state - only update if different (unless force_update)
         if not force_update:
             current_state = self.hass.states.get(entity_id)
             if current_state is not None:
@@ -817,11 +815,6 @@ class UFHControllerDataUpdateCoordinator(
 
         Safety: If ANY zone is in fail-safe, summer mode is forced to 'auto'
         to allow physical fallback valves to receive heated water.
-
-        Args:
-            summer_mode: The summer mode value to set.
-            force_update: If True, send command even if entity is in correct state.
-
         """
         entity_id = self._controller.config.summer_mode_entity
         if entity_id is None:
@@ -834,7 +827,6 @@ class UFHControllerDataUpdateCoordinator(
                 "Zone(s) in fail-safe, forcing summer mode to 'auto' for fallbacks"
             )
 
-        # Check current state (unless force_update)
         current_state = self.hass.states.get(entity_id)
         if current_state is None:
             return
