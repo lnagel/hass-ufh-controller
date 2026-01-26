@@ -44,12 +44,10 @@ This prevents the common problem of integral windup where the integral term accu
 
 ### Time Windows
 
-| Window | Duration | Calculation |
-|--------|----------|-------------|
-| **Observation Period** | 2 hours (default) | Aligned to even hours (00:00, 02:00, 04:00...) |
-| **Valve Open Detection** | 3.5 minutes | Fixed window for detecting valve fully open |
-
-**Observation Period Alignment:** Periods always start at even hours (midnight, 2am, 4am, etc.) regardless of when the controller started. This ensures consistent quota scheduling and predictable behavior.
+| Window | Duration | Calculation                                  |
+|--------|----------|----------------------------------------------|
+| **Observation Period** | 2 hours (default) | Aligned to midnight (00:00, 02:00, 04:00...) |
+| **Valve Open Detection** | 3.5 minutes | Fixed window for detecting valve fully open  |
 
 ### Zone Decision Tree
 

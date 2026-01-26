@@ -284,7 +284,7 @@ uv run bump-my-version bump major  # 0.1.3 → 1.0.0
 - Integral term has anti-windup protection
 
 ### Observation Period
-- 2-hour windows aligned to even hours (00:00, 02:00, 04:00...)
+- 2-hour windows aligned to midnight by default (00:00, 02:00, 04:00...)
 - Zones get quota based on duty cycle average
 - Prevents rapid valve cycling
 
