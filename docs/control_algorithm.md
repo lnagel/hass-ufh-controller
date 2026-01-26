@@ -49,7 +49,7 @@ This prevents the common problem of integral windup where the integral term accu
 | **Observation Period** | 2 hours (default) | Aligned to even hours (00:00, 02:00, 04:00...) |
 | **Valve Open Detection** | 3.5 minutes | Fixed window for detecting valve fully open |
 
-**Observation Period Alignment:** Periods always start at even hours (midnight, 2am, 4am, etc.) regardless of when the controller started. This ensures consistent quota scheduling and predictable behavior. Commands are re-sent at least once per period for external dead-man-switch compatibility.
+**Observation Period Alignment:** Periods always start at even hours (midnight, 2am, 4am, etc.) regardless of when the controller started. This ensures consistent quota scheduling and predictable behavior.
 
 ### Zone Decision Tree
 

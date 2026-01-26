@@ -15,6 +15,8 @@ Timing parameters control the scheduling, valve operation, and observation windo
 
 The observation period defines the time window used for quota-based valve scheduling. Each zone is allocated a "quota" of valve-on time based on its PID-calculated duty cycle, and this quota is distributed across the observation period.
 
+Commands are re-sent at least once per period for external dead-man-switch compatibility.
+
 **How it works:** Observation periods are aligned to midnight and use the exact configured duration. When an observation period ends, a new one begins and all zone quotas reset. The controller calculates how much time each zone's valve has been open during the current period (`used_duration`) and compares it to how much time it should be open (`requested_duration = duty_cycle% × observation_period`).
 
 **Note:** When a period doesn't divide evenly into 24 hours, the last period of the day will be shorter (truncated at midnight). The next day starts fresh from midnight.
