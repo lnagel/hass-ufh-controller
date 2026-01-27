@@ -294,6 +294,7 @@ class ZoneRuntime:
         *,
         temp_unavailable: bool,
         recorder_failure: bool,
+        valve_unavailable: bool,
         fail_safe_timeout: int,
     ) -> ZoneStatusTransition:
         """
@@ -306,13 +307,14 @@ class ZoneRuntime:
             now: Current timestamp.
             temp_unavailable: Whether temperature reading is unavailable.
             recorder_failure: Whether Recorder query failed.
+            valve_unavailable: Whether valve entity is unavailable or unknown.
             fail_safe_timeout: Seconds before entering fail-safe mode.
 
         Returns:
             ZoneStatusTransition indicating what happened (for caller to log).
 
         """
-        if temp_unavailable or recorder_failure:
+        if temp_unavailable or recorder_failure or valve_unavailable:
             # Zone has a failure - increment counter and check for fail-safe
             self.state.consecutive_failures += 1
 

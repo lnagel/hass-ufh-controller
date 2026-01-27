@@ -377,6 +377,7 @@ async def test_crash_recovery_preserves_valve_off_when_duty_cycle_zero(
 
     # Temperature at setpoint
     hass.states.async_set("sensor.zone1_temp", "20.5")
+    hass.states.async_set("switch.zone1_valve", "off")
 
     with patch(
         "homeassistant.helpers.storage.Store.async_load",
@@ -1006,8 +1007,9 @@ async def test_valve_actions_execute_after_initialization(
     After temperature sensors provide readings and zones transition to NORMAL,
     the controller should evaluate and execute valve actions.
     """
-    # Set up temperature sensor - zone will transition to NORMAL
+    # Set up temperature sensor and valve - zone will transition to NORMAL
     hass.states.async_set("sensor.zone1_temp", "18.0")  # Cold room
+    hass.states.async_set("switch.zone1_valve", "off")
 
     # Set up stored state with high duty cycle to ensure valve should turn on
     stored_data = {
