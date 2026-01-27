@@ -118,6 +118,7 @@ Sensor failures in one zone don't bring down your heating:
 - **[Control Algorithm](docs/control_algorithm.md)** - PID controller and scheduling details
 - **[Fault Isolation](docs/fault_isolation.md)** - How zone failures are handled
 - **[Configuration](docs/configuration.md)** - All parameters explained
+- **[Tasmota Relay Configuration](docs/tasmota.md)** - Setting up Tasmota-controlled relay boards
 
 ## License
 
