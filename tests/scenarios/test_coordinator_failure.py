@@ -1,5 +1,6 @@
 """Tests for Coordinator failure handling."""
 
+import logging
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -680,3 +681,230 @@ class TestZoneIsolation:
         # Check zone counts
         assert "zones_degraded" in state_dict
         assert "zones_fail_safe" in state_dict
+
+
+class TestValveUnavailability:
+    """Test valve entity unavailability triggers degraded/fail-safe."""
+
+    async def test_valve_unavailable_sets_zone_degraded(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+    ) -> None:
+        """Test that valve entity state 'unavailable' sets zone to degraded."""
+        mock_config_entry.add_to_hass(hass)
+        hass.states.async_set("sensor.zone1_temp", "20.5")
+        hass.states.async_set("switch.zone1_valve", "unavailable")
+
+        coordinator = UFHControllerDataUpdateCoordinator(hass, mock_config_entry)
+
+        # First, set zone to NORMAL (as if it had a successful update)
+        runtime = coordinator._controller.get_zone_runtime("zone1")
+        assert runtime is not None
+        runtime.state.zone_status = ZoneStatus.NORMAL
+        runtime.state.last_successful_update = datetime.now(UTC)
+
+        now = datetime.now(UTC)
+        coordinator._controller.state.observation_start = now - timedelta(hours=1)
+
+        mock_recorder = MagicMock()
+        mock_recorder.async_add_executor_job = AsyncMock(return_value={})
+
+        with patch(
+            "homeassistant.components.recorder.get_instance",
+            return_value=mock_recorder,
+        ):
+            await coordinator._update_zone("zone1", now, 60.0)
+
+        assert runtime.state.zone_status == ZoneStatus.DEGRADED
+
+    async def test_valve_not_found_sets_zone_degraded(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+    ) -> None:
+        """Test that valve entity not found (None) sets zone to degraded."""
+        mock_config_entry.add_to_hass(hass)
+        hass.states.async_set("sensor.zone1_temp", "20.5")
+        # Do NOT set valve entity - hass.states.get will return None
+
+        coordinator = UFHControllerDataUpdateCoordinator(hass, mock_config_entry)
+
+        # Set zone to NORMAL
+        runtime = coordinator._controller.get_zone_runtime("zone1")
+        assert runtime is not None
+        runtime.state.zone_status = ZoneStatus.NORMAL
+        runtime.state.last_successful_update = datetime.now(UTC)
+
+        now = datetime.now(UTC)
+        coordinator._controller.state.observation_start = now - timedelta(hours=1)
+
+        mock_recorder = MagicMock()
+        mock_recorder.async_add_executor_job = AsyncMock(return_value={})
+
+        with patch(
+            "homeassistant.components.recorder.get_instance",
+            return_value=mock_recorder,
+        ):
+            await coordinator._update_zone("zone1", now, 60.0)
+
+        # Valve not found maps to UNAVAILABLE via ValveState.from_ha_state(None)
+        assert runtime.state.valve_state == ValveState.UNAVAILABLE
+        assert runtime.state.zone_status == ZoneStatus.DEGRADED
+
+    async def test_valve_unknown_sets_zone_degraded(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+    ) -> None:
+        """Test that valve entity state 'unknown' sets zone to degraded."""
+        mock_config_entry.add_to_hass(hass)
+        hass.states.async_set("sensor.zone1_temp", "20.5")
+        hass.states.async_set("switch.zone1_valve", "unknown")
+
+        coordinator = UFHControllerDataUpdateCoordinator(hass, mock_config_entry)
+
+        # Set zone to NORMAL
+        runtime = coordinator._controller.get_zone_runtime("zone1")
+        assert runtime is not None
+        runtime.state.zone_status = ZoneStatus.NORMAL
+        runtime.state.last_successful_update = datetime.now(UTC)
+
+        now = datetime.now(UTC)
+        coordinator._controller.state.observation_start = now - timedelta(hours=1)
+
+        mock_recorder = MagicMock()
+        mock_recorder.async_add_executor_job = AsyncMock(return_value={})
+
+        with patch(
+            "homeassistant.components.recorder.get_instance",
+            return_value=mock_recorder,
+        ):
+            await coordinator._update_zone("zone1", now, 60.0)
+
+        assert runtime.state.valve_state == ValveState.UNKNOWN
+        assert runtime.state.zone_status == ZoneStatus.DEGRADED
+
+    async def test_valve_unavailable_fail_safe_after_one_hour(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+    ) -> None:
+        """Test that valve unavailable for >1 hour triggers fail-safe."""
+        mock_config_entry.add_to_hass(hass)
+        hass.states.async_set("sensor.zone1_temp", "20.5")
+        hass.states.async_set("switch.zone1_valve", "unavailable")
+
+        coordinator = UFHControllerDataUpdateCoordinator(hass, mock_config_entry)
+
+        # Set zone's last_successful_update to more than 1 hour ago
+        runtime = coordinator._controller.get_zone_runtime("zone1")
+        assert runtime is not None
+        runtime.state.last_successful_update = datetime.now(UTC) - timedelta(
+            seconds=FAIL_SAFE_TIMEOUT + 60
+        )
+
+        now = datetime.now(UTC)
+        coordinator._controller.state.observation_start = now - timedelta(hours=1)
+
+        mock_recorder = MagicMock()
+        mock_recorder.async_add_executor_job = AsyncMock(return_value={})
+
+        with patch(
+            "homeassistant.components.recorder.get_instance",
+            return_value=mock_recorder,
+        ):
+            await coordinator._update_zone("zone1", now, 60.0)
+
+        assert runtime.state.zone_status == ZoneStatus.FAIL_SAFE
+
+    async def test_valve_recovery_from_unavailable(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+    ) -> None:
+        """Test zone recovers from degraded when valve becomes available."""
+        mock_config_entry.add_to_hass(hass)
+        hass.states.async_set("sensor.zone1_temp", "20.5")
+        hass.states.async_set("switch.zone1_valve", "off")
+
+        coordinator = UFHControllerDataUpdateCoordinator(hass, mock_config_entry)
+
+        now = datetime.now(UTC)
+        coordinator._controller.state.observation_start = now - timedelta(hours=1)
+
+        mock_recorder = MagicMock()
+        mock_recorder.async_add_executor_job = AsyncMock(return_value={})
+
+        with patch(
+            "homeassistant.components.recorder.get_instance",
+            return_value=mock_recorder,
+        ):
+            # First update: successful, zone goes to NORMAL
+            await coordinator._update_zone("zone1", now, 60.0)
+
+        runtime = coordinator._controller.get_zone_runtime("zone1")
+        assert runtime is not None
+        assert runtime.state.zone_status == ZoneStatus.NORMAL
+
+        # Make valve unavailable
+        hass.states.async_set("switch.zone1_valve", "unavailable")
+
+        with patch(
+            "homeassistant.components.recorder.get_instance",
+            return_value=mock_recorder,
+        ):
+            # Second update: valve unavailable → degraded
+            await coordinator._update_zone("zone1", now + timedelta(seconds=60), 60.0)
+
+        assert runtime.state.zone_status == ZoneStatus.DEGRADED
+
+        # Restore valve
+        hass.states.async_set("switch.zone1_valve", "off")
+
+        with patch(
+            "homeassistant.components.recorder.get_instance",
+            return_value=mock_recorder,
+        ):
+            # Third update: valve available again → recovered to NORMAL
+            await coordinator._update_zone("zone1", now + timedelta(seconds=120), 60.0)
+
+        assert runtime.state.zone_status == ZoneStatus.NORMAL
+
+
+class TestTempEntityNotFound:
+    """Test temperature entity not found warning."""
+
+    async def test_temp_entity_not_found_logs_warning(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        caplog: object,
+    ) -> None:
+        """Test that temp entity not found logs a warning."""
+        mock_config_entry.add_to_hass(hass)
+        # Do NOT set temp sensor entity - hass.states.get will return None
+        hass.states.async_set("switch.zone1_valve", "off")
+
+        coordinator = UFHControllerDataUpdateCoordinator(hass, mock_config_entry)
+
+        now = datetime.now(UTC)
+        coordinator._controller.state.observation_start = now - timedelta(hours=1)
+
+        mock_recorder = MagicMock()
+        mock_recorder.async_add_executor_job = AsyncMock(return_value={})
+
+        with (
+            patch(
+                "homeassistant.components.recorder.get_instance",
+                return_value=mock_recorder,
+            ),
+            caplog.at_level(logging.WARNING),  # type: ignore[union-attr]
+        ):
+            await coordinator._update_zone("zone1", now, 60.0)
+
+        assert any(
+            "Temperature entity sensor.zone1_temp not found for zone zone1"
+            in record.message
+            for record in caplog.records  # type: ignore[union-attr]
+        )

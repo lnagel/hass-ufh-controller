@@ -321,12 +321,14 @@ def mock_setup_entry() -> Generator[None]:
 @pytest.fixture
 async def mock_temp_sensor(hass: HomeAssistant) -> None:
     """
-    Set up mock temperature sensor state.
+    Set up mock temperature sensor and valve entity states.
 
     Use this fixture in tests that need the climate entity to be available.
-    Without a temperature reading, climate entities are marked unavailable.
+    Without a temperature reading and available valve entity, zones cannot
+    reach NORMAL status and climate entities are marked unavailable.
     """
     hass.states.async_set("sensor.zone1_temp", "20.5")
+    hass.states.async_set("switch.zone1_valve", "off")
 
 
 @pytest.fixture(autouse=True)

@@ -34,7 +34,7 @@ Coordinator._async_update_data()
     │       ├─► Query Recorder for historical averages
     │       ├─► zone.update_historical(period_avg, open_avg, ...)
     │       ├─► Sync valve state from HA entity
-    │       └─► zone.update_failure_state(now, temp_unavail, recorder_fail)
+    │       └─► zone.update_failure_state(now, temp_unavail, recorder_fail, valve_unavail)
     │
     ├─► controller.evaluate(now) → ControllerAction
     │       ├─► Evaluate regular zones first

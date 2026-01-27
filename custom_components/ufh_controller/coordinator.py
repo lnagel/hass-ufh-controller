@@ -610,6 +610,11 @@ class UFHControllerDataUpdateCoordinator(
                 )
         else:
             temp_unavailable = True
+            LOGGER.warning(
+                "Temperature entity %s not found for zone %s",
+                runtime.config.temp_sensor,
+                zone_id,
+            )
 
         # Update PID controller
         runtime.update_pid(dt, self._controller.mode)
@@ -709,6 +714,12 @@ class UFHControllerDataUpdateCoordinator(
         current_valve_state = self.hass.states.get(runtime.config.valve_switch)
         runtime.state.valve_state = ValveState.from_ha_state(current_valve_state)
 
+        # Determine if valve entity is unavailable or unknown
+        valve_unavailable = runtime.state.valve_state in (
+            ValveState.UNAVAILABLE,
+            ValveState.UNKNOWN,
+        )
+
         # Log if valve entity is unavailable or unknown
         if runtime.state.valve_state == ValveState.UNAVAILABLE:
             LOGGER.warning(
@@ -729,6 +740,7 @@ class UFHControllerDataUpdateCoordinator(
             now,
             temp_unavailable=temp_unavailable,
             recorder_failure=recorder_failure,
+            valve_unavailable=valve_unavailable,
             fail_safe_timeout=FAIL_SAFE_TIMEOUT,
         )
         self._log_zone_status_transition(
@@ -736,6 +748,7 @@ class UFHControllerDataUpdateCoordinator(
             transition,
             temp_unavailable=temp_unavailable,
             recorder_failure=recorder_failure,
+            valve_unavailable=valve_unavailable,
         )
 
     def _log_zone_status_transition(
@@ -745,6 +758,7 @@ class UFHControllerDataUpdateCoordinator(
         *,
         temp_unavailable: bool,
         recorder_failure: bool,
+        valve_unavailable: bool,
     ) -> None:
         """Log zone status transitions (integration layer's responsibility)."""
         if transition == ZoneStatusTransition.ENTERED_FAIL_SAFE:
@@ -756,10 +770,11 @@ class UFHControllerDataUpdateCoordinator(
         elif transition == ZoneStatusTransition.ENTERED_DEGRADED:
             LOGGER.warning(
                 "Zone %s entering degraded mode: temp_unavailable=%s, "
-                "recorder_failure=%s",
+                "recorder_failure=%s, valve_unavailable=%s",
                 zone_id,
                 temp_unavailable,
                 recorder_failure,
+                valve_unavailable,
             )
         elif transition == ZoneStatusTransition.RECOVERED:
             LOGGER.info("Zone %s recovered to normal operation", zone_id)

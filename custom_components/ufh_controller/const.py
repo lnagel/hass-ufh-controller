@@ -67,7 +67,7 @@ class ZoneStatus(StrEnum):
 
     INITIALIZING = "initializing"  # Zone starting up, awaiting first successful update
     NORMAL = "normal"  # Zone operating normally with valid temperature readings
-    DEGRADED = "degraded"  # Temp sensor unavailable or Recorder query failing
+    DEGRADED = "degraded"  # Temp sensor, valve, or Recorder unavailable
     FAIL_SAFE = "fail_safe"  # No successful update for >1 hour, valve forced closed
 
 
