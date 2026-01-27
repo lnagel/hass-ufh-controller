@@ -11,13 +11,13 @@ Each zone tracks its own operational status:
 | `initializing` | Zone starting up; awaiting first successful temperature reading |
 | `normal` | Zone operating normally with valid temperature readings |
 | `degraded` | Temperature sensor or valve entity unavailable; using last-known duty cycle |
-| `fail_safe` | No successful update for >1 hour; valve forced closed |
+| `fail_safe` | No successful update within timeout; valve forced closed |
 
 **Initializing:** No valve actions are taken until all zones have valid readings and exit initialization. Entities remain available using restored state from storage.
 
 **Degraded:** PID continues with cached demand, zone still responds to setpoint changes. Triggered by temperature sensor unavailability, valve entity unavailability, or Recorder query failure.
 
-**Fail-safe:** Valve forced closed, zone excluded from heating. Recovery requires successful temperature reading.
+**Fail-safe:** Valve forced closed, zone excluded from heating. During initialization (no prior successful update), fail-safe activates after 2 minutes of continuous failures to surface misconfigurations quickly. After normal operation, the timeout is 1 hour.
 
 ## Zone Isolation Guarantee
 
