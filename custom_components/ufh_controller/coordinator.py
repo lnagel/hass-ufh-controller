@@ -182,7 +182,6 @@ class UFHControllerDataUpdateCoordinator(
             name=data["name"],
             heat_request_entity=data.get("heat_request_entity"),
             dhw_active_entity=data.get("dhw_active_entity"),
-            circulation_entity=data.get("circulation_entity"),
             summer_mode_entity=data.get("summer_mode_entity"),
             timing=timing,
             zones=zones,
@@ -248,8 +247,6 @@ class UFHControllerDataUpdateCoordinator(
             entity_ids.append(summer_mode)
         if dhw_active := entry.data.get("dhw_active_entity"):
             entity_ids.append(dhw_active)
-        if circulation := entry.data.get("circulation_entity"):
-            entity_ids.append(circulation)
 
         # Zone valve switches from subentries
         entity_ids.extend(

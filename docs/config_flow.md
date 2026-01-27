@@ -20,7 +20,6 @@ To control the boiler, configure either a Heat Request Switch or Summer Mode Sel
 | controller_id | string | Auto | Unique ID (auto-generated from name) |
 | heat_request_entity | entity (switch) | No | Switch to signal heat demand to boiler |
 | dhw_active_entity | entity (binary_sensor) | No | Sensor indicating DHW tank is heating |
-| circulation_entity | entity (binary_sensor) | No | Sensor indicating circulation pump is running |
 | summer_mode_entity | entity (select) | No | Select to enable/disable boiler UFH circuit |
 
 On entry setup, a **controller subentry** is automatically created to:

@@ -46,7 +46,6 @@ CONF_NAME = "name"
 CONF_CONTROLLER_ID = "controller_id"
 CONF_HEAT_REQUEST_ENTITY = "heat_request_entity"
 CONF_DHW_ACTIVE_ENTITY = "dhw_active_entity"
-CONF_CIRCULATION_ENTITY = "circulation_entity"
 CONF_SUMMER_MODE_ENTITY = "summer_mode_entity"
 
 
@@ -552,7 +551,6 @@ class UFHControllerFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_CONTROLLER_ID: controller_id,
                     CONF_HEAT_REQUEST_ENTITY: user_input.get(CONF_HEAT_REQUEST_ENTITY),
                     CONF_DHW_ACTIVE_ENTITY: user_input.get(CONF_DHW_ACTIVE_ENTITY),
-                    CONF_CIRCULATION_ENTITY: user_input.get(CONF_CIRCULATION_ENTITY),
                     CONF_SUMMER_MODE_ENTITY: user_input.get(CONF_SUMMER_MODE_ENTITY),
                 },
                 options={
@@ -571,9 +569,6 @@ class UFHControllerFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                         selector.EntitySelectorConfig(domain="switch")
                     ),
                     vol.Optional(CONF_DHW_ACTIVE_ENTITY): selector.EntitySelector(
-                        selector.EntitySelectorConfig(domain="binary_sensor")
-                    ),
-                    vol.Optional(CONF_CIRCULATION_ENTITY): selector.EntitySelector(
                         selector.EntitySelectorConfig(domain="binary_sensor")
                     ),
                     vol.Optional(CONF_SUMMER_MODE_ENTITY): selector.EntitySelector(
@@ -626,7 +621,6 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
                 **self.config_entry.data,
                 CONF_HEAT_REQUEST_ENTITY: user_input.get(CONF_HEAT_REQUEST_ENTITY),
                 CONF_DHW_ACTIVE_ENTITY: user_input.get(CONF_DHW_ACTIVE_ENTITY),
-                CONF_CIRCULATION_ENTITY: user_input.get(CONF_CIRCULATION_ENTITY),
                 CONF_SUMMER_MODE_ENTITY: user_input.get(CONF_SUMMER_MODE_ENTITY),
             }
             self.hass.config_entries.async_update_entry(
@@ -656,14 +650,6 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
                         CONF_DHW_ACTIVE_ENTITY,
                         description={
                             "suggested_value": current_data.get(CONF_DHW_ACTIVE_ENTITY)
-                        },
-                    ): selector.EntitySelector(
-                        selector.EntitySelectorConfig(domain="binary_sensor")
-                    ),
-                    vol.Optional(
-                        CONF_CIRCULATION_ENTITY,
-                        description={
-                            "suggested_value": current_data.get(CONF_CIRCULATION_ENTITY)
                         },
                     ): selector.EntitySelector(
                         selector.EntitySelectorConfig(domain="binary_sensor")

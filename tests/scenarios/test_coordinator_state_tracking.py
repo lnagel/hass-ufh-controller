@@ -23,7 +23,6 @@ from custom_components.ufh_controller.coordinator import (
         ("binary_sensor.dhw_active", "off", "on"),
         ("switch.heat_request", "off", "on"),
         ("select.summer_mode", "winter", "summer"),
-        ("binary_sensor.circulation", "off", "on"),
         ("switch.zone1_valve", "off", "on"),
     ],
 )

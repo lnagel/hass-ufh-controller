@@ -62,7 +62,6 @@ async def test_user_flow_with_all_entities(
             "name": "Full Controller",
             "heat_request_entity": "switch.boiler_heat",
             "dhw_active_entity": "binary_sensor.dhw_active",
-            "circulation_entity": "binary_sensor.circulation",
             "summer_mode_entity": "select.summer_mode",
         },
     )
@@ -70,7 +69,6 @@ async def test_user_flow_with_all_entities(
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"]["heat_request_entity"] == "switch.boiler_heat"
     assert result["data"]["dhw_active_entity"] == "binary_sensor.dhw_active"
-    assert result["data"]["circulation_entity"] == "binary_sensor.circulation"
     assert result["data"]["summer_mode_entity"] == "select.summer_mode"
 
 

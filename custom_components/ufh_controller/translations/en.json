@@ -8,7 +8,6 @@
           "name": "Controller name",
           "heat_request_entity": "Heat request switch",
           "dhw_active_entity": "DHW active sensor",
-          "circulation_entity": "Circulation pump sensor",
           "summer_mode_entity": "Summer mode select"
         }
       }
@@ -31,7 +30,6 @@
         "data": {
           "heat_request_entity": "Heat request switch",
           "dhw_active_entity": "DHW active sensor",
-          "circulation_entity": "Circulation pump sensor",
           "summer_mode_entity": "Summer mode select"
         }
       },
