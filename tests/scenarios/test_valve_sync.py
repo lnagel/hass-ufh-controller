@@ -1,7 +1,6 @@
 """Test valve state synchronization with external changes."""
 
 import logging
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -11,8 +10,6 @@ from homeassistant.core import HomeAssistant, ServiceCall
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ufh_controller.const import (
-    DEFAULT_PID,
-    DEFAULT_SETPOINT,
     DEFAULT_TIMING,
     DOMAIN,
     SUBENTRY_TYPE_ZONE,
@@ -22,21 +19,12 @@ from custom_components.ufh_controller.coordinator import (
     UFHControllerDataUpdateCoordinator,
 )
 from custom_components.ufh_controller.core.zone import ZoneAction
+from tests.conftest import MOCK_ZONE_DATA
 
 
 @pytest.fixture
 def mock_config_entry_with_heat_request() -> MockConfigEntry:
     """Return a config entry with heat_request_entity configured."""
-    zone_data: dict[str, Any] = {
-        "id": "zone1",
-        "name": "Test Zone 1",
-        "circuit_type": "regular",
-        "temp_sensor": "sensor.zone1_temp",
-        "valve_switch": "switch.zone1_valve",
-        "setpoint": DEFAULT_SETPOINT,
-        "pid": DEFAULT_PID,
-        "window_sensors": [],
-    }
     return MockConfigEntry(
         domain=DOMAIN,
         title="Test Controller",
@@ -50,7 +38,7 @@ def mock_config_entry_with_heat_request() -> MockConfigEntry:
         unique_id="test_controller_hr",
         subentries_data=[
             {
-                "data": zone_data,
+                "data": MOCK_ZONE_DATA,
                 "subentry_id": "subentry_zone1",
                 "subentry_type": SUBENTRY_TYPE_ZONE,
                 "title": "Test Zone 1",
