@@ -101,33 +101,6 @@ def mock_config_entry_with_summer_mode() -> MockConfigEntry:
 
 
 @pytest.fixture
-def mock_config_entry_with_heat_request() -> MockConfigEntry:
-    """Return a mock config entry with heat request entity configured."""
-    zone_data = _make_zone_data()
-    return MockConfigEntry(
-        domain=DOMAIN,
-        title="Test Controller",
-        data={
-            "name": "Test Controller",
-            "controller_id": MOCK_CONTROLLER_ID,
-            "heat_request_entity": "switch.heat_request",
-        },
-        options={"timing": DEFAULT_TIMING},
-        entry_id="test_entry_heat_request",
-        unique_id=f"{MOCK_CONTROLLER_ID}_heat_request",
-        subentries_data=[
-            {
-                "data": zone_data,
-                "subentry_id": "subentry_zone1",
-                "subentry_type": SUBENTRY_TYPE_ZONE,
-                "title": "Test Zone 1",
-                "unique_id": "zone1",
-            }
-        ],
-    )
-
-
-@pytest.fixture
 def mock_config_entry_with_window_sensor() -> MockConfigEntry:
     """Return a mock config entry with window sensor configured."""
     zone_data = _make_zone_data(window_sensors=["binary_sensor.window1"])

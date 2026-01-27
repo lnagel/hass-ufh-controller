@@ -166,6 +166,34 @@ def mock_config_entry() -> MockConfigEntry:
 
 
 @pytest.fixture
+def mock_config_entry_with_heat_request() -> MockConfigEntry:
+    """Return a mock config entry with heat request entity configured."""
+    return MockConfigEntry(
+        domain=DOMAIN,
+        title="Test Controller",
+        data={
+            "name": "Test Controller",
+            "controller_id": MOCK_CONTROLLER_ID,
+            "heat_request_entity": "switch.heat_request",
+        },
+        options={
+            "timing": DEFAULT_TIMING,
+        },
+        entry_id=f"{MOCK_CONTROLLER_ID}_heat_request",
+        unique_id=f"{MOCK_CONTROLLER_ID}_heat_request",
+        subentries_data=[
+            {
+                "data": MOCK_ZONE_DATA,
+                "subentry_id": "subentry_zone1",
+                "subentry_type": SUBENTRY_TYPE_ZONE,
+                "title": "Test Zone 1",
+                "unique_id": "zone1",
+            }
+        ],
+    )
+
+
+@pytest.fixture
 def mock_config_entry_no_zones() -> MockConfigEntry:
     """Return a mock config entry without zones."""
     return MockConfigEntry(

@@ -9,43 +9,11 @@ from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant, ServiceCall
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.ufh_controller.const import (
-    DEFAULT_TIMING,
-    DOMAIN,
-    SUBENTRY_TYPE_ZONE,
-    ValveState,
-)
+from custom_components.ufh_controller.const import ValveState
 from custom_components.ufh_controller.coordinator import (
     UFHControllerDataUpdateCoordinator,
 )
 from custom_components.ufh_controller.core.zone import ZoneAction
-from tests.conftest import MOCK_ZONE_DATA
-
-
-@pytest.fixture
-def mock_config_entry_with_heat_request() -> MockConfigEntry:
-    """Return a config entry with heat_request_entity configured."""
-    return MockConfigEntry(
-        domain=DOMAIN,
-        title="Test Controller",
-        data={
-            "name": "Test Controller",
-            "controller_id": "test_controller",
-            "heat_request_entity": "switch.heat_request",
-        },
-        options={"timing": DEFAULT_TIMING},
-        entry_id="test_entry_id_hr",
-        unique_id="test_controller_hr",
-        subentries_data=[
-            {
-                "data": MOCK_ZONE_DATA,
-                "subentry_id": "subentry_zone1",
-                "subentry_type": SUBENTRY_TYPE_ZONE,
-                "title": "Test Zone 1",
-                "unique_id": "zone1",
-            }
-        ],
-    )
 
 
 async def test_valve_restored_when_externally_turned_off(
