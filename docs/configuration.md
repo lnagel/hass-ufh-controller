@@ -428,18 +428,6 @@ A binary sensor indicating when the boiler is heating domestic hot water (DHW).
 
 **Why it matters:** Prevents new heating demands from competing with DHW heating, which typically has priority. Allowing existing valves to stay open enables continued water circulation through the thermal mass of the floor, providing some heat distribution even during DHW priority. Also enables flush circuits to capture waste heat.
 
-#### circulation_entity
-
-**Type:** Binary sensor entity
-**Required:** No
-**Config location:** ConfigEntry → `data.circulation_entity`
-
-A binary sensor indicating when the boiler's circulation pump is running.
-
-**How it works:** Currently informational; may be used in future features for detecting flow/no-flow conditions.
-
-**Example:** `binary_sensor.boiler_circulation` → Indicates water is circulating through the heating system.
-
 #### summer_mode_entity
 
 **Type:** Select entity

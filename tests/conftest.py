@@ -264,7 +264,6 @@ def mock_config_entry_all_entities() -> MockConfigEntry:
             "heat_request_entity": "switch.heat_request",
             "summer_mode_entity": "select.summer_mode",
             "dhw_active_entity": "binary_sensor.dhw_active",
-            "circulation_entity": "binary_sensor.circulation",
         },
         options={
             "timing": DEFAULT_TIMING,

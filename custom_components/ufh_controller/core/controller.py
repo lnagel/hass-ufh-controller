@@ -53,7 +53,6 @@ class ControllerConfig:
     name: str
     heat_request_entity: str | None = None
     dhw_active_entity: str | None = None
-    circulation_entity: str | None = None
     summer_mode_entity: str | None = None
     timing: TimingParams = field(default_factory=TimingParams)
     zones: list[ZoneConfig] = field(default_factory=list)
