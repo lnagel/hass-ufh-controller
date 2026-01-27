@@ -9,13 +9,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 from custom_components.ufh_controller.const import (
     DEFAULT_PID,
     DEFAULT_SETPOINT,
     DEFAULT_TEMP_EMA_TIME_CONSTANT,
     DEFAULT_VALVE_OPEN_THRESHOLD,
+    FAIL_SAFE_TIMEOUT,
+    INITIALIZING_TIMEOUT,
     OperationMode,
     TimingParams,
     ValveState,
@@ -61,6 +63,13 @@ class ZoneStatusTransition(StrEnum):
     ENTERED_DEGRADED = "entered_degraded"  # Zone entered degraded mode
     ENTERED_FAIL_SAFE = "entered_fail_safe"  # Zone entered fail-safe mode
     RECOVERED = "recovered"  # Zone recovered from degraded/fail-safe
+
+
+class FailureStateResult(NamedTuple):
+    """Result of update_failure_state including the timeout that was applied."""
+
+    transition: ZoneStatusTransition
+    timeout_used: int
 
 
 @dataclass
@@ -295,8 +304,7 @@ class ZoneRuntime:
         temp_unavailable: bool,
         recorder_failure: bool,
         valve_unavailable: bool,
-        fail_safe_timeout: int,
-    ) -> ZoneStatusTransition:
+    ) -> FailureStateResult:
         """
         Update zone failure tracking state.
 
@@ -308,28 +316,39 @@ class ZoneRuntime:
             temp_unavailable: Whether temperature reading is unavailable.
             recorder_failure: Whether Recorder query failed.
             valve_unavailable: Whether valve entity is unavailable or unknown.
-            fail_safe_timeout: Seconds before entering fail-safe mode.
 
         Returns:
-            ZoneStatusTransition indicating what happened (for caller to log).
+            FailureStateResult with the transition and the timeout applied.
 
         """
+        # Select timeout once — used for both the fail-safe check and
+        # returned to the caller so it can log the correct value.
+        timeout = (
+            INITIALIZING_TIMEOUT
+            if self.state.zone_status == ZoneStatus.INITIALIZING
+            else FAIL_SAFE_TIMEOUT
+        )
+
         if temp_unavailable or recorder_failure or valve_unavailable:
             # Zone has a failure - increment counter and check for fail-safe
             self.state.consecutive_failures += 1
 
             # Check for zone-level fail-safe
-            if self._should_fail_safe(now, fail_safe_timeout):
+            if self._should_fail_safe(now, timeout):
                 if self.state.zone_status != ZoneStatus.FAIL_SAFE:
                     self.state.zone_status = ZoneStatus.FAIL_SAFE
-                    return ZoneStatusTransition.ENTERED_FAIL_SAFE
+                    return FailureStateResult(
+                        ZoneStatusTransition.ENTERED_FAIL_SAFE, timeout
+                    )
             elif self.state.zone_status == ZoneStatus.NORMAL:
                 # Only transition to DEGRADED if we were previously NORMAL
                 self.state.zone_status = ZoneStatus.DEGRADED
-                return ZoneStatusTransition.ENTERED_DEGRADED
+                return FailureStateResult(
+                    ZoneStatusTransition.ENTERED_DEGRADED, timeout
+                )
             # If zone is still INITIALIZING, keep it that way - don't report
             # problems before we've had a successful update
-            return ZoneStatusTransition.NONE
+            return FailureStateResult(ZoneStatusTransition.NONE, timeout)
 
         # Zone succeeded - reset failure tracking
         previous_status = self.state.zone_status
@@ -338,8 +357,8 @@ class ZoneRuntime:
         self.state.consecutive_failures = 0
 
         if previous_status not in (ZoneStatus.NORMAL, ZoneStatus.INITIALIZING):
-            return ZoneStatusTransition.RECOVERED
-        return ZoneStatusTransition.NONE
+            return FailureStateResult(ZoneStatusTransition.RECOVERED, timeout)
+        return FailureStateResult(ZoneStatusTransition.NONE, timeout)
 
     def _should_fail_safe(self, now: datetime, fail_safe_timeout: int) -> bool:
         """

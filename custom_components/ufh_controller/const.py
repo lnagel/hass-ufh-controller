@@ -98,6 +98,7 @@ class ValveState(StrEnum):
 FAILURE_NOTIFICATION_THRESHOLD = (
     3  # Create notification after this many consecutive failures
 )
+INITIALIZING_TIMEOUT = 120  # 2 minutes before fail-safe during initialization
 FAIL_SAFE_TIMEOUT = 3600  # 1 hour in seconds before activating fail-safe mode
 
 # Coordinator update intervals

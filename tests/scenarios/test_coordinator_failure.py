@@ -10,6 +10,7 @@ from sqlalchemy.exc import OperationalError
 
 from custom_components.ufh_controller.const import (
     FAIL_SAFE_TIMEOUT,
+    INITIALIZING_TIMEOUT,
     ControllerStatus,
     SummerMode,
     ValveState,
@@ -439,16 +440,17 @@ class TestZoneIsolation:
         hass: HomeAssistant,
         mock_config_entry: MockConfigEntry,
     ) -> None:
-        """Test that zone enters fail-safe after 1 hour of failures."""
+        """Test that a NORMAL zone enters fail-safe after 1 hour of failures."""
         mock_config_entry.add_to_hass(hass)
         hass.states.async_set("sensor.zone1_temp", "unavailable")
         hass.states.async_set("switch.zone1_valve", "off")
 
         coordinator = UFHControllerDataUpdateCoordinator(hass, mock_config_entry)
 
-        # Set zone's last_successful_update to more than 1 hour ago
+        # Zone must be NORMAL to use the full FAIL_SAFE_TIMEOUT
         zone1 = coordinator._controller.get_zone_runtime("zone1")
         assert zone1 is not None
+        zone1.state.zone_status = ZoneStatus.NORMAL
         zone1.state.last_successful_update = datetime.now(UTC) - timedelta(
             seconds=FAIL_SAFE_TIMEOUT + 60
         )
@@ -797,9 +799,10 @@ class TestValveUnavailability:
 
         coordinator = UFHControllerDataUpdateCoordinator(hass, mock_config_entry)
 
-        # Set zone's last_successful_update to more than 1 hour ago
+        # Zone must be NORMAL to use the full FAIL_SAFE_TIMEOUT
         runtime = coordinator._controller.get_zone_runtime("zone1")
         assert runtime is not None
+        runtime.state.zone_status = ZoneStatus.NORMAL
         runtime.state.last_successful_update = datetime.now(UTC) - timedelta(
             seconds=FAIL_SAFE_TIMEOUT + 60
         )
@@ -906,5 +909,90 @@ class TestTempEntityNotFound:
         assert any(
             "Temperature entity sensor.zone1_temp not found for zone zone1"
             in record.message
+            for record in caplog.records  # type: ignore[union-attr]
+        )
+
+
+class TestInitializingTimeout:
+    """Test shorter fail-safe timeout during initialization."""
+
+    async def test_initializing_timeout_triggers_fail_safe(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+    ) -> None:
+        """Zone never gets successful update, enters FAIL_SAFE."""
+        mock_config_entry.add_to_hass(hass)
+        hass.states.async_set("sensor.zone1_temp", "unavailable")
+        hass.states.async_set("switch.zone1_valve", "off")
+
+        coordinator = UFHControllerDataUpdateCoordinator(hass, mock_config_entry)
+
+        zone1 = coordinator._controller.get_zone_runtime("zone1")
+        assert zone1 is not None
+        assert zone1.state.zone_status == ZoneStatus.INITIALIZING
+
+        now = datetime.now(UTC)
+        coordinator._controller.state.observation_start = now - timedelta(hours=1)
+
+        mock_recorder = MagicMock()
+        mock_recorder.async_add_executor_job = AsyncMock(return_value={})
+
+        with patch(
+            "homeassistant.components.recorder.get_instance",
+            return_value=mock_recorder,
+        ):
+            # First update: starts failure tracking
+            await coordinator._update_zone("zone1", now, 60.0)
+
+        assert zone1.state.zone_status == ZoneStatus.INITIALIZING
+
+        # After INITIALIZING_TIMEOUT: should enter fail-safe
+        later = now + timedelta(seconds=INITIALIZING_TIMEOUT + 1)
+        with patch(
+            "homeassistant.components.recorder.get_instance",
+            return_value=mock_recorder,
+        ):
+            await coordinator._update_zone("zone1", later, 60.0)
+
+        assert zone1.state.zone_status == ZoneStatus.FAIL_SAFE
+
+    async def test_initializing_timeout_logs_correct_timeout(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        caplog: object,
+    ) -> None:
+        """Fail-safe log message reports the initializing timeout, not 1 hour."""
+        mock_config_entry.add_to_hass(hass)
+        hass.states.async_set("sensor.zone1_temp", "unavailable")
+        hass.states.async_set("switch.zone1_valve", "off")
+
+        coordinator = UFHControllerDataUpdateCoordinator(hass, mock_config_entry)
+
+        now = datetime.now(UTC)
+        coordinator._controller.state.observation_start = now - timedelta(hours=1)
+
+        mock_recorder = MagicMock()
+        mock_recorder.async_add_executor_job = AsyncMock(return_value={})
+
+        with patch(
+            "homeassistant.components.recorder.get_instance",
+            return_value=mock_recorder,
+        ):
+            await coordinator._update_zone("zone1", now, 60.0)
+
+        later = now + timedelta(seconds=INITIALIZING_TIMEOUT + 1)
+        with (
+            patch(
+                "homeassistant.components.recorder.get_instance",
+                return_value=mock_recorder,
+            ),
+            caplog.at_level(logging.ERROR),  # type: ignore[union-attr]
+        ):
+            await coordinator._update_zone("zone1", later, 60.0)
+
+        assert any(
+            f"after {INITIALIZING_TIMEOUT} seconds" in record.message
             for record in caplog.records  # type: ignore[union-attr]
         )

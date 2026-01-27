@@ -25,7 +25,6 @@ from .const import (
     DEFAULT_TEMP_EMA_TIME_CONSTANT,
     DEFAULT_TIMING,
     DOMAIN,
-    FAIL_SAFE_TIMEOUT,
     INITIALIZING_UPDATE_INTERVAL,
     LOGGER,
     SUBENTRY_TYPE_CONTROLLER,
@@ -42,6 +41,7 @@ from .core.history import get_observation_start, get_valve_open_window
 from .core.pid import PIDState
 from .core.zone import (
     CircuitType,
+    FailureStateResult,
     ZoneAction,
     ZoneConfig,
     ZoneStatusTransition,
@@ -736,16 +736,15 @@ class UFHControllerDataUpdateCoordinator(
             )
 
         # Track zone-level failure state
-        transition = runtime.update_failure_state(
+        result = runtime.update_failure_state(
             now,
             temp_unavailable=temp_unavailable,
             recorder_failure=recorder_failure,
             valve_unavailable=valve_unavailable,
-            fail_safe_timeout=FAIL_SAFE_TIMEOUT,
         )
         self._log_zone_status_transition(
             zone_id,
-            transition,
+            result,
             temp_unavailable=temp_unavailable,
             recorder_failure=recorder_failure,
             valve_unavailable=valve_unavailable,
@@ -754,20 +753,20 @@ class UFHControllerDataUpdateCoordinator(
     def _log_zone_status_transition(
         self,
         zone_id: str,
-        transition: ZoneStatusTransition,
+        result: FailureStateResult,
         *,
         temp_unavailable: bool,
         recorder_failure: bool,
         valve_unavailable: bool,
     ) -> None:
         """Log zone status transitions (integration layer's responsibility)."""
-        if transition == ZoneStatusTransition.ENTERED_FAIL_SAFE:
+        if result.transition == ZoneStatusTransition.ENTERED_FAIL_SAFE:
             LOGGER.error(
                 "Zone %s entering fail-safe mode after %d seconds of failures",
                 zone_id,
-                FAIL_SAFE_TIMEOUT,
+                result.timeout_used,
             )
-        elif transition == ZoneStatusTransition.ENTERED_DEGRADED:
+        elif result.transition == ZoneStatusTransition.ENTERED_DEGRADED:
             LOGGER.warning(
                 "Zone %s entering degraded mode: temp_unavailable=%s, "
                 "recorder_failure=%s, valve_unavailable=%s",
@@ -776,7 +775,7 @@ class UFHControllerDataUpdateCoordinator(
                 recorder_failure,
                 valve_unavailable,
             )
-        elif transition == ZoneStatusTransition.RECOVERED:
+        elif result.transition == ZoneStatusTransition.RECOVERED:
             LOGGER.info("Zone %s recovered to normal operation", zone_id)
 
     def _update_controller_status_from_zones(self) -> None:
