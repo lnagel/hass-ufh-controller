@@ -86,6 +86,9 @@ class UFHControllerDataUpdateCoordinator(
         # Track previous DHW state for transition detection
         self._prev_dhw_active: bool = False
 
+        # Track last force-update to ensure commands are sent at least once per cycle
+        self._last_force_update: datetime | None = None
+
     def _build_controller(self, entry: UFHControllerConfigEntry) -> HeatingController:
         """Build HeatingController from config entry."""
         data = entry.data
@@ -381,6 +384,12 @@ class UFHControllerDataUpdateCoordinator(
             now - self._controller.state.observation_start
         ).total_seconds()
 
+        # Determine if force-update is needed (once per observation cycle)
+        force_update = (
+            self._last_force_update is None
+            or self._last_force_update < self._controller.state.observation_start
+        )
+
         # Check DHW active state
         await self._update_dhw_state()
 
@@ -421,17 +430,25 @@ class UFHControllerDataUpdateCoordinator(
         self._controller.state.heat_requests = actions.heat_requests
 
         # Execute valve actions with zone-level isolation
-        await self._execute_valve_actions_with_isolation(actions.valve_actions)
+        await self._execute_valve_actions_with_isolation(
+            actions.valve_actions, force_update=force_update
+        )
 
         # Execute heat request and summer mode
         if actions.heat_requests:
             # Compute and set heat request from per-zone requests
             heat_request = any(actions.heat_requests.values())
-            await self._execute_heat_request(heat_request=heat_request)
+            await self._execute_heat_request(
+                heat_request=heat_request, force_update=force_update
+            )
 
             # Derive and update summer mode from heat_request
             summer_mode = SummerMode.WINTER if heat_request else SummerMode.SUMMER
-            await self._set_summer_mode(summer_mode)
+            await self._set_summer_mode(summer_mode, force_update=force_update)
+
+        # Mark force-update as completed for this cycle
+        if force_update:
+            self._last_force_update = now
 
         return self._build_state_dict()
 
@@ -740,6 +757,8 @@ class UFHControllerDataUpdateCoordinator(
     async def _execute_valve_actions_with_isolation(
         self,
         actions: dict[str, ZoneAction],
+        *,
+        force_update: bool = False,
     ) -> None:
         """Execute valve actions respecting zone-level fail-safe."""
         for zone_id, action in actions.items():
@@ -763,39 +782,39 @@ class UFHControllerDataUpdateCoordinator(
                 await self._call_switch_service(valve_entity, turn_on=False)
                 runtime.state.valve_state = ValveState.OFF
             elif action == ZoneAction.STAY_ON:
-                if runtime.state.valve_state != ValveState.ON:
+                if force_update or runtime.state.valve_state != ValveState.ON:
                     await self._call_switch_service(valve_entity, turn_on=True)
                 runtime.state.valve_state = ValveState.ON
             elif action == ZoneAction.STAY_OFF:
-                if runtime.state.valve_state != ValveState.OFF:
+                if force_update or runtime.state.valve_state != ValveState.OFF:
                     await self._call_switch_service(valve_entity, turn_on=False)
                 runtime.state.valve_state = ValveState.OFF
 
-    async def _execute_heat_request(self, *, heat_request: bool) -> None:
+    async def _execute_heat_request(
+        self, *, heat_request: bool, force_update: bool = False
+    ) -> None:
         """Execute heat request by calling switch service if configured."""
         entity_id = self._controller.config.heat_request_entity
         if entity_id is None:
             return
 
-        # Check current entity state - only update if different
-        current_state = self.hass.states.get(entity_id)
-        if current_state is not None:
-            current_on = current_state.state == "on"
-            if current_on == heat_request:
-                return  # Already in correct state
+        if not force_update:
+            current_state = self.hass.states.get(entity_id)
+            if current_state is not None:
+                current_on = current_state.state == "on"
+                if current_on == heat_request:
+                    return  # Already in correct state
 
         await self._call_switch_service(entity_id, turn_on=heat_request)
 
-    async def _set_summer_mode(self, summer_mode: SummerMode) -> None:
+    async def _set_summer_mode(
+        self, summer_mode: SummerMode, *, force_update: bool = False
+    ) -> None:
         """
         Set boiler summer mode to specified value.
 
         Safety: If ANY zone is in fail-safe, summer mode is forced to 'auto'
         to allow physical fallback valves to receive heated water.
-
-        Args:
-            summer_mode: The summer mode value to set.
-
         """
         entity_id = self._controller.config.summer_mode_entity
         if entity_id is None:
@@ -808,11 +827,10 @@ class UFHControllerDataUpdateCoordinator(
                 "Zone(s) in fail-safe, forcing summer mode to 'auto' for fallbacks"
             )
 
-        # Check current state
         current_state = self.hass.states.get(entity_id)
         if current_state is None:
             return
-        if current_state.state == summer_mode:
+        if not force_update and current_state.state == summer_mode:
             return  # Already in correct mode
 
         # Check if select service is available
