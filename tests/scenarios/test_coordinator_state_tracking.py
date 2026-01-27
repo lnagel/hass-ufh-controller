@@ -1,56 +1,44 @@
 """
 Tests for coordinator external state change tracking.
 
-This test suite verifies that the coordinator properly tracks expected states
-for entities it controls and triggers refreshes when external changes occur.
+Verifies that the coordinator properly tracks expected states for entities it
+controls and triggers refreshes when external changes occur.
 """
 
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-
-async def test_external_dhw_state_change_triggers_refresh(
-    hass: HomeAssistant,
-    mock_config_entry: MockConfigEntry,
-) -> None:
-    """
-    Test that external DHW entity state change triggers coordinator refresh.
-
-    DHW is a read-only entity - any state change should trigger a refresh.
-    """
-    mock_config_entry.add_to_hass(hass)
-    await hass.config_entries.async_setup(mock_config_entry.entry_id)
-    await hass.async_block_till_done()
-
-    coordinator = mock_config_entry.runtime_data.coordinator
-
-    # Set initial DHW state
-    hass.states.async_set("binary_sensor.dhw_active", "off")
-    await hass.async_block_till_done()
-
-    # Monitor refresh calls
-    with patch.object(
-        coordinator, "async_request_refresh", new_callable=AsyncMock
-    ) as mock_refresh:
-        # External change to DHW state
-        hass.states.async_set("binary_sensor.dhw_active", "on")
-        await hass.async_block_till_done()
-
-        # Should trigger refresh since DHW is a read-only entity
-        mock_refresh.assert_called_once()
+from custom_components.ufh_controller.const import SummerMode
+from custom_components.ufh_controller.coordinator import (
+    UFHControllerDataUpdateCoordinator,
+)
 
 
-async def test_self_initiated_heat_request_change_no_extra_refresh(
+@pytest.mark.parametrize(
+    ("entity_id", "initial_state", "new_state"),
+    [
+        ("binary_sensor.dhw_active", "off", "on"),
+        ("switch.heat_request", "off", "on"),
+        ("select.summer_mode", "winter", "summer"),
+        ("binary_sensor.circulation", "off", "on"),
+        ("switch.zone1_valve", "off", "on"),
+    ],
+)
+async def test_external_state_change_triggers_refresh(
     hass: HomeAssistant,
     mock_config_entry_all_entities: MockConfigEntry,
+    entity_id: str,
+    initial_state: str,
+    new_state: str,
 ) -> None:
     """
-    Test that self-initiated heat_request changes don't trigger extra refresh.
+    Test that external entity state changes trigger coordinator refresh.
 
-    When we set the expected state before calling the service, and the actual
-    state matches our expectation, we should NOT trigger an additional refresh.
+    Any state change to a monitored entity that doesn't match a coordinator-set
+    expectation should trigger a refresh to pick up the new state.
     """
     mock_config_entry_all_entities.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_config_entry_all_entities.entry_id)
@@ -58,92 +46,57 @@ async def test_self_initiated_heat_request_change_no_extra_refresh(
 
     coordinator = mock_config_entry_all_entities.runtime_data.coordinator
 
-    # Set up heat_request entity initial state
-    hass.states.async_set("switch.heat_request", "off")
+    hass.states.async_set(entity_id, initial_state)
     await hass.async_block_till_done()
 
-    # Simulate the coordinator setting expected state and calling service
-    # (mimics what _call_switch_service does)
-    coordinator._expected_states["switch.heat_request"] = "on"
-
-    # Monitor refresh calls
     with patch.object(
         coordinator, "async_request_refresh", new_callable=AsyncMock
     ) as mock_refresh:
-        # State change that matches our expectation (self-initiated)
-        hass.states.async_set("switch.heat_request", "on")
+        hass.states.async_set(entity_id, new_state)
         await hass.async_block_till_done()
 
-        # Should NOT trigger refresh since this was our own change
+        mock_refresh.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    ("entity_id", "expected_state"),
+    [
+        ("switch.heat_request", "on"),
+        ("switch.zone1_valve", "on"),
+    ],
+)
+async def test_self_initiated_change_no_extra_refresh(
+    hass: HomeAssistant,
+    mock_config_entry_all_entities: MockConfigEntry,
+    entity_id: str,
+    expected_state: str,
+) -> None:
+    """
+    Test that self-initiated changes don't trigger extra refresh.
+
+    When the coordinator sets an expected state before calling a service,
+    the resulting state change event should be recognized as self-initiated.
+    """
+    mock_config_entry_all_entities.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry_all_entities.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = mock_config_entry_all_entities.runtime_data.coordinator
+
+    hass.states.async_set(entity_id, "off")
+    await hass.async_block_till_done()
+
+    # Simulate coordinator setting expected state before service call
+    coordinator._expected_states[entity_id] = expected_state
+
+    with patch.object(
+        coordinator, "async_request_refresh", new_callable=AsyncMock
+    ) as mock_refresh:
+        hass.states.async_set(entity_id, expected_state)
+        await hass.async_block_till_done()
+
         mock_refresh.assert_not_called()
-
-        # Verify expected state was cleared
-        assert coordinator._expected_states.get("switch.heat_request") is None
-
-
-async def test_external_heat_request_change_triggers_refresh(
-    hass: HomeAssistant,
-    mock_config_entry_all_entities: MockConfigEntry,
-) -> None:
-    """
-    Test that external heat_request changes trigger coordinator refresh.
-
-    When the state changes to something other than what we expected (or we had
-    no expectation), it's an external change and should trigger a refresh.
-    """
-    mock_config_entry_all_entities.add_to_hass(hass)
-    await hass.config_entries.async_setup(mock_config_entry_all_entities.entry_id)
-    await hass.async_block_till_done()
-
-    coordinator = mock_config_entry_all_entities.runtime_data.coordinator
-
-    # Set up heat_request entity initial state
-    hass.states.async_set("switch.heat_request", "off")
-    await hass.async_block_till_done()
-
-    # No expected state set (simulates external change)
-    coordinator._expected_states["switch.heat_request"] = None
-
-    # Monitor refresh calls
-    with patch.object(
-        coordinator, "async_request_refresh", new_callable=AsyncMock
-    ) as mock_refresh:
-        # External change to heat_request
-        hass.states.async_set("switch.heat_request", "on")
-        await hass.async_block_till_done()
-
-        # Should trigger refresh since this was an external change
-        mock_refresh.assert_called_once()
-
-
-async def test_external_summer_mode_change_triggers_refresh(
-    hass: HomeAssistant,
-    mock_config_entry_all_entities: MockConfigEntry,
-) -> None:
-    """Test that external summer_mode changes trigger coordinator refresh."""
-    mock_config_entry_all_entities.add_to_hass(hass)
-    await hass.config_entries.async_setup(mock_config_entry_all_entities.entry_id)
-    await hass.async_block_till_done()
-
-    coordinator = mock_config_entry_all_entities.runtime_data.coordinator
-
-    # Set up summer_mode entity initial state
-    hass.states.async_set("select.summer_mode", "winter")
-    await hass.async_block_till_done()
-
-    # No expected state set (simulates external change)
-    coordinator._expected_states["select.summer_mode"] = None
-
-    # Monitor refresh calls
-    with patch.object(
-        coordinator, "async_request_refresh", new_callable=AsyncMock
-    ) as mock_refresh:
-        # External change to summer_mode
-        hass.states.async_set("select.summer_mode", "summer")
-        await hass.async_block_till_done()
-
-        # Should trigger refresh since this was an external change
-        mock_refresh.assert_called_once()
+        assert coordinator._expected_states.get(entity_id) is None
 
 
 async def test_entity_removed_no_refresh(
@@ -157,123 +110,40 @@ async def test_entity_removed_no_refresh(
 
     coordinator = mock_config_entry_all_entities.runtime_data.coordinator
 
-    # Set up heat_request entity
     hass.states.async_set("switch.heat_request", "off")
     await hass.async_block_till_done()
 
-    # Monitor refresh calls
     with patch.object(
         coordinator, "async_request_refresh", new_callable=AsyncMock
     ) as mock_refresh:
-        # Remove the entity (sets state to None internally)
         hass.states.async_remove("switch.heat_request")
         await hass.async_block_till_done()
 
-        # Should NOT trigger refresh since entity was removed
         mock_refresh.assert_not_called()
 
 
-async def test_external_circulation_state_change_triggers_refresh(
+async def test_fail_safe_sets_expected_state_for_summer_mode(
     hass: HomeAssistant,
     mock_config_entry_all_entities: MockConfigEntry,
 ) -> None:
     """
-    Test that external circulation entity state change triggers refresh.
+    Test that fail-safe actions set expected state for summer mode.
 
-    Circulation is a read-only entity - any state change should trigger a refresh.
+    During fail-safe, the coordinator resets summer mode to 'auto'. The expected
+    state must be set so this self-initiated change isn't treated as external.
     """
     mock_config_entry_all_entities.add_to_hass(hass)
-    await hass.config_entries.async_setup(mock_config_entry_all_entities.entry_id)
-    await hass.async_block_till_done()
+    hass.states.async_set("sensor.zone1_temp", "20.5")
+    hass.states.async_set("switch.zone1_valve", "on")
 
-    coordinator = mock_config_entry_all_entities.runtime_data.coordinator
+    # Register services needed by fail-safe actions
+    hass.services.async_register("switch", "turn_off", AsyncMock())
+    hass.services.async_register("switch", "turn_on", AsyncMock())
+    hass.services.async_register("select", "select_option", AsyncMock())
 
-    # Set initial circulation state
-    hass.states.async_set("binary_sensor.circulation", "off")
-    await hass.async_block_till_done()
+    coordinator = UFHControllerDataUpdateCoordinator(
+        hass, mock_config_entry_all_entities
+    )
+    await coordinator._execute_fail_safe_actions()
 
-    # Monitor refresh calls
-    with patch.object(
-        coordinator, "async_request_refresh", new_callable=AsyncMock
-    ) as mock_refresh:
-        # External change to circulation state
-        hass.states.async_set("binary_sensor.circulation", "on")
-        await hass.async_block_till_done()
-
-        # Should trigger refresh since circulation is a read-only entity
-        mock_refresh.assert_called_once()
-
-
-async def test_external_zone_valve_change_triggers_refresh(
-    hass: HomeAssistant,
-    mock_config_entry: MockConfigEntry,
-) -> None:
-    """
-    Test that external zone valve state change triggers coordinator refresh.
-
-    When someone manually toggles a zone valve switch, the coordinator should
-    detect this as an external change and request a refresh.
-    """
-    mock_config_entry.add_to_hass(hass)
-    await hass.config_entries.async_setup(mock_config_entry.entry_id)
-    await hass.async_block_till_done()
-
-    coordinator = mock_config_entry.runtime_data.coordinator
-
-    # Set initial valve state
-    hass.states.async_set("switch.zone1_valve", "off")
-    await hass.async_block_till_done()
-
-    # No expected state set (simulates external change)
-    coordinator._expected_states["switch.zone1_valve"] = None
-
-    # Monitor refresh calls
-    with patch.object(
-        coordinator, "async_request_refresh", new_callable=AsyncMock
-    ) as mock_refresh:
-        # External change to valve state (someone manually turned it on)
-        hass.states.async_set("switch.zone1_valve", "on")
-        await hass.async_block_till_done()
-
-        # Should trigger refresh since this was an external change
-        mock_refresh.assert_called_once()
-
-
-async def test_self_initiated_zone_valve_change_no_extra_refresh(
-    hass: HomeAssistant,
-    mock_config_entry: MockConfigEntry,
-) -> None:
-    """
-    Test that self-initiated zone valve changes don't trigger extra refresh.
-
-    When the coordinator turns a valve on/off, it sets the expected state first.
-    The subsequent state change event should be recognized as our own change
-    and not trigger an additional refresh.
-    """
-    mock_config_entry.add_to_hass(hass)
-    await hass.config_entries.async_setup(mock_config_entry.entry_id)
-    await hass.async_block_till_done()
-
-    coordinator = mock_config_entry.runtime_data.coordinator
-
-    # Set initial valve state
-    hass.states.async_set("switch.zone1_valve", "off")
-    await hass.async_block_till_done()
-
-    # Simulate the coordinator setting expected state before calling service
-    # (mimics what _call_switch_service does)
-    coordinator._expected_states["switch.zone1_valve"] = "on"
-
-    # Monitor refresh calls
-    with patch.object(
-        coordinator, "async_request_refresh", new_callable=AsyncMock
-    ) as mock_refresh:
-        # State change that matches our expectation (self-initiated)
-        hass.states.async_set("switch.zone1_valve", "on")
-        await hass.async_block_till_done()
-
-        # Should NOT trigger refresh since this was our own change
-        mock_refresh.assert_not_called()
-
-        # Verify expected state was cleared
-        assert coordinator._expected_states.get("switch.zone1_valve") is None
+    assert coordinator._expected_states.get("select.summer_mode") == SummerMode.AUTO
