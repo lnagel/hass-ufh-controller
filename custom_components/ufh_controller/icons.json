@@ -1,0 +1,9 @@
+{
+  "entity": {
+    "climate": {
+      "zone": {
+        "default": "mdi:heating-coil"
+      }
+    }
+  }
+}
