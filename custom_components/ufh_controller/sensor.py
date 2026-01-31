@@ -88,13 +88,13 @@ DUTY_CYCLE_SENSOR = UFHZoneSensorEntityDescription(
     value_fn=lambda data: data.get("duty_cycle"),
 )
 
-HEAT_PERFORMANCE_SENSOR = UFHZoneSensorEntityDescription(
-    key="heat_performance",
-    translation_key="heat_performance",
+SUPPLY_COEFFICIENT_SENSOR = UFHZoneSensorEntityDescription(
+    key="supply_coefficient",
+    translation_key="supply_coefficient",
     native_unit_of_measurement=PERCENTAGE,
     state_class=SensorStateClass.MEASUREMENT,
     suggested_display_precision=0,
-    value_fn=lambda data: data.get("heat_performance"),
+    value_fn=lambda data: data.get("supply_coefficient"),
 )
 
 
@@ -157,14 +157,14 @@ async def async_setup_entry(
             ]
         )
 
-        # Add heat_performance sensor only if supply_temp_entity is configured
+        # Add supply_coefficient sensor only if supply_temp_entity is configured
         if supply_entity:
             zone_sensors.append(
                 UFHDutyCycleSensor(
                     coordinator=coordinator,
                     zone_id=zone_id,
                     zone_name=zone_name,
-                    description=HEAT_PERFORMANCE_SENSOR,
+                    description=SUPPLY_COEFFICIENT_SENSOR,
                     subentry_id=subentry_id,
                 )
             )

@@ -48,13 +48,13 @@
       },
       "supply_temperature": {
         "title": "Supply Temperature",
-        "description": "Configure supply temperature sensor for heat performance calculation.",
+        "description": "Configure supply temperature sensor for supply coefficient calculation.",
         "data": {
           "supply_temp_entity": "Supply temperature sensor",
           "supply_target_temp": "Target supply temperature"
         },
         "data_description": {
-          "supply_target_temp": "Expected supply temperature when boiler is firing at full capacity. Used to calculate heat performance percentage."
+          "supply_target_temp": "Expected supply temperature when boiler is firing at full capacity. Used to calculate supply coefficient percentage."
         }
       },
       "zone_entities": {
@@ -223,8 +223,8 @@
       "requesting_zones": {
         "name": "Requesting Zones"
       },
-      "heat_performance": {
-        "name": "Heat Performance"
+      "supply_coefficient": {
+        "name": "Supply Coefficient"
       }
     },
     "binary_sensor": {

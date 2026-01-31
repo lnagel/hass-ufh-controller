@@ -16,7 +16,7 @@
       "requesting_zones": {
         "default": "mdi:counter"
       },
-      "heat_performance": {
+      "supply_coefficient": {
         "default": "mdi:thermometer"
       }
     },

@@ -279,11 +279,11 @@ async def test_duty_cycle_sensor_icon(
     assert state.attributes.get("icon") == expected_icon
 
 
-async def test_heat_performance_sensor_created_with_supply_entity(
+async def test_supply_coefficient_sensor_created_with_supply_entity(
     hass: HomeAssistant,
     mock_config_entry_with_supply_temp: MockConfigEntry,
 ) -> None:
-    """Test heat_performance sensor is created when supply_temp_entity is configured."""
+    """Test supply_coefficient sensor is created when supply_temp_entity is set."""
     # Set up the supply temperature sensor entity
     hass.states.async_set("sensor.supply_temp", "45.0")
     hass.states.async_set("sensor.zone1_temp", "20.5")
@@ -293,20 +293,20 @@ async def test_heat_performance_sensor_created_with_supply_entity(
     await hass.config_entries.async_setup(mock_config_entry_with_supply_temp.entry_id)
     await hass.async_block_till_done()
 
-    # Heat performance sensor should exist for zone1
-    state = hass.states.get("sensor.test_zone_1_heat_performance")
+    # Supply coefficient sensor should exist for zone1
+    state = hass.states.get("sensor.test_zone_1_supply_coefficient")
     assert state is not None
 
 
-async def test_heat_performance_sensor_not_created_without_supply_entity(
+async def test_supply_coefficient_sensor_not_created_without_supply_entity(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
 ) -> None:
-    """Test heat_performance sensor is NOT created when no supply_temp_entity."""
+    """Test supply_coefficient sensor is NOT created when no supply_temp_entity."""
     mock_config_entry.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
 
-    # Heat performance sensor should NOT exist
-    state = hass.states.get("sensor.test_zone_1_heat_performance")
+    # Supply coefficient sensor should NOT exist
+    state = hass.states.get("sensor.test_zone_1_supply_coefficient")
     assert state is None
