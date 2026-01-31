@@ -42,7 +42,6 @@ class ControllerState:
     dhw_active: bool = False
     flush_until: datetime | None = None
     flush_request: bool = False
-    delta_t: float | None = None
     zones: dict[str, ZoneState] = field(default_factory=dict)
 
 

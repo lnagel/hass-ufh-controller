@@ -224,9 +224,6 @@
       "requesting_zones": {
         "name": "Requesting Zones"
       },
-      "delta_t": {
-        "name": "Delta T"
-      },
       "heat_performance": {
         "name": "Heat Performance"
       }

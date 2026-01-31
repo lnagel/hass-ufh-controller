@@ -109,19 +109,12 @@ async def async_setup_entry(
 
     # Check if supply temp is configured (enables heat performance sensors)
     supply_entity = entry.data.get("supply_temp_entity")
-    return_entity = entry.data.get("return_temp_entity")
 
     # Add controller-level sensors
     if controller_subentry_id is not None:
         controller_sensors: list[SensorEntity] = [
             UFHRequestingZonesSensor(coordinator, controller_subentry_id)
         ]
-
-        # Add delta_t sensor only if both flow monitoring entities are configured
-        if supply_entity and return_entity:
-            controller_sensors.append(
-                UFHDeltaTSensor(coordinator, controller_subentry_id)
-            )
 
         async_add_entities(
             controller_sensors,
@@ -293,33 +286,3 @@ class UFHRequestingZonesSensor(UFHControllerEntity, SensorEntity):
     def native_value(self) -> int:
         """Return the count of zones requesting heat."""
         return self.coordinator.data.get("zones_requesting_heat", 0)
-
-
-class UFHDeltaTSensor(UFHControllerEntity, SensorEntity):
-    """Sensor showing temperature delta between supply and return."""
-
-    _attr_translation_key = "delta_t"
-    _attr_state_class = SensorStateClass.MEASUREMENT
-    _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
-    _attr_suggested_display_precision = 1
-
-    def __init__(
-        self,
-        coordinator: UFHControllerDataUpdateCoordinator,
-        subentry_id: str,
-    ) -> None:
-        """Initialize the sensor entity."""
-        super().__init__(coordinator, subentry_id)
-
-        controller_id = coordinator.config_entry.data.get("controller_id", "")
-        self._attr_unique_id = f"{controller_id}_delta_t"
-
-    @property
-    def native_value(self) -> float | None:
-        """Return the temperature delta (supply - return)."""
-        return self.coordinator.data.get("delta_t")
-
-    @property
-    def available(self) -> bool:
-        """Return True if coordinator is available and delta_t value is valid."""
-        return super().available and self.native_value is not None
