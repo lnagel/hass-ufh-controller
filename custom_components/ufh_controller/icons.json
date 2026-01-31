@@ -1,8 +1,37 @@
 {
   "entity": {
+    "binary_sensor": {
+      "flush_request": {
+        "default": "mdi:thermometer-off",
+        "state": {
+          "on": "mdi:thermometer-chevron-down"
+        }
+      }
+    },
     "climate": {
       "thermostat": {
         "default": "mdi:heating-coil"
+      }
+    },
+    "select": {
+      "mode": {
+        "default": "mdi:thermostat",
+        "state": {
+          "heat": "mdi:fire",
+          "flush": "mdi:thermometer-chevron-down",
+          "cycle": "mdi:sync",
+          "all_on": "mdi:valve-open",
+          "all_off": "mdi:valve-closed",
+          "off": "mdi:power-off"
+        }
+      }
+    },
+    "switch": {
+      "flush_enabled": {
+        "default": "mdi:thermometer-off",
+        "state": {
+          "on": "mdi:thermometer-chevron-down"
+        }
       }
     }
   }
