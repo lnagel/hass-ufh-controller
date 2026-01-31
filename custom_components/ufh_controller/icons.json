@@ -1,5 +1,22 @@
 {
   "entity": {
+    "sensor": {
+      "duty_cycle": {
+        "default": "mdi:gauge"
+      },
+      "pid_proportional": {
+        "default": "mdi:alpha-p-circle-outline"
+      },
+      "pid_integral": {
+        "default": "mdi:alpha-i-circle-outline"
+      },
+      "pid_derivative": {
+        "default": "mdi:alpha-d-circle-outline"
+      },
+      "requesting_zones": {
+        "default": "mdi:counter"
+      }
+    },
     "binary_sensor": {
       "flush_request": {
         "default": "mdi:thermometer-off",
