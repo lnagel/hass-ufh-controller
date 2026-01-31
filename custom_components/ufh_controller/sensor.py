@@ -13,7 +13,12 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.const import PERCENTAGE, UnitOfTemperature
 
-from .const import PID_ERROR_AT_SETPOINT_THRESHOLD, SUBENTRY_TYPE_ZONE, ZoneStatus
+from .const import (
+    ICON_DUTY_CYCLE_THRESHOLDS,
+    ICON_PID_ERROR_THRESHOLD,
+    SUBENTRY_TYPE_ZONE,
+    ZoneStatus,
+)
 from .entity import (
     UFHControllerEntity,
     UFHControllerZoneEntity,
@@ -38,14 +43,6 @@ class UFHZoneSensorEntityDescription(SensorEntityDescription):
 
 
 ZONE_SENSORS: tuple[UFHZoneSensorEntityDescription, ...] = (
-    UFHZoneSensorEntityDescription(
-        key="duty_cycle",
-        translation_key="duty_cycle",
-        native_unit_of_measurement=PERCENTAGE,
-        state_class=SensorStateClass.MEASUREMENT,
-        suggested_display_precision=1,
-        value_fn=lambda data: data.get("duty_cycle"),
-    ),
     UFHZoneSensorEntityDescription(
         key="pid_proportional",
         translation_key="pid_proportional",
@@ -80,6 +77,15 @@ PID_ERROR_SENSOR = UFHZoneSensorEntityDescription(
     state_class=SensorStateClass.MEASUREMENT,
     suggested_display_precision=2,
     value_fn=lambda data: data.get("error"),
+)
+
+DUTY_CYCLE_SENSOR = UFHZoneSensorEntityDescription(
+    key="duty_cycle",
+    translation_key="duty_cycle",
+    native_unit_of_measurement=PERCENTAGE,
+    state_class=SensorStateClass.MEASUREMENT,
+    suggested_display_precision=1,
+    value_fn=lambda data: data.get("duty_cycle"),
 )
 
 
@@ -124,7 +130,13 @@ async def async_setup_entry(
                     zone_id=zone_id,
                     zone_name=zone_name,
                     subentry_id=subentry_id,
-                )
+                ),
+                UFHDutyCycleSensor(
+                    coordinator=coordinator,
+                    zone_id=zone_id,
+                    zone_name=zone_name,
+                    subentry_id=subentry_id,
+                ),
             ],
             config_subentry_id=subentry_id,
         )
@@ -193,11 +205,41 @@ class UFHPidErrorSensor(UFHZoneSensor):
         value = self.native_value
         if value is None:
             return "mdi:thermometer-off"
-        if value > PID_ERROR_AT_SETPOINT_THRESHOLD:
+        if value > ICON_PID_ERROR_THRESHOLD:
             return "mdi:thermometer-chevron-up"
-        if value < -PID_ERROR_AT_SETPOINT_THRESHOLD:
+        if value < -ICON_PID_ERROR_THRESHOLD:
             return "mdi:thermometer-chevron-down"
         return "mdi:thermometer-check"
+
+
+class UFHDutyCycleSensor(UFHZoneSensor):
+    """Sensor entity for duty cycle with dynamic icon based on value."""
+
+    def __init__(
+        self,
+        coordinator: UFHControllerDataUpdateCoordinator,
+        zone_id: str,
+        zone_name: str,
+        subentry_id: str,
+    ) -> None:
+        """Initialize the duty cycle sensor entity."""
+        super().__init__(
+            coordinator, zone_id, zone_name, DUTY_CYCLE_SENSOR, subentry_id
+        )
+
+    @property
+    def icon(self) -> str | None:
+        """Return icon based on duty cycle value."""
+        value = self.native_value
+        if value is None:
+            return "mdi:gauge-empty"
+        if value >= ICON_DUTY_CYCLE_THRESHOLDS[2]:
+            return "mdi:gauge-full"
+        if value >= ICON_DUTY_CYCLE_THRESHOLDS[1]:
+            return "mdi:gauge"
+        if value >= ICON_DUTY_CYCLE_THRESHOLDS[0]:
+            return "mdi:gauge-low"
+        return "mdi:gauge-empty"
 
 
 class UFHRequestingZonesSensor(UFHControllerEntity, SensorEntity):
