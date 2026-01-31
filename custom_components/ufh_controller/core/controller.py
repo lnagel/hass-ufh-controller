@@ -57,6 +57,7 @@ class ControllerConfig:
     summer_mode_entity: str | None = None
     supply_temp_entity: str | None = None
     return_temp_entity: str | None = None
+    supply_target_temp: float = 40.0
     timing: TimingParams = field(default_factory=TimingParams)
     zones: list[ZoneConfig] = field(default_factory=list)
 

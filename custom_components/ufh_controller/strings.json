@@ -51,7 +51,11 @@
         "description": "Configure temperature sensors for monitoring manifold supply and return temperatures.",
         "data": {
           "supply_temp_entity": "Supply temperature sensor",
-          "return_temp_entity": "Return temperature sensor"
+          "return_temp_entity": "Return temperature sensor",
+          "supply_target_temp": "Target supply temperature"
+        },
+        "data_description": {
+          "supply_target_temp": "Expected supply temperature when boiler is firing at full capacity. Used to calculate heat performance percentage."
         }
       },
       "zone_entities": {
@@ -222,6 +226,9 @@
       },
       "delta_t": {
         "name": "Delta T"
+      },
+      "heat_performance": {
+        "name": "Heat Performance"
       }
     },
     "binary_sensor": {

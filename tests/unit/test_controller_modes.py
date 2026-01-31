@@ -57,11 +57,14 @@ class TestEvaluateZonesHeatMode:
         setup_zone_historical(
             controller,
             "living_room",
-            period_state_avg=0.0,  # No usage yet
             open_state_avg=0.0,
             window_recently_open=False,
-            elapsed_time=7200.0,  # Full observation period
         )
+
+        # Update requested_duration from duty cycle
+        runtime = controller.get_zone_runtime("living_room")
+        assert runtime is not None
+        runtime.update_requested_duration(7200)
 
         actions = controller.evaluate(now=datetime.now(UTC)).valve_actions
 

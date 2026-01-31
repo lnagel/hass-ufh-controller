@@ -249,3 +249,36 @@ async def test_options_flow_update_flow_monitoring(
     # Verify the config entry data was updated
     assert mock_config_entry.data["supply_temp_entity"] == "sensor.supply_temp"
     assert mock_config_entry.data["return_temp_entity"] == "sensor.return_temp"
+
+
+async def test_options_flow_update_supply_target_temp(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Test updating supply_target_temp via options flow."""
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    result = await hass.config_entries.options.async_init(mock_config_entry.entry_id)
+
+    # Navigate to flow_monitoring
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={"next_step_id": "flow_monitoring"},
+    )
+
+    # Update with supply_target_temp
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={
+            "supply_temp_entity": "sensor.supply_temp",
+            "return_temp_entity": "sensor.return_temp",
+            "supply_target_temp": 45.0,
+        },
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+
+    # Verify the config entry data was updated
+    assert mock_config_entry.data["supply_target_temp"] == 45.0

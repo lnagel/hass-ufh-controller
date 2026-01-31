@@ -500,7 +500,7 @@ class TestUpdateZoneHistorical:
     """Test update_zone_historical method."""
 
     def test_update_historical_data(self, basic_config: ControllerConfig) -> None:
-        """Test updating zone historical data."""
+        """Test updating zone historical data sets flow state."""
         controller = HeatingController(basic_config)
 
         # Set duty cycle first
@@ -509,19 +509,33 @@ class TestUpdateZoneHistorical:
         setup_zone_historical(
             controller,
             "living_room",
-            period_state_avg=0.25,
-            open_state_avg=0.9,
+            open_state_avg=0.9,  # Above 0.85 threshold
             window_recently_open=False,
-            elapsed_time=7200.0,  # Full observation period
         )
 
         state = controller.get_zone_state("living_room")
         assert state is not None
-        assert state.period_state_avg == 0.25
         assert state.open_state_avg == 0.9
         assert state.window_recently_open is False
-        # Used duration = 0.25 * 7200 = 1800
-        assert state.used_duration == 1800.0
+        # Flow is derived from open_state_avg >= 0.85
+        assert state.flow is True
+
+    def test_update_historical_sets_flow_false(
+        self, basic_config: ControllerConfig
+    ) -> None:
+        """Test that flow is False when valve not open long enough."""
+        controller = HeatingController(basic_config)
+
+        setup_zone_historical(
+            controller,
+            "living_room",
+            open_state_avg=0.5,  # Below 0.85 threshold
+            window_recently_open=False,
+        )
+
+        state = controller.get_zone_state("living_room")
+        assert state is not None
+        assert state.flow is False
 
     def test_update_unknown_zone(self, basic_config: ControllerConfig) -> None:
         """Test updating unknown zone does nothing."""
@@ -530,76 +544,43 @@ class TestUpdateZoneHistorical:
         setup_zone_historical(
             controller,
             "unknown",
-            period_state_avg=0.25,
             open_state_avg=0.9,
             window_recently_open=False,
-            elapsed_time=7200.0,
         )
 
-    def test_used_duration_with_elapsed_time(
+    def test_quota_based_evaluation_with_used_duration(
         self, basic_config: ControllerConfig
     ) -> None:
         """
-        Test used_duration calculation uses elapsed time, not full period.
+        Test that quota-based evaluation uses used_duration correctly.
 
-        When partway through an observation period, used_duration should be
-        calculated from the actual elapsed time, not the full observation period.
+        used_duration is now an internal accumulator rather than being
+        calculated from recorder data.
         """
         controller = HeatingController(basic_config)
 
-        # Set duty cycle to 90%
-        setup_zone_pid(controller, "living_room", 19.0, 60.0)  # 2 degree error
-
-        # Simulate being 30 minutes (1800s) into a 2-hour observation period
-        # Valve was on 50% of the elapsed time (15 minutes = 900 seconds)
-        setup_zone_historical(
-            controller,
-            "living_room",
-            period_state_avg=0.5,  # On 50% of elapsed time
-            open_state_avg=0.9,
-            window_recently_open=False,
-            elapsed_time=1800.0,
-        )
-
-        state = controller.get_zone_state("living_room")
-        assert state is not None
-        # used_duration should be 0.5 * 1800 = 900 seconds (NOT 0.5 * 7200 = 3600)
-        assert state.used_duration == 900.0
-        # requested_duration still uses full period: duty_cycle * 7200
-        # With 2 degree error and Kp=50, duty_cycle ≈ 100% (clamped)
-        assert state.requested_duration > 0
-
-    def test_high_duty_cycle_low_elapsed_time_turns_on(
-        self, basic_config: ControllerConfig
-    ) -> None:
-        """
-        Test that high duty cycle zone turns on even early in observation period.
-
-        This is a regression test for the bug where used_duration was incorrectly
-        calculated using full period instead of elapsed time, causing zones to
-        think they had used more quota than they actually had.
-        """
-        controller = HeatingController(basic_config)
-
-        # Set up zone with high duty cycle (90%)
+        # Set up zone with high duty cycle
         setup_zone_pid(controller, "living_room", 19.0, 60.0)
-
-        # Early in observation period (30 min), valve was on most of the time (80%)
-        # Bug: used_duration = 0.8 * 7200 = 5760 (would exceed quota for 80% duty)
-        # Fix: used_duration = 0.8 * 1800 = 1440 (still has plenty of quota)
         setup_zone_historical(
             controller,
             "living_room",
-            period_state_avg=0.8,
             open_state_avg=0.0,
             window_recently_open=False,
-            elapsed_time=1800.0,
         )
+
+        runtime = controller.get_zone_runtime("living_room")
+        assert runtime is not None
+
+        # Update requested_duration from duty cycle
+        runtime.update_requested_duration(7200)
+
+        # Simulate some used_duration
+        runtime.state.used_duration = 1440.0
 
         actions = controller.evaluate(now=datetime.now(UTC)).valve_actions
 
         # Zone should turn on because it still has quota remaining:
-        # With 100% duty cycle: requested_duration is 7200s, used_duration is 1440s,
+        # requested_duration ~ 7200s (100% duty), used_duration is 1440s,
         # so remaining quota (5760s) exceeds min_run_time (540s)
         assert actions["living_room"] == ZoneAction.TURN_ON
 
@@ -647,12 +628,10 @@ class TestHeatRequestFromEvaluate:
         setup_zone_historical(
             controller,
             "living_room",
-            period_state_avg=0.0,
-            open_state_avg=0.9,  # Above 0.85 threshold
+            open_state_avg=0.9,  # Above 0.85 threshold (sets flow=True)
             window_recently_open=False,
-            elapsed_time=7200.0,  # Full observation period
         )
-        # Manually set valve on
+        # Manually set valve on and quota
         runtime = controller.get_zone_runtime("living_room")
         assert runtime is not None
         runtime.state.valve_state = ValveState.ON
@@ -759,18 +738,14 @@ class TestComputeActionsWithFlushZones:
         setup_zone_historical(
             controller,
             "living_room",
-            period_state_avg=0.0,
             open_state_avg=0.0,
             window_recently_open=False,
-            elapsed_time=7200.0,
         )
         setup_zone_historical(
             controller,
             "bathroom",
-            period_state_avg=0.0,
             open_state_avg=0.0,
             window_recently_open=False,
-            elapsed_time=7200.0,
         )
 
         actions = controller.evaluate(now=datetime.now(UTC))
@@ -796,18 +771,14 @@ class TestComputeActionsWithFlushZones:
         setup_zone_historical(
             controller,
             "living_room",
-            period_state_avg=0.0,
             open_state_avg=0.0,
             window_recently_open=False,
-            elapsed_time=7200.0,
         )
         setup_zone_historical(
             controller,
             "bathroom",
-            period_state_avg=0.0,
             open_state_avg=0.0,
             window_recently_open=False,
-            elapsed_time=7200.0,
         )
 
         actions = controller.evaluate(now=datetime.now(UTC))
