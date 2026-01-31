@@ -188,7 +188,7 @@
   },
   "entity": {
     "climate": {
-      "zone": {
+      "thermostat": {
         "name": "Climate"
       }
     },

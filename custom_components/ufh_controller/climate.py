@@ -53,8 +53,8 @@ class UFHZoneClimate(UFHControllerZoneEntity, ClimateEntity):
     """Climate entity for a UFH zone."""
 
     _attr_hvac_modes: ClassVar[list[HVACMode]] = [HVACMode.HEAT, HVACMode.OFF]
-    _attr_icon = "mdi:heating-coil"
     _attr_name = "Thermostat"
+    _attr_translation_key = "thermostat"
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
     _enable_turn_on_off_backwards_compat = False
 
@@ -71,7 +71,6 @@ class UFHZoneClimate(UFHControllerZoneEntity, ClimateEntity):
 
         controller_id = coordinator.config_entry.data.get("controller_id", "")
         self._attr_unique_id = f"{controller_id}_{zone_id}_climate"
-        self._attr_translation_key = "zone"
 
         # Temperature settings
         setpoint_config = zone_config.get("setpoint", DEFAULT_SETPOINT)

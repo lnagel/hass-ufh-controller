@@ -1,0 +1,9 @@
+{
+  "entity": {
+    "climate": {
+      "thermostat": {
+        "default": "mdi:heating-coil"
+      }
+    }
+  }
+}
