@@ -220,6 +220,16 @@ class UFHControllerDataUpdateCoordinator(
                 # Invalid timestamp format, start fresh
                 self.last_update_success_time = None
 
+        # Restore last force update for observation period tracking
+        if "last_force_update" in stored_data:
+            try:
+                self._last_force_update = datetime.fromisoformat(
+                    stored_data["last_force_update"]
+                )
+            except (ValueError, TypeError):
+                # Invalid timestamp format, will trigger reset on first update
+                self._last_force_update = None
+
         # Restore controller-level state using shared method
         self._restore_controller_state(stored_data)
 
@@ -406,6 +416,10 @@ class UFHControllerDataUpdateCoordinator(
         # Include last update timestamp from base class
         if self.last_update_success_time is not None:
             data["last_update_success_time"] = self.last_update_success_time.isoformat()
+
+        # Include last force update timestamp for observation period tracking
+        if self._last_force_update is not None:
+            data["last_force_update"] = self._last_force_update.isoformat()
 
         return data
 

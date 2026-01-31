@@ -146,3 +146,42 @@ async def test_fail_safe_sets_expected_state_for_summer_mode(
     await coordinator._execute_fail_safe_actions()
 
     assert coordinator._expected_states.get("select.summer_mode") == SummerMode.AUTO
+
+
+async def test_dhw_off_transition_sets_flush_until_when_enabled(
+    hass: HomeAssistant,
+    mock_config_entry_all_entities: MockConfigEntry,
+) -> None:
+    """
+    Test that DHW OFF transition sets flush_until when flush is enabled.
+
+    When DHW transitions from on to off and flush is enabled with a non-zero
+    flush_duration, the coordinator should set flush_until to schedule the
+    post-DHW flush period.
+    """
+    mock_config_entry_all_entities.add_to_hass(hass)
+    hass.states.async_set("sensor.zone1_temp", "20.5")
+
+    await hass.config_entries.async_setup(mock_config_entry_all_entities.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = mock_config_entry_all_entities.runtime_data.coordinator
+
+    # Enable flush mode
+    coordinator._controller.state.flush_enabled = True
+
+    # Simulate DHW being on (previous state)
+    hass.states.async_set("binary_sensor.dhw_active", "on")
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    # Verify flush_until is not set while DHW is active
+    assert coordinator._controller.state.flush_until is None
+
+    # Transition DHW to off
+    hass.states.async_set("binary_sensor.dhw_active", "off")
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    # flush_until should now be set (post-DHW flush period started)
+    assert coordinator._controller.state.flush_until is not None
