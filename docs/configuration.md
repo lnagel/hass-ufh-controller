@@ -443,3 +443,39 @@ A select entity on the boiler to toggle between "summer" (heating circuit disabl
 **Why it matters:** Reduces standby energy consumption by disabling the heating circuit when not needed. Alternative to using `heat_request_entity`.
 
 ---
+
+### Flow Monitoring
+
+Flow monitoring allows tracking of manifold supply and return temperatures. These are optional sensors used for monitoring system performance.
+
+#### supply_temp_entity
+
+**Type:** Sensor entity
+**Required:** No
+**Config location:** ConfigEntry → `data.supply_temp_entity`
+
+A temperature sensor measuring the supply water temperature at the heating manifold (water from the boiler).
+
+**How it works:** The controller reads this sensor's value at each control loop interval. When combined with `return_temp_entity`, it enables the Delta T sensor which shows the temperature difference across the manifold.
+
+**Example:** `sensor.manifold_supply_temperature` → Reads the temperature of water entering the manifold from the boiler.
+
+**Why it matters:** Monitoring supply temperature helps diagnose boiler performance and verify that adequate heat is being delivered to the system.
+
+#### return_temp_entity
+
+**Type:** Sensor entity
+**Required:** No
+**Config location:** ConfigEntry → `data.return_temp_entity`
+
+A temperature sensor measuring the return water temperature at the heating manifold (water returning to the boiler).
+
+**How it works:** The controller reads this sensor's value at each control loop interval. When combined with `supply_temp_entity`, it enables the Delta T sensor which shows the temperature difference across the manifold.
+
+**Example:** `sensor.manifold_return_temperature` → Reads the temperature of water leaving the manifold back to the boiler.
+
+**Why it matters:** Monitoring return temperature helps verify that heat is being effectively transferred to the floor. The difference between supply and return (Delta T) indicates how much heat the floor is absorbing.
+
+**Note:** Both `supply_temp_entity` and `return_temp_entity` must be configured for the Delta T sensor to be created. If only one is configured, no Delta T calculation is performed.
+
+---

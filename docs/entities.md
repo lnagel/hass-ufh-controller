@@ -12,8 +12,11 @@ All controller entities belong to a device named after the controller (user-defi
 | sensor | `sensor.{controller_id}_requesting_zones`  | "{name} Requesting Zones"  | Count of zones currently requesting heat |
 | binary_sensor | `binary_sensor.{controller_id}_status` | "{name} Status" | Controller operational status (problem when degraded/fail-safe) |
 | binary_sensor | `binary_sensor.{controller_id}_flush_request` | "{name} Flush Request" | Flush is actively running (only when `dhw_active_entity` configured) |
+| sensor | `sensor.{controller_id}_delta_t` | "{name} Delta T" | Temperature difference between supply and return (only when flow monitoring configured) |
 
 **Note:** The flush enabled switch and flush request sensor are only created when `dhw_active_entity` is configured, as the DHW latent heat capture feature requires DHW state input to function.
+
+**Note:** The Delta T sensor is only created when both `supply_temp_entity` and `return_temp_entity` are configured. It shows the temperature difference (supply - return) and becomes unavailable if either source sensor is missing or has an invalid value.
 
 **Flush Enabled Behavior:**
 - **Enabled:** Flush-type circuits can turn on for a configurable period after DHW ends (`flush_duration`) to capture latent heat (only when no regular circuits are currently running with valve ON).

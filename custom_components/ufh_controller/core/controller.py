@@ -42,6 +42,7 @@ class ControllerState:
     dhw_active: bool = False
     flush_until: datetime | None = None
     flush_request: bool = False
+    delta_t: float | None = None
     zones: dict[str, ZoneState] = field(default_factory=dict)
 
 
@@ -54,6 +55,8 @@ class ControllerConfig:
     heat_request_entity: str | None = None
     dhw_active_entity: str | None = None
     summer_mode_entity: str | None = None
+    supply_temp_entity: str | None = None
+    return_temp_entity: str | None = None
     timing: TimingParams = field(default_factory=TimingParams)
     zones: list[ZoneConfig] = field(default_factory=list)
 

@@ -15,6 +15,9 @@
       },
       "requesting_zones": {
         "default": "mdi:counter"
+      },
+      "delta_t": {
+        "default": "mdi:thermometer-lines"
       }
     },
     "binary_sensor": {

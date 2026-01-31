@@ -282,6 +282,35 @@ def mock_config_entry_all_entities() -> MockConfigEntry:
     )
 
 
+@pytest.fixture
+def mock_config_entry_with_flow_monitoring() -> MockConfigEntry:
+    """Return a mock config entry with flow monitoring entities configured."""
+    return MockConfigEntry(
+        domain=DOMAIN,
+        title="Test Controller Flow",
+        data={
+            "name": "Test Controller Flow",
+            "controller_id": f"{MOCK_CONTROLLER_ID}_flow",
+            "supply_temp_entity": "sensor.supply_temp",
+            "return_temp_entity": "sensor.return_temp",
+        },
+        options={
+            "timing": DEFAULT_TIMING,
+        },
+        entry_id="test_entry_id_flow",
+        unique_id=f"{MOCK_CONTROLLER_ID}_flow",
+        subentries_data=[
+            {
+                "data": MOCK_ZONE_DATA,
+                "subentry_id": "subentry_zone1",
+                "subentry_type": SUBENTRY_TYPE_ZONE,
+                "title": "Test Zone 1",
+                "unique_id": "zone1",
+            }
+        ],
+    )
+
+
 @pytest.fixture(autouse=True)
 def auto_enable_custom_integrations(
     enable_custom_integrations: None,
