@@ -27,6 +27,7 @@ async def test_options_flow_show_menu(
     assert result["step_id"] == "init"
     assert "control_entities" in result["menu_options"]
     assert "timing" in result["menu_options"]
+    assert "flow_monitoring" in result["menu_options"]
 
 
 async def test_options_flow_control_entities_form(
@@ -194,3 +195,57 @@ async def test_options_flow_reads_controller_subentry(
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "timing"
     # The form should be shown with the custom timing values as defaults
+
+
+async def test_options_flow_flow_monitoring_form(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Test navigating to flow monitoring form from menu."""
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    result = await hass.config_entries.options.async_init(mock_config_entry.entry_id)
+
+    # Select flow_monitoring from menu
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={"next_step_id": "flow_monitoring"},
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "flow_monitoring"
+
+
+async def test_options_flow_update_flow_monitoring(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Test updating flow monitoring entities via options flow."""
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    result = await hass.config_entries.options.async_init(mock_config_entry.entry_id)
+
+    # Navigate to flow_monitoring
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={"next_step_id": "flow_monitoring"},
+    )
+
+    # Update flow monitoring entities
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={
+            "supply_temp_entity": "sensor.supply_temp",
+            "return_temp_entity": "sensor.return_temp",
+        },
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+
+    # Verify the config entry data was updated
+    assert mock_config_entry.data["supply_temp_entity"] == "sensor.supply_temp"
+    assert mock_config_entry.data["return_temp_entity"] == "sensor.return_temp"
