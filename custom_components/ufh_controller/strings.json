@@ -234,6 +234,9 @@
       "heat_request": {
         "name": "Heat Request"
       },
+      "flow": {
+        "name": "Flow"
+      },
       "status": {
         "name": "Status"
       },
