@@ -1,7 +1,7 @@
 {
   "entity": {
     "climate": {
-      "zone": {
+      "thermostat": {
         "default": "mdi:heating-coil"
       }
     }
