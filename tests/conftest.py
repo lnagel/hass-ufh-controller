@@ -62,7 +62,7 @@ def setup_zone_pid(
     return runtime.update_pid(dt, controller.mode)
 
 
-def setup_zone_historical(  # noqa: PLR0913
+def setup_zone_historical(
     controller: "HeatingController",
     zone_id: str,
     *,

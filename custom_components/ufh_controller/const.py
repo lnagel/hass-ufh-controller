@@ -230,3 +230,7 @@ UI_TEMP_EMA_TIME_CONSTANT = {"min": 0, "max": 1800, "step": 60}  # 0-30 minutes
 
 # UI validation constraints for preset temperatures
 UI_PRESET_TEMPERATURE = {"min": 5.0, "max": 35.0, "step": 0.5}
+
+# Icons
+ICON_PID_ERROR_THRESHOLD = 0.1
+ICON_DUTY_CYCLE_THRESHOLDS = (16.7, 50.0, 83.3)
