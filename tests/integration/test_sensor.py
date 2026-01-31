@@ -8,7 +8,12 @@ from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.ufh_controller.const import FAIL_SAFE_TIMEOUT, ZoneStatus
+from custom_components.ufh_controller.const import (
+    FAIL_SAFE_TIMEOUT,
+    PID_ERROR_AT_SETPOINT_THRESHOLD,
+    ZoneStatus,
+)
+from custom_components.ufh_controller.core.pid import PIDState
 
 
 @pytest.fixture
@@ -167,3 +172,55 @@ async def test_zone_sensor_unavailable_during_fail_safe(
             f"Sensor {sensor_suffix} should be unavailable during FAIL_SAFE, "
             f"got {state.state}"
         )
+
+
+@pytest.mark.parametrize(
+    ("error_value", "expected_icon"),
+    [
+        (None, "mdi:thermometer-off"),
+        (1.0, "mdi:thermometer-chevron-up"),  # Cold, needs heating
+        (PID_ERROR_AT_SETPOINT_THRESHOLD + 0.01, "mdi:thermometer-chevron-up"),
+        (-1.0, "mdi:thermometer-chevron-down"),  # Warm, above setpoint
+        (-PID_ERROR_AT_SETPOINT_THRESHOLD - 0.01, "mdi:thermometer-chevron-down"),
+        (0.0, "mdi:thermometer-check"),  # At setpoint
+        (PID_ERROR_AT_SETPOINT_THRESHOLD - 0.01, "mdi:thermometer-check"),
+        (-PID_ERROR_AT_SETPOINT_THRESHOLD + 0.01, "mdi:thermometer-check"),
+    ],
+)
+async def test_pid_error_sensor_icon(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_temp_sensor: None,
+    sensor_entity_prefix: str,
+    error_value: float | None,
+    expected_icon: str,
+) -> None:
+    """Test PID error sensor icon changes based on error value."""
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = mock_config_entry.runtime_data.coordinator
+    zone1 = coordinator._controller.get_zone_runtime("zone1")
+    assert zone1 is not None
+
+    # Set the error value in the PID state (where coordinator reads it from)
+    # PIDState is frozen, so we need to replace it entirely
+    old_state = zone1.pid.state
+    zone1.pid._state = (
+        PIDState(
+            error=error_value if error_value is not None else 0.0,
+            p_term=old_state.p_term if old_state else 0.0,
+            i_term=old_state.i_term if old_state else 0.0,
+            d_term=old_state.d_term if old_state else 0.0,
+            duty_cycle=old_state.duty_cycle if old_state else 0.0,
+        )
+        if error_value is not None
+        else None
+    )
+    coordinator.async_set_updated_data(coordinator._build_state_dict())
+    await hass.async_block_till_done()
+
+    state = hass.states.get(f"{sensor_entity_prefix}_pid_error")
+    assert state is not None
+    assert state.attributes.get("icon") == expected_icon

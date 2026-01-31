@@ -13,7 +13,7 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.const import PERCENTAGE, UnitOfTemperature
 
-from .const import SUBENTRY_TYPE_ZONE, ZoneStatus
+from .const import PID_ERROR_AT_SETPOINT_THRESHOLD, SUBENTRY_TYPE_ZONE, ZoneStatus
 from .entity import (
     UFHControllerEntity,
     UFHControllerZoneEntity,
@@ -47,15 +47,6 @@ ZONE_SENSORS: tuple[UFHZoneSensorEntityDescription, ...] = (
         value_fn=lambda data: data.get("duty_cycle"),
     ),
     UFHZoneSensorEntityDescription(
-        key="pid_error",
-        translation_key="pid_error",
-        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
-        device_class=SensorDeviceClass.TEMPERATURE,
-        state_class=SensorStateClass.MEASUREMENT,
-        suggested_display_precision=2,
-        value_fn=lambda data: data.get("error"),
-    ),
-    UFHZoneSensorEntityDescription(
         key="pid_proportional",
         translation_key="pid_proportional",
         native_unit_of_measurement=PERCENTAGE,
@@ -79,6 +70,16 @@ ZONE_SENSORS: tuple[UFHZoneSensorEntityDescription, ...] = (
         suggested_display_precision=2,
         value_fn=lambda data: data.get("d_term"),
     ),
+)
+
+PID_ERROR_SENSOR = UFHZoneSensorEntityDescription(
+    key="pid_error",
+    translation_key="pid_error",
+    native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+    device_class=SensorDeviceClass.TEMPERATURE,
+    state_class=SensorStateClass.MEASUREMENT,
+    suggested_display_precision=2,
+    value_fn=lambda data: data.get("error"),
 )
 
 
@@ -116,6 +117,14 @@ async def async_setup_entry(
                     subentry_id=subentry_id,
                 )
                 for description in ZONE_SENSORS
+            ]
+            + [
+                UFHPidErrorSensor(
+                    coordinator=coordinator,
+                    zone_id=zone_id,
+                    zone_name=zone_name,
+                    subentry_id=subentry_id,
+                )
             ],
             config_subentry_id=subentry_id,
         )
@@ -163,6 +172,32 @@ class UFHZoneSensor(UFHControllerZoneEntity, SensorEntity):
         if zone_status == ZoneStatus.FAIL_SAFE.value:
             return False
         return self.native_value is not None
+
+
+class UFHPidErrorSensor(UFHZoneSensor):
+    """Sensor entity for PID error with dynamic icon based on value sign."""
+
+    def __init__(
+        self,
+        coordinator: UFHControllerDataUpdateCoordinator,
+        zone_id: str,
+        zone_name: str,
+        subentry_id: str,
+    ) -> None:
+        """Initialize the PID error sensor entity."""
+        super().__init__(coordinator, zone_id, zone_name, PID_ERROR_SENSOR, subentry_id)
+
+    @property
+    def icon(self) -> str | None:
+        """Return icon based on error value."""
+        value = self.native_value
+        if value is None:
+            return "mdi:thermometer-off"
+        if value > PID_ERROR_AT_SETPOINT_THRESHOLD:
+            return "mdi:thermometer-chevron-up"
+        if value < -PID_ERROR_AT_SETPOINT_THRESHOLD:
+            return "mdi:thermometer-chevron-down"
+        return "mdi:thermometer-check"
 
 
 class UFHRequestingZonesSensor(UFHControllerEntity, SensorEntity):
