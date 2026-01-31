@@ -94,11 +94,12 @@ class ZoneState:
     valve_on_since: datetime | None = None
 
     # Historical averages from Recorder queries
-    period_state_avg: float = 0.0
     open_state_avg: float = 0.0
-    window_recently_open: bool = False  # Was any window open within blocking period
+    flow: bool = False
+    window_recently_open: bool = False
 
     # Derived scheduling values
+    heat_performance: float | None = None
     used_duration: float = 0.0
     requested_duration: float = 0.0
 
@@ -241,37 +242,98 @@ class ZoneRuntime:
         # Window was open recently - pause PID to let temperature stabilize
         return self.state.window_recently_open
 
-    def update_historical(
-        self,
-        *,
-        period_state_avg: float,
-        open_state_avg: float,
-        window_recently_open: bool,
-        elapsed_time: float,
-        observation_period: int,
-    ) -> None:
+    def update_requested_duration(self, observation_period: int) -> None:
         """
-        Update zone historical averages from Recorder queries.
+        Update requested_duration based on current duty cycle.
 
         Args:
-            period_state_avg: Average valve state since observation start.
-            open_state_avg: Average valve state for open detection.
-            window_recently_open: Was any window open within blocking period.
-            elapsed_time: Actual elapsed time since observation start in seconds.
             observation_period: Full observation period in seconds.
 
         """
-        self.state.period_state_avg = period_state_avg
-        self.state.open_state_avg = open_state_avg
-        self.state.window_recently_open = window_recently_open
-
-        # Calculate used and requested durations
-        self.state.used_duration = period_state_avg * elapsed_time
         duty_cycle = self.pid.state.duty_cycle if self.pid.state else 0.0
         self.state.requested_duration = calculate_requested_duration(
             duty_cycle,
             observation_period,
         )
+
+    def update_historical(
+        self,
+        *,
+        open_state_avg: float,
+        window_recently_open: bool,
+    ) -> None:
+        """
+        Update zone historical averages from Recorder queries.
+
+        Args:
+            open_state_avg: Average valve state for open detection.
+            window_recently_open: Was any window open within blocking period.
+
+        """
+        self.state.open_state_avg = open_state_avg
+        self.state.flow = open_state_avg >= DEFAULT_VALVE_OPEN_THRESHOLD
+        self.state.window_recently_open = window_recently_open
+
+    def update_heat_performance(
+        self, *, supply_temp: float | None, supply_target_temp: float
+    ) -> None:
+        """
+        Update heat_performance based on supply vs target temperatures.
+
+        Formula: (supply_temp - room_temp) / (supply_target_temp - room_temp) * 100
+        Result is % of expected heat delivery (100% = at target, >100% = above).
+
+        Args:
+            supply_temp: Current supply temperature, or None if unavailable.
+            supply_target_temp: Expected target supply temperature.
+
+        """
+        room_temp = self.state.current
+
+        # Can't calculate without both temps
+        if supply_temp is None or room_temp is None:
+            self.state.heat_performance = None
+            return
+
+        denominator = supply_target_temp - room_temp
+        if denominator <= 0:
+            # Room at/above target - no meaningful ratio
+            self.state.heat_performance = None
+            return
+
+        numerator = supply_temp - room_temp
+        if numerator <= 0:
+            # Supply at/below room - 0% performance
+            self.state.heat_performance = 0.0
+            return
+
+        # Calculate as percentage, cap at 200%
+        self.state.heat_performance = min(numerator / denominator * 100, 200.0)
+
+    def update_used_duration(self, dt: float) -> None:
+        """
+        Update used_duration based on flow state and heat performance.
+
+        Only accumulates time when flow=True (valve open long enough).
+        When heat_performance is available, accumulation is weighted by it.
+
+        Args:
+            dt: Time delta since last update in seconds.
+
+        """
+        if not self.state.flow:
+            return
+
+        if self.state.heat_performance is not None:
+            # Weight by heat performance (converted from % to ratio)
+            self.state.used_duration += dt * (self.state.heat_performance / 100.0)
+        else:
+            # Fallback: simple accumulation
+            self.state.used_duration += dt
+
+    def reset_used_duration(self) -> None:
+        """Reset used_duration at the start of a new observation period."""
+        self.state.used_duration = 0.0
 
     def set_setpoint(self, setpoint: float) -> None:
         """
@@ -499,7 +561,7 @@ def should_request_heat(
         return False
 
     # Wait for valve to fully open
-    if zone.open_state_avg < DEFAULT_VALVE_OPEN_THRESHOLD:
+    if not zone.flow:
         return False
 
     # Don't request if zone is about to close

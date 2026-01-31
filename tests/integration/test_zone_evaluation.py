@@ -558,6 +558,7 @@ class TestShouldRequestHeat:
             zone_id="test",
             valve_state=ValveState.ON,
             open_state_avg=0.90,  # Above 85% threshold
+            flow=True,  # Derived from open_state_avg >= 0.85
             requested_duration=1000.0,
             used_duration=0.0,
         )
