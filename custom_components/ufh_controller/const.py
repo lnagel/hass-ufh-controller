@@ -209,9 +209,7 @@ DEFAULT_VALVE_OPEN_THRESHOLD = 0.85  # 85% threshold for considering valve fully
 DEFAULT_WINDOW_OPEN_THRESHOLD = 0.1  # 10% threshold for window open detection
 
 # Flow monitoring defaults
-DEFAULT_SUPPLY_TARGET_TEMP = (
-    40.0  # Expected supply temperature for heat performance calc
-)
+DEFAULT_SUPPLY_TARGET_TEMP = 40.0
 
 # UI validation constraints for flow monitoring
 UI_SUPPLY_TARGET_TEMP = {"min": 25.0, "max": 60.0, "step": 0.5}

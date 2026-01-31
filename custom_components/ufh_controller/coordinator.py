@@ -755,7 +755,7 @@ class UFHControllerDataUpdateCoordinator(
                 exc_info=True,
             )
 
-        # Update zone with historical data (sets flow state)
+        # Update zone with historical data
         runtime.update_historical(
             open_state_avg=open_state_avg,
             window_recently_open=window_recently_open,
