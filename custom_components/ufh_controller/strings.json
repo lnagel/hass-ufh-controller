@@ -23,7 +23,7 @@
         "menu_options": {
           "control_entities": "Control Entities",
           "timing": "Timing Parameters",
-          "flow_monitoring": "Flow Monitoring"
+          "supply_temperature": "Supply Temperature"
         }
       },
       "control_entities": {
@@ -46,12 +46,11 @@
           "flush_duration": "Flush duration after DHW"
         }
       },
-      "flow_monitoring": {
-        "title": "Flow Monitoring",
-        "description": "Configure temperature sensors for monitoring manifold supply and return temperatures.",
+      "supply_temperature": {
+        "title": "Supply Temperature",
+        "description": "Configure supply temperature sensor for heat performance calculation.",
         "data": {
           "supply_temp_entity": "Supply temperature sensor",
-          "return_temp_entity": "Return temperature sensor",
           "supply_target_temp": "Target supply temperature"
         },
         "data_description": {

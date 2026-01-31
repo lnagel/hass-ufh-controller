@@ -50,7 +50,6 @@ CONF_HEAT_REQUEST_ENTITY = "heat_request_entity"
 CONF_DHW_ACTIVE_ENTITY = "dhw_active_entity"
 CONF_SUMMER_MODE_ENTITY = "summer_mode_entity"
 CONF_SUPPLY_TEMP_ENTITY = "supply_temp_entity"
-CONF_RETURN_TEMP_ENTITY = "return_temp_entity"
 CONF_SUPPLY_TARGET_TEMP = "supply_target_temp"
 
 
@@ -612,7 +611,7 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
         """Show menu with configuration options."""
         return self.async_show_menu(
             step_id="init",
-            menu_options=["control_entities", "timing", "flow_monitoring"],
+            menu_options=["control_entities", "timing", "supply_temperature"],
         )
 
     async def async_step_control_entities(
@@ -713,17 +712,16 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
             data_schema=get_timing_schema(timing),
         )
 
-    async def async_step_flow_monitoring(
+    async def async_step_supply_temperature(
         self,
         user_input: dict[str, Any] | None = None,
     ) -> config_entries.ConfigFlowResult:
-        """Configure flow monitoring entities (supply/return temperature sensors)."""
+        """Configure supply temperature sensor and target."""
         if user_input is not None:
-            # Update the config entry data with flow monitoring entities
+            # Update the config entry data with supply temperature settings
             new_data = {
                 **self.config_entry.data,
                 CONF_SUPPLY_TEMP_ENTITY: user_input.get(CONF_SUPPLY_TEMP_ENTITY),
-                CONF_RETURN_TEMP_ENTITY: user_input.get(CONF_RETURN_TEMP_ENTITY),
                 CONF_SUPPLY_TARGET_TEMP: user_input.get(
                     CONF_SUPPLY_TARGET_TEMP, DEFAULT_SUPPLY_TARGET_TEMP
                 ),
@@ -738,21 +736,13 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
         current_data = self.config_entry.data
 
         return self.async_show_form(
-            step_id="flow_monitoring",
+            step_id="supply_temperature",
             data_schema=vol.Schema(
                 {
                     vol.Optional(
                         CONF_SUPPLY_TEMP_ENTITY,
                         description={
                             "suggested_value": current_data.get(CONF_SUPPLY_TEMP_ENTITY)
-                        },
-                    ): selector.EntitySelector(
-                        selector.EntitySelectorConfig(domain="sensor")
-                    ),
-                    vol.Optional(
-                        CONF_RETURN_TEMP_ENTITY,
-                        description={
-                            "suggested_value": current_data.get(CONF_RETURN_TEMP_ENTITY)
                         },
                     ): selector.EntitySelector(
                         selector.EntitySelectorConfig(domain="sensor")

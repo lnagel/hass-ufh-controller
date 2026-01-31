@@ -185,7 +185,6 @@ class UFHControllerDataUpdateCoordinator(
             dhw_active_entity=data.get("dhw_active_entity"),
             summer_mode_entity=data.get("summer_mode_entity"),
             supply_temp_entity=data.get("supply_temp_entity"),
-            return_temp_entity=data.get("return_temp_entity"),
             supply_target_temp=data.get(
                 "supply_target_temp", DEFAULT_SUPPLY_TARGET_TEMP
             ),

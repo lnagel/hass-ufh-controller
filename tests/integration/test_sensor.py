@@ -281,19 +281,16 @@ async def test_duty_cycle_sensor_icon(
 
 async def test_heat_performance_sensor_created_with_supply_entity(
     hass: HomeAssistant,
-    mock_config_entry_with_flow_monitoring: MockConfigEntry,
+    mock_config_entry_with_supply_temp: MockConfigEntry,
 ) -> None:
     """Test heat_performance sensor is created when supply_temp_entity is configured."""
-    # Set up the flow monitoring sensor entities
+    # Set up the supply temperature sensor entity
     hass.states.async_set("sensor.supply_temp", "45.0")
-    hass.states.async_set("sensor.return_temp", "35.0")
     hass.states.async_set("sensor.zone1_temp", "20.5")
     hass.states.async_set("switch.zone1_valve", "off")
 
-    mock_config_entry_with_flow_monitoring.add_to_hass(hass)
-    await hass.config_entries.async_setup(
-        mock_config_entry_with_flow_monitoring.entry_id
-    )
+    mock_config_entry_with_supply_temp.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry_with_supply_temp.entry_id)
     await hass.async_block_till_done()
 
     # Heat performance sensor should exist for zone1

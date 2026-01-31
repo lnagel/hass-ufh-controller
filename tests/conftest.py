@@ -276,8 +276,8 @@ def mock_config_entry_all_entities() -> MockConfigEntry:
 
 
 @pytest.fixture
-def mock_config_entry_with_flow_monitoring() -> MockConfigEntry:
-    """Return a mock config entry with flow monitoring entities configured."""
+def mock_config_entry_with_supply_temp() -> MockConfigEntry:
+    """Return a mock config entry with supply temperature entity configured."""
     return MockConfigEntry(
         domain=DOMAIN,
         title="Test Controller Flow",
@@ -285,7 +285,6 @@ def mock_config_entry_with_flow_monitoring() -> MockConfigEntry:
             "name": "Test Controller Flow",
             "controller_id": f"{MOCK_CONTROLLER_ID}_flow",
             "supply_temp_entity": "sensor.supply_temp",
-            "return_temp_entity": "sensor.return_temp",
         },
         options={
             "timing": DEFAULT_TIMING,
