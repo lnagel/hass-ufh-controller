@@ -456,7 +456,7 @@ Flow monitoring allows tracking of manifold supply and return temperatures. Thes
 
 A temperature sensor measuring the supply water temperature at the heating manifold (water from the boiler).
 
-**How it works:** The controller reads this sensor's value at each control loop interval to calculate heat performance for each zone.
+**How it works:** The controller reads this sensor's value at each control loop interval to calculate supply coefficient for each zone.
 
 **Example:** `sensor.manifold_supply_temperature` → Reads the temperature of water entering the manifold from the boiler.
 

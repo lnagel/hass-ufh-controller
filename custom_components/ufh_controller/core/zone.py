@@ -99,7 +99,7 @@ class ZoneState:
     window_recently_open: bool = False
 
     # Derived scheduling values
-    heat_performance: float | None = None
+    supply_coefficient: float | None = None
     used_duration: float = 0.0
     requested_duration: float = 0.0
 
@@ -274,11 +274,11 @@ class ZoneRuntime:
         self.state.flow = open_state_avg >= DEFAULT_VALVE_OPEN_THRESHOLD
         self.state.window_recently_open = window_recently_open
 
-    def update_heat_performance(
+    def update_supply_coefficient(
         self, *, supply_temp: float | None, supply_target_temp: float
     ) -> None:
         """
-        Update heat_performance based on supply vs target temperatures.
+        Update supply_coefficient based on supply vs target temperatures.
 
         Formula: (supply_temp - room_temp) / (supply_target_temp - room_temp) * 100
         Result is % of expected heat delivery (100% = at target, >100% = above).
@@ -292,30 +292,30 @@ class ZoneRuntime:
 
         # Can't calculate without both temps
         if supply_temp is None or room_temp is None:
-            self.state.heat_performance = None
+            self.state.supply_coefficient = None
             return
 
         denominator = supply_target_temp - room_temp
         if denominator <= 0:
             # Room at/above target - no meaningful ratio
-            self.state.heat_performance = None
+            self.state.supply_coefficient = None
             return
 
         numerator = supply_temp - room_temp
         if numerator <= 0:
             # Supply at/below room - 0% performance
-            self.state.heat_performance = 0.0
+            self.state.supply_coefficient = 0.0
             return
 
         # Calculate as percentage, cap at 200%
-        self.state.heat_performance = min(numerator / denominator * 100, 200.0)
+        self.state.supply_coefficient = min(numerator / denominator * 100, 200.0)
 
     def update_used_duration(self, dt: float) -> None:
         """
-        Update used_duration based on flow state and heat performance.
+        Update used_duration based on flow state and supply coefficient.
 
         Only accumulates time when flow=True (valve open long enough).
-        When heat_performance is available, accumulation is weighted by it.
+        When supply_coefficient is available, accumulation is weighted by it.
 
         Args:
             dt: Time delta since last update in seconds.
@@ -324,9 +324,9 @@ class ZoneRuntime:
         if not self.state.flow:
             return
 
-        if self.state.heat_performance is not None:
-            # Weight by heat performance (converted from % to ratio)
-            self.state.used_duration += dt * (self.state.heat_performance / 100.0)
+        if self.state.supply_coefficient is not None:
+            # Weight by supply coefficient (converted from % to ratio)
+            self.state.used_duration += dt * (self.state.supply_coefficient / 100.0)
         else:
             # Fallback: simple accumulation
             self.state.used_duration += dt

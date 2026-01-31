@@ -761,9 +761,9 @@ class UFHControllerDataUpdateCoordinator(
             window_recently_open=window_recently_open,
         )
 
-        # Update heat performance from supply temperature
+        # Update supply coefficient from supply temperature
         supply_temp = self._get_supply_temp()
-        runtime.update_heat_performance(
+        runtime.update_supply_coefficient(
             supply_temp=supply_temp,
             supply_target_temp=self._controller.config.supply_target_temp,
         )
@@ -1105,7 +1105,7 @@ class UFHControllerDataUpdateCoordinator(
                     ),
                     "preset_mode": state.preset_mode,
                     "zone_status": state.zone_status.value,
-                    "heat_performance": state.heat_performance,
+                    "supply_coefficient": state.supply_coefficient,
                 }
 
         return result
