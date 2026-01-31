@@ -1,6 +1,6 @@
 [project]
 name = "hass-ufh-controller"
-version = "0.2.0"
+version = "0.2.1"
 description = "A Home Assistant integration for underfloor heating controller"
 readme = "README.md"
 requires-python = ">=3.13.2"
@@ -96,7 +96,7 @@ show_missing = true
 python-version = "3.13"
 
 [tool.bumpversion]
-current_version = "0.2.0"
+current_version = "0.2.1"
 parse = "(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)"
 serialize = ["{major}.{minor}.{patch}"]
 commit = true
