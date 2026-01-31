@@ -462,18 +462,4 @@ A temperature sensor measuring the supply water temperature at the heating manif
 
 **Why it matters:** Monitoring supply temperature helps diagnose boiler performance and verify that adequate heat is being delivered to the system.
 
-#### return_temp_entity
-
-**Type:** Sensor entity
-**Required:** No
-**Config location:** ConfigEntry → `data.return_temp_entity`
-
-A temperature sensor measuring the return water temperature at the heating manifold (water returning to the boiler).
-
-**How it works:** The controller reads this sensor's value at each control loop interval for monitoring purposes.
-
-**Example:** `sensor.manifold_return_temperature` → Reads the temperature of water leaving the manifold back to the boiler.
-
-**Why it matters:** Monitoring return temperature helps verify that heat is being effectively transferred to the floor.
-
 ---
