@@ -223,8 +223,8 @@ class TestTimingParams:
         assert timing.flush_duration == 480  # 8 minutes
 
 
-class TestZoneRuntimeHeatPerformance:
-    """Test update_heat_performance method."""
+class TestZoneRuntimeSupplyCoefficient:
+    """Test update_supply_coefficient method."""
 
     @pytest.fixture
     def zone_runtime(self) -> ZoneRuntime:
@@ -249,71 +249,89 @@ class TestZoneRuntimeHeatPerformance:
     def test_supply_at_target_returns_100_percent(
         self, zone_runtime: ZoneRuntime
     ) -> None:
-        """Supply at target temperature gives 100% performance."""
+        """Supply at target temperature gives 100% coefficient."""
         zone_runtime.state.current = 20.0  # Room temp
-        zone_runtime.update_heat_performance(supply_temp=40.0, supply_target_temp=40.0)
-        assert zone_runtime.state.heat_performance == 100.0
+        zone_runtime.update_supply_coefficient(
+            supply_temp=40.0, supply_target_temp=40.0
+        )
+        assert zone_runtime.state.supply_coefficient == 100.0
 
     def test_supply_above_target_returns_above_100_percent(
         self, zone_runtime: ZoneRuntime
     ) -> None:
-        """Supply above target gives >100% performance."""
+        """Supply above target gives >100% coefficient."""
         zone_runtime.state.current = 20.0  # Room temp
         # (45-20)/(40-20)*100 = 125%
-        zone_runtime.update_heat_performance(supply_temp=45.0, supply_target_temp=40.0)
-        assert zone_runtime.state.heat_performance == 125.0
+        zone_runtime.update_supply_coefficient(
+            supply_temp=45.0, supply_target_temp=40.0
+        )
+        assert zone_runtime.state.supply_coefficient == 125.0
 
     def test_supply_below_target_returns_below_100_percent(
         self, zone_runtime: ZoneRuntime
     ) -> None:
-        """Supply below target gives <100% performance."""
+        """Supply below target gives <100% coefficient."""
         zone_runtime.state.current = 20.0  # Room temp
         # (30-20)/(40-20)*100 = 50%
-        zone_runtime.update_heat_performance(supply_temp=30.0, supply_target_temp=40.0)
-        assert zone_runtime.state.heat_performance == 50.0
+        zone_runtime.update_supply_coefficient(
+            supply_temp=30.0, supply_target_temp=40.0
+        )
+        assert zone_runtime.state.supply_coefficient == 50.0
 
     def test_supply_at_room_temp_returns_zero(self, zone_runtime: ZoneRuntime) -> None:
-        """Supply at room temp gives 0% performance."""
+        """Supply at room temp gives 0% coefficient."""
         zone_runtime.state.current = 20.0
-        zone_runtime.update_heat_performance(supply_temp=20.0, supply_target_temp=40.0)
-        assert zone_runtime.state.heat_performance == 0.0
+        zone_runtime.update_supply_coefficient(
+            supply_temp=20.0, supply_target_temp=40.0
+        )
+        assert zone_runtime.state.supply_coefficient == 0.0
 
     def test_supply_below_room_temp_returns_zero(
         self, zone_runtime: ZoneRuntime
     ) -> None:
-        """Supply below room temp gives 0% performance."""
+        """Supply below room temp gives 0% coefficient."""
         zone_runtime.state.current = 20.0
-        zone_runtime.update_heat_performance(supply_temp=15.0, supply_target_temp=40.0)
-        assert zone_runtime.state.heat_performance == 0.0
+        zone_runtime.update_supply_coefficient(
+            supply_temp=15.0, supply_target_temp=40.0
+        )
+        assert zone_runtime.state.supply_coefficient == 0.0
 
     def test_room_above_target_returns_none(self, zone_runtime: ZoneRuntime) -> None:
         """Room at/above target returns None (no meaningful ratio)."""
         zone_runtime.state.current = 45.0  # Room above target
-        zone_runtime.update_heat_performance(supply_temp=40.0, supply_target_temp=40.0)
-        assert zone_runtime.state.heat_performance is None
+        zone_runtime.update_supply_coefficient(
+            supply_temp=40.0, supply_target_temp=40.0
+        )
+        assert zone_runtime.state.supply_coefficient is None
 
     def test_supply_temp_unavailable_returns_none(
         self, zone_runtime: ZoneRuntime
     ) -> None:
         """No supply temp returns None."""
         zone_runtime.state.current = 20.0
-        zone_runtime.update_heat_performance(supply_temp=None, supply_target_temp=40.0)
-        assert zone_runtime.state.heat_performance is None
+        zone_runtime.update_supply_coefficient(
+            supply_temp=None, supply_target_temp=40.0
+        )
+        assert zone_runtime.state.supply_coefficient is None
 
     def test_room_temp_unavailable_returns_none(
         self, zone_runtime: ZoneRuntime
     ) -> None:
         """No room temp returns None."""
         zone_runtime.state.current = None
-        zone_runtime.update_heat_performance(supply_temp=40.0, supply_target_temp=40.0)
-        assert zone_runtime.state.heat_performance is None
+        zone_runtime.update_supply_coefficient(
+            supply_temp=40.0, supply_target_temp=40.0
+        )
+        assert zone_runtime.state.supply_coefficient is None
 
     def test_caps_at_200_percent(self, zone_runtime: ZoneRuntime) -> None:
-        """Performance caps at 200%."""
+        """Supply coefficient caps at 200%."""
         zone_runtime.state.current = 20.0
         # (80-20)/(40-20)*100 = 300%, but should cap at 200%
-        zone_runtime.update_heat_performance(supply_temp=80.0, supply_target_temp=40.0)
-        assert zone_runtime.state.heat_performance == 200.0
+        zone_runtime.update_supply_coefficient(
+            supply_temp=80.0, supply_target_temp=40.0
+        )
+        assert zone_runtime.state.supply_coefficient == 200.0
 
 
 class TestZoneRuntimeUsedDuration:
@@ -332,12 +350,12 @@ class TestZoneRuntimeUsedDuration:
         state = ZoneState(zone_id="test")
         return ZoneRuntime(config=config, pid=pid, state=state)
 
-    def test_flow_true_no_performance_increments_by_dt(
+    def test_flow_true_no_coefficient_increments_by_dt(
         self, zone_runtime: ZoneRuntime
     ) -> None:
-        """Flow=True without heat_performance increments by dt (fallback)."""
+        """Flow=True without supply_coefficient increments by dt (fallback)."""
         zone_runtime.state.flow = True
-        zone_runtime.state.heat_performance = None
+        zone_runtime.state.supply_coefficient = None
         zone_runtime.state.used_duration = 100.0
 
         zone_runtime.update_used_duration(60.0)
@@ -347,31 +365,31 @@ class TestZoneRuntimeUsedDuration:
     def test_flow_false_does_not_accumulate(self, zone_runtime: ZoneRuntime) -> None:
         """Flow=False means no accumulation."""
         zone_runtime.state.flow = False
-        zone_runtime.state.heat_performance = 100.0
+        zone_runtime.state.supply_coefficient = 100.0
         zone_runtime.state.used_duration = 100.0
 
         zone_runtime.update_used_duration(60.0)
 
         assert zone_runtime.state.used_duration == 100.0  # Unchanged
 
-    def test_flow_true_with_100_percent_performance(
+    def test_flow_true_with_100_percent_coefficient(
         self, zone_runtime: ZoneRuntime
     ) -> None:
-        """Flow=True with 100% performance increments by dt."""
+        """Flow=True with 100% coefficient increments by dt."""
         zone_runtime.state.flow = True
-        zone_runtime.state.heat_performance = 100.0
+        zone_runtime.state.supply_coefficient = 100.0
         zone_runtime.state.used_duration = 100.0
 
         zone_runtime.update_used_duration(60.0)
 
         assert zone_runtime.state.used_duration == 160.0
 
-    def test_flow_true_with_120_percent_performance(
+    def test_flow_true_with_120_percent_coefficient(
         self, zone_runtime: ZoneRuntime
     ) -> None:
-        """Flow=True with 120% performance increments by 1.2 * dt."""
+        """Flow=True with 120% coefficient increments by 1.2 * dt."""
         zone_runtime.state.flow = True
-        zone_runtime.state.heat_performance = 120.0
+        zone_runtime.state.supply_coefficient = 120.0
         zone_runtime.state.used_duration = 100.0
 
         zone_runtime.update_used_duration(60.0)
@@ -379,12 +397,12 @@ class TestZoneRuntimeUsedDuration:
         # 100 + 60 * 1.2 = 172
         assert zone_runtime.state.used_duration == 172.0
 
-    def test_flow_true_with_50_percent_performance(
+    def test_flow_true_with_50_percent_coefficient(
         self, zone_runtime: ZoneRuntime
     ) -> None:
-        """Flow=True with 50% performance increments by 0.5 * dt."""
+        """Flow=True with 50% coefficient increments by 0.5 * dt."""
         zone_runtime.state.flow = True
-        zone_runtime.state.heat_performance = 50.0
+        zone_runtime.state.supply_coefficient = 50.0
         zone_runtime.state.used_duration = 100.0
 
         zone_runtime.update_used_duration(60.0)
