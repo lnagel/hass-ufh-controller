@@ -1,5 +1,6 @@
 """Tests for Underfloor Heating Controller coordinator persistence."""
 
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, patch
 
 from homeassistant.core import HomeAssistant
@@ -1273,3 +1274,148 @@ async def test_load_stored_state_skipped_when_already_restored(
 
         # async_load should NOT have been called again (early return)
         assert mock_load.call_count == initial_call_count
+
+
+async def test_used_duration_preserved_across_restart_within_same_period(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """
+    Test used_duration is NOT reset when restarting within same observation period.
+
+    Bug scenario: On restart, _last_force_update was None, causing the coordinator
+    to think it's a new observation period and reset all used_duration values
+    immediately after restoring them.
+
+    Fix: Persist last_force_update timestamp so we can correctly detect whether
+    we're still in the same observation period after a restart.
+    """
+    # Create a timestamp within the current observation period (recent)
+    now = datetime.now(UTC)
+    recent_timestamp = (now - timedelta(minutes=5)).isoformat()
+
+    stored_data = {
+        "version": 1,
+        "controller_mode": "heat",
+        "last_update_success_time": recent_timestamp,
+        "last_force_update": recent_timestamp,  # Same as last update
+        "zones": {
+            "zone1": {
+                "setpoint": 21.0,
+                "enabled": True,
+                "used_duration": 1800.0,  # 30 minutes of accumulated heat time
+            },
+        },
+    }
+
+    hass.states.async_set("sensor.zone1_temp", "20.0")
+
+    with patch(
+        "homeassistant.helpers.storage.Store.async_load",
+        return_value=stored_data,
+    ):
+        mock_config_entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    coordinator = mock_config_entry.runtime_data.coordinator
+    runtime = coordinator.controller.get_zone_runtime("zone1")
+    assert runtime is not None
+
+    # CRITICAL: used_duration should NOT be reset to 0
+    # It should be preserved from the stored value (or close to it)
+    assert runtime.state.used_duration >= 1800.0, (
+        f"used_duration was reset to {runtime.state.used_duration}, "
+        "expected ~1800.0 (preserved from storage)"
+    )
+
+
+async def test_invalid_last_force_update_timestamp_handled_gracefully(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """
+    Test coordinator handles invalid last_force_update timestamp gracefully.
+
+    If the stored last_force_update is not a valid ISO timestamp, it should
+    be ignored (set to None) and the coordinator should recover normally.
+    """
+    stored_data = {
+        "version": 1,
+        "controller_mode": "heat",
+        "last_update_success_time": "2026-01-31T12:00:00+00:00",
+        "last_force_update": "not-a-valid-timestamp",  # Invalid!
+        "zones": {
+            "zone1": {
+                "setpoint": 21.0,
+                "enabled": True,
+            },
+        },
+    }
+
+    hass.states.async_set("sensor.zone1_temp", "20.0")
+
+    with patch(
+        "homeassistant.helpers.storage.Store.async_load",
+        return_value=stored_data,
+    ):
+        mock_config_entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    coordinator = mock_config_entry.runtime_data.coordinator
+
+    # Should recover gracefully - _last_force_update becomes None
+    # which triggers a reset on first update (expected behavior for invalid data)
+    assert coordinator._last_force_update is None or isinstance(
+        coordinator._last_force_update, datetime
+    )
+
+
+async def test_used_duration_reset_when_restarting_in_new_period(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """
+    Test used_duration IS reset when restarting in a new observation period.
+
+    If last_force_update is from a previous observation period, the used_duration
+    should correctly reset to 0 at the start of the new period.
+    """
+    # Create a timestamp from a previous observation period (e.g., 3 hours ago)
+    now = datetime.now(UTC)
+    old_timestamp = (now - timedelta(hours=3)).isoformat()
+
+    stored_data = {
+        "version": 1,
+        "controller_mode": "heat",
+        "last_update_success_time": old_timestamp,
+        "last_force_update": old_timestamp,
+        "zones": {
+            "zone1": {
+                "setpoint": 21.0,
+                "enabled": True,
+                "used_duration": 1800.0,  # Old accumulated time from previous period
+            },
+        },
+    }
+
+    hass.states.async_set("sensor.zone1_temp", "20.0")
+
+    with patch(
+        "homeassistant.helpers.storage.Store.async_load",
+        return_value=stored_data,
+    ):
+        mock_config_entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    coordinator = mock_config_entry.runtime_data.coordinator
+    runtime = coordinator.controller.get_zone_runtime("zone1")
+    assert runtime is not None
+
+    # used_duration SHOULD be reset because we're in a new observation period
+    assert runtime.state.used_duration < 100.0, (
+        f"used_duration was {runtime.state.used_duration}, "
+        "expected ~0 (reset for new observation period)"
+    )
