@@ -18,6 +18,9 @@
       },
       "delta_t": {
         "default": "mdi:thermometer-lines"
+      },
+      "heat_performance": {
+        "default": "mdi:thermometer"
       }
     },
     "binary_sensor": {

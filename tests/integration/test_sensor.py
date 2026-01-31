@@ -358,3 +358,39 @@ async def test_delta_t_sensor_unavailable_when_invalid_values(
     state = hass.states.get("sensor.test_controller_flow_delta_t")
     assert state is not None
     assert state.state == STATE_UNAVAILABLE
+
+
+async def test_heat_performance_sensor_created_with_supply_entity(
+    hass: HomeAssistant,
+    mock_config_entry_with_flow_monitoring: MockConfigEntry,
+) -> None:
+    """Test heat_performance sensor is created when supply_temp_entity is configured."""
+    # Set up the flow monitoring sensor entities
+    hass.states.async_set("sensor.supply_temp", "45.0")
+    hass.states.async_set("sensor.return_temp", "35.0")
+    hass.states.async_set("sensor.zone1_temp", "20.5")
+    hass.states.async_set("switch.zone1_valve", "off")
+
+    mock_config_entry_with_flow_monitoring.add_to_hass(hass)
+    await hass.config_entries.async_setup(
+        mock_config_entry_with_flow_monitoring.entry_id
+    )
+    await hass.async_block_till_done()
+
+    # Heat performance sensor should exist for zone1
+    state = hass.states.get("sensor.test_zone_1_heat_performance")
+    assert state is not None
+
+
+async def test_heat_performance_sensor_not_created_without_supply_entity(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Test heat_performance sensor is NOT created when no supply_temp_entity."""
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    # Heat performance sensor should NOT exist
+    state = hass.states.get("sensor.test_zone_1_heat_performance")
+    assert state is None
