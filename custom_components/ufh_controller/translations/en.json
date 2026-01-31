@@ -22,7 +22,8 @@
         "title": "Configure",
         "menu_options": {
           "control_entities": "Control Entities",
-          "timing": "Timing Parameters"
+          "timing": "Timing Parameters",
+          "flow_monitoring": "Flow Monitoring"
         }
       },
       "control_entities": {
@@ -43,6 +44,14 @@
           "window_block_time": "Window block time",
           "controller_loop_interval": "Controller loop interval",
           "flush_duration": "Flush duration after DHW"
+        }
+      },
+      "flow_monitoring": {
+        "title": "Flow Monitoring",
+        "description": "Configure temperature sensors for monitoring manifold supply and return temperatures.",
+        "data": {
+          "supply_temp_entity": "Supply temperature sensor",
+          "return_temp_entity": "Return temperature sensor"
         }
       },
       "zone_entities": {
@@ -210,6 +219,9 @@
       },
       "requesting_zones": {
         "name": "Requesting Zones"
+      },
+      "delta_t": {
+        "name": "Delta T"
       }
     },
     "binary_sensor": {

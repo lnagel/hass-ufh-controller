@@ -77,6 +77,7 @@ Sensor failures in one zone don't bring down your heating:
   - (Optional) Boiler heat request switch or summer mode control
   - (Optional) DHW active sensor for latent heat capture
   - (Optional) Window/door sensors (pauses PID integration, prevents integral windup)
+  - (Optional) Supply/return temperature sensors for manifold monitoring (Delta T)
 
 ## Installation
 
