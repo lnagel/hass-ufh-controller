@@ -513,9 +513,6 @@ class UFHControllerDataUpdateCoordinator(
         # Check DHW active state
         await self._update_dhw_state()
 
-        # Update flow monitoring delta_t
-        self._update_delta_t()
-
         # Update each zone (each zone tracks its own failure state)
         for zone_id in self._controller.zone_ids:
             await self._update_zone(zone_id, now, dt)
@@ -640,31 +637,6 @@ class UFHControllerDataUpdateCoordinator(
             self._last_force_update = now
 
         return new_period
-
-    def _update_delta_t(self) -> None:
-        """Update delta_t (supply - return temperature) from flow monitoring sensors."""
-        supply_entity = self._controller.config.supply_temp_entity
-        return_entity = self._controller.config.return_temp_entity
-
-        # Both entities must be configured
-        if supply_entity is None or return_entity is None:
-            self._controller.state.delta_t = None
-            return
-
-        supply_state = self.hass.states.get(supply_entity)
-        return_state = self.hass.states.get(return_entity)
-
-        # Both entities must have valid numeric states
-        if supply_state is None or return_state is None:
-            self._controller.state.delta_t = None
-            return
-
-        try:
-            supply_temp = float(supply_state.state)
-            return_temp = float(return_state.state)
-            self._controller.state.delta_t = supply_temp - return_temp
-        except (ValueError, TypeError):
-            self._controller.state.delta_t = None
 
     def _get_supply_temp(self) -> float | None:
         """Get current supply temperature if available."""
@@ -1107,7 +1079,6 @@ class UFHControllerDataUpdateCoordinator(
             "zones_degraded": zones_degraded,
             "zones_fail_safe": zones_fail_safe,
             "flush_request": self._controller.state.flush_request,
-            "delta_t": self._controller.state.delta_t,
             "zones": {},
         }
 

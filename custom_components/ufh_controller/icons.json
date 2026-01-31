@@ -16,9 +16,6 @@
       "requesting_zones": {
         "default": "mdi:counter"
       },
-      "delta_t": {
-        "default": "mdi:thermometer-lines"
-      },
       "heat_performance": {
         "default": "mdi:thermometer"
       }
