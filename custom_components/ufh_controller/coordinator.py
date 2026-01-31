@@ -1103,6 +1103,7 @@ class UFHControllerDataUpdateCoordinator(
                     "heat_request": self._controller.state.heat_requests.get(
                         zone_id, False
                     ),
+                    "flow": state.flow,
                     "preset_mode": state.preset_mode,
                     "zone_status": state.zone_status.value,
                     "supply_coefficient": state.supply_coefficient,
