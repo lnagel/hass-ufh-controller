@@ -20,13 +20,19 @@ See [Configuration](configuration.md#heat-accounting) for detailed parameter doc
 When a supply temperature sensor is configured, the controller calculates a supply coefficient for each zone:
 
 ```
-supply_coefficient = (supply_temp - room_temp) / (supply_target_temp - room_temp) × 100
+supply_coefficient = (supply_temp - room_temp) / (supply_target_temp - setpoint) × 100
 ```
 
-- **100%**: Supply at target temperature (normal operation)
-- **50%**: Supply halfway between room and target (boiler warming up)
-- **150%**: Supply above target (boiler overshooting)
-- **0%**: Supply at room temperature (no heat delivery)
+The formula measures actual heat delivery relative to design conditions. When the room is colder than setpoint, the
+larger temperature differential delivers more heat, reflected in a coefficient above 100%.
+
+| Scenario | Supply | Room | Setpoint | Coefficient |
+|----------|--------|------|----------|-------------|
+| Design conditions | 40°C | 20°C | 20°C | 100% |
+| Cold room heating up | 40°C | 15°C | 20°C | 125% |
+| Room overshooting | 40°C | 22°C | 20°C | 90% |
+| Boiler warming up | 30°C | 20°C | 20°C | 50% |
+| Supply = room temp | 20°C | 20°C | 20°C | 0% |
 
 The coefficient is capped at 200% to prevent runaway accumulation.
 
