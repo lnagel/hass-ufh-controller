@@ -36,7 +36,7 @@ Coordinator._async_update_data()
     │       ├─► zone.update_supply_coefficient(supply_temp, supply_target_temp)
     │       ├─► zone.update_used_duration(dt)
     │       ├─► Sync valve state from HA entity
-    │       └─► zone.update_failure_state(now, temp_unavail, recorder_fail, valve_unavail)
+    │       └─► zone.update_failure_state(now, temp_unavail, valve_unavail)
     │
     ├─► controller.evaluate(now) → ControllerAction
     │       ├─► Evaluate regular zones first
