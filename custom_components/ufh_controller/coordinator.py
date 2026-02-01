@@ -262,8 +262,21 @@ class UFHControllerDataUpdateCoordinator(
         self._listener_unsub = async_track_state_change_event(
             self.hass, entity_ids, self._on_external_entity_change
         )
-        self.config_entry.async_on_unload(self._listener_unsub)
         LOGGER.debug("Subscribed to state changes for entities: %s", entity_ids)
+
+    @callback
+    def shutdown(self) -> None:
+        """
+        Clean up resources on config entry unload.
+
+        This method should be registered with async_on_unload() once during setup.
+        It handles cleanup of listeners that may have been set up multiple times
+        during in-place config reloads.
+        """
+        if self._listener_unsub is not None:
+            self._listener_unsub()
+            self._listener_unsub = None
+            LOGGER.debug("Unsubscribed state change listeners on shutdown")
 
     @callback
     def _on_external_entity_change(self, event: Event[EventStateChangedData]) -> None:

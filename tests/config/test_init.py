@@ -345,3 +345,57 @@ async def test_subentry_update_event_ignores_other_subentry_types(
 
         # async_reload_config should NOT be called for unknown subentry type
         mock_reload_config.assert_not_called()
+
+
+async def test_unload_after_config_reload_no_double_unsubscribe(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """
+    Test unload after in-place config reload doesn't double-unsubscribe listeners.
+
+    This is a regression test for a crash that occurred when:
+    1. Entry is set up (listeners registered with async_on_unload)
+    2. In-place config reload (old listeners manually unsubscribed, new registered)
+    3. Entry unload tries to unsubscribe the already-unsubscribed old listeners
+
+    The error was: ValueError: list.remove(x): x not in list
+    """
+    mock_config_entry.add_to_hass(hass)
+    hass.states.async_set("sensor.zone1_temp", "20.5")
+
+    # Step 1: Setup entry (listeners registered via async_on_unload)
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = mock_config_entry.runtime_data.coordinator
+
+    # Find zone subentry for parameter change
+    zone_subentry = None
+    for subentry in mock_config_entry.subentries.values():
+        if subentry.subentry_type == SUBENTRY_TYPE_ZONE:
+            zone_subentry = subentry
+            break
+    assert zone_subentry is not None
+
+    # Step 2: Trigger in-place config reload by changing parameters
+    # This calls _async_setup_listeners() again, which manually unsubscribes
+    # the old listener but the old callback is still in async_on_unload list
+    new_pid = {**DEFAULT_PID, "kp": 25.0}
+    updated_data = {**zone_subentry.data, "pid": new_pid}
+
+    hass.config_entries.async_update_subentry(
+        mock_config_entry,
+        zone_subentry,
+        data=updated_data,
+    )
+    await hass.async_block_till_done()
+
+    # Verify the config was reloaded in-place (not full reload)
+    assert coordinator.controller.get_zone_runtime("zone1").config.kp == 25.0
+
+    # Step 3: Unload should succeed without ValueError from double-unsubscribe
+    # Before the fix, this would raise:
+    # ValueError: list.remove(x): x not in list
+    assert await hass.config_entries.async_unload(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
