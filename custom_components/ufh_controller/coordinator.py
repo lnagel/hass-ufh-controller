@@ -309,14 +309,7 @@ class UFHControllerDataUpdateCoordinator(
         self.hass.async_create_task(self.async_request_refresh())
 
     def _restore_zone_state(self, zone_id: str, zone_state: dict[str, Any]) -> None:
-        """
-        Restore state for a single zone from storage.
-
-        Args:
-            zone_id: Zone identifier.
-            zone_state: Stored zone state dictionary.
-
-        """
+        """Restore state for a single zone from storage."""
         runtime = self._controller.get_zone_runtime(zone_id)
         if runtime is None:
             return
@@ -356,7 +349,7 @@ class UFHControllerDataUpdateCoordinator(
         if "display_temp" in zone_state:
             runtime.state.display_temp = zone_state["display_temp"]
 
-        # Restore used_duration - will be reset on observation period boundary
+        # Restore used_duration
         if "used_duration" in zone_state:
             runtime.state.used_duration = zone_state["used_duration"]
 
@@ -493,7 +486,7 @@ class UFHControllerDataUpdateCoordinator(
         if not self._controller.zone_ids:
             return self._build_state_dict()
 
-        # Handle observation period transition (resets used_duration on new period)
+        # Handle observation period transition
         force_update = self._handle_observation_period_transition(now)
 
         # Check DHW active state

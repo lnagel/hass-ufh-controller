@@ -17,7 +17,7 @@
         "default": "mdi:counter"
       },
       "supply_coefficient": {
-        "default": "mdi:thermometer"
+        "default": "mdi:gauge"
       }
     },
     "binary_sensor": {
