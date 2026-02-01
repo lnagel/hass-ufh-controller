@@ -685,7 +685,6 @@ class UFHControllerDataUpdateCoordinator(
 
         # NON-CRITICAL: Valve state for open detection (recent window)
         # Fallback: Use current valve entity state
-        recorder_failure = False
         valve_start, valve_end = get_valve_open_window(now, timing.valve_open_time)
         try:
             open_state_avg = await get_state_average(
@@ -697,7 +696,6 @@ class UFHControllerDataUpdateCoordinator(
             )
         except SQLAlchemyError:
             # Fallback to current entity state
-            recorder_failure = True
             current_valve_state = self.hass.states.get(runtime.config.valve_switch)
             open_state_avg = (
                 1.0
@@ -782,14 +780,12 @@ class UFHControllerDataUpdateCoordinator(
         result = runtime.update_failure_state(
             now,
             temp_unavailable=temp_unavailable,
-            recorder_failure=recorder_failure,
             valve_unavailable=valve_unavailable,
         )
         self._log_zone_status_transition(
             zone_id,
             result,
             temp_unavailable=temp_unavailable,
-            recorder_failure=recorder_failure,
             valve_unavailable=valve_unavailable,
         )
 
@@ -799,7 +795,6 @@ class UFHControllerDataUpdateCoordinator(
         result: FailureStateResult,
         *,
         temp_unavailable: bool,
-        recorder_failure: bool,
         valve_unavailable: bool,
     ) -> None:
         """Log zone status transitions (integration layer's responsibility)."""
@@ -812,10 +807,9 @@ class UFHControllerDataUpdateCoordinator(
         elif result.transition == ZoneStatusTransition.ENTERED_DEGRADED:
             LOGGER.warning(
                 "Zone %s entering degraded mode: temp_unavailable=%s, "
-                "recorder_failure=%s, valve_unavailable=%s",
+                "valve_unavailable=%s",
                 zone_id,
                 temp_unavailable,
-                recorder_failure,
                 valve_unavailable,
             )
         elif result.transition == ZoneStatusTransition.RECOVERED:
