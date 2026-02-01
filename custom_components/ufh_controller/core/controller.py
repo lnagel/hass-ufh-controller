@@ -439,3 +439,8 @@ class HeatingController:
     def zone_ids(self) -> list[str]:
         """Get list of all zone IDs."""
         return list(self._zones.keys())
+
+    @property
+    def zone_runtimes(self) -> list[ZoneRuntime]:
+        """Get list of all zone runtimes."""
+        return list(self._zones.values())

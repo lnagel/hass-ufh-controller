@@ -620,10 +620,8 @@ class UFHControllerDataUpdateCoordinator(
 
         if new_period:
             # Reset used_duration for all zones at period boundary
-            for zone_id in self._controller.zone_ids:
-                runtime = self._controller.get_zone_runtime(zone_id)
-                if runtime is not None:
-                    runtime.reset_used_duration()
+            for runtime in self._controller.zone_runtimes:
+                runtime.reset_used_duration()
 
             # Mark this period as handled
             self._last_force_update = now
