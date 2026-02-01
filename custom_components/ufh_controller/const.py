@@ -67,7 +67,7 @@ class ZoneStatus(StrEnum):
 
     INITIALIZING = "initializing"  # Zone starting up, awaiting first successful update
     NORMAL = "normal"  # Zone operating normally with valid temperature readings
-    DEGRADED = "degraded"  # Temp sensor, valve, or Recorder unavailable
+    DEGRADED = "degraded"  # Temp sensor or valve entity unavailable
     FAIL_SAFE = "fail_safe"  # No successful update for >1 hour, valve forced closed
 
 
@@ -210,6 +210,7 @@ DEFAULT_WINDOW_OPEN_THRESHOLD = 0.1  # 10% threshold for window open detection
 
 # Flow monitoring defaults
 DEFAULT_SUPPLY_TARGET_TEMP = 40.0
+DEFAULT_SUPPLY_COEFFICIENT_CAP = 200.0  # Maximum supply coefficient percentage
 
 # UI validation constraints for flow monitoring
 UI_SUPPLY_TARGET_TEMP = {"min": 25.0, "max": 60.0, "step": 0.5}

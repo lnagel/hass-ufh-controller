@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, NamedTuple
 from custom_components.ufh_controller.const import (
     DEFAULT_PID,
     DEFAULT_SETPOINT,
+    DEFAULT_SUPPLY_COEFFICIENT_CAP,
     DEFAULT_TEMP_EMA_TIME_CONSTANT,
     DEFAULT_VALVE_OPEN_THRESHOLD,
     FAIL_SAFE_TIMEOUT,
@@ -307,8 +308,10 @@ class ZoneRuntime:
             self.state.supply_coefficient = 0.0
             return
 
-        # Calculate as percentage, cap at 200%
-        self.state.supply_coefficient = min(numerator / denominator * 100, 200.0)
+        # Calculate as percentage, cap at configured maximum
+        self.state.supply_coefficient = min(
+            numerator / denominator * 100, DEFAULT_SUPPLY_COEFFICIENT_CAP
+        )
 
     def update_used_duration(self, dt: float) -> None:
         """
