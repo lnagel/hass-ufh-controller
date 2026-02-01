@@ -51,7 +51,7 @@ This prevents the common problem of integral windup where the integral term accu
 
 ### Heat Accounting
 
-Heat accounting tracks how much of its quota each zone has used during the observation period, with optional supply-temperature weighting for more accurate heat delivery tracking.
+Heat accounting tracks how much of its quota each zone has consumed during the observation period, with optional supply-temperature normalization to adjust for actual heating conditions.
 
 **Key concepts:**
 - `used_duration` accumulates only when `flow=True` (valve confirmed open)

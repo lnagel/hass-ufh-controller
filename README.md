@@ -45,9 +45,9 @@ Multiple zones sharing one heat source need coordination. The controller:
 
 ### Heat Accounting
 
-Multi-zone systems need fair quota allocation. Simply tracking valve-open time doesn't reflect actual heat delivered—a zone open during boiler coast-down receives less heat than one open at peak temperature.
+Multi-zone systems need fair quota allocation. Simply tracking valve-open time penalizes zones that happen to be open when the boiler is cold—they use up quota while receiving less heating benefit.
 
-- **Supply-temperature weighting** - Quota accumulates faster when supply is hot, slower during coast-down
+- **Supply-temperature normalization** - Quota consumption adjusts to actual supply conditions
 - **Single sensor simplicity** - Only needs one manifold supply temperature sensor
 - **Automatic fallback** - Works with simple time-based tracking if no sensor configured
 

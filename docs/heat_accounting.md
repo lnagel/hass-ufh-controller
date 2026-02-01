@@ -1,14 +1,14 @@
 # Heat Accounting
 
-Underfloor heating systems need accurate heat accounting to fairly allocate heating time quotas across zones. When
-multiple zones share a single heat source, simply tracking valve-open duration doesn't reflect actual heat delivered—a
-zone with its valve open while the boiler is cold receives far less heat than one open during peak supply temperature.
+Multi-zone underfloor heating systems need fair quota allocation. When multiple zones share a single heat source, simply
+tracking valve-open duration penalizes zones that happen to be open when the boiler is cold—they consume their time
+quota while receiving less heating benefit than zones open at peak supply temperature.
 
-## Supply Temperature Weighting
+## Supply Temperature Normalization
 
 The chosen approach requires only a single additional sensor (manifold supply temperature) and naturally handles boiler
-cycling: when the boiler fires, supply temperature rises and quota accumulates faster; during coast-down, supply
-temperature decays and quota accumulation slows proportionally. This provides a practical approximation of heat delivery
+cycling: when the boiler fires, supply temperature rises and quota consumption increases; during coast-down, supply
+temperature decays and quota consumption slows proportionally. This normalizes quota usage to actual supply conditions
 without the complexity, cost, or failure modes of the alternatives.
 
 When no supply temperature sensor is configured, the system falls back to simple time-based quota tracking.
@@ -23,8 +23,10 @@ When a supply temperature sensor is configured, the controller calculates a supp
 supply_coefficient = (supply_temp - room_temp) / (supply_target_temp - setpoint) × 100
 ```
 
-The formula measures actual heat delivery relative to design conditions. When the room is colder than setpoint, the
-larger temperature differential delivers more heat, reflected in a coefficient above 100%.
+The coefficient scales quota consumption relative to design conditions. At 100%, quota accumulates at the normal rate.
+When supply temperature is low (boiler warming up), the coefficient drops below 100% and quota consumption slows—the
+zone can stay open longer to compensate. When the room is colder than setpoint, the larger temperature differential
+means the zone receives more benefit, reflected in a coefficient above 100%.
 
 | Scenario | Supply | Room | Setpoint | Coefficient |
 |----------|--------|------|----------|-------------|

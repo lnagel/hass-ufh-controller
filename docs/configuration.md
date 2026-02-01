@@ -446,7 +446,7 @@ A select entity on the boiler to toggle between "summer" (heating circuit disabl
 
 ### Heat Accounting
 
-Supply temperature monitoring enables weighted heat accounting, where zones accumulate quota based on actual heat delivered rather than just time with valve open.
+Supply temperature monitoring enables normalized quota tracking, where zones consume their time budget based on actual supply conditions rather than just elapsed time.
 
 #### supply_temp_entity
 
@@ -456,7 +456,7 @@ Supply temperature monitoring enables weighted heat accounting, where zones accu
 
 A temperature sensor measuring the supply water temperature at the heating manifold.
 
-**How it works:** The controller uses this sensor to calculate a supply coefficient for each zone, which weights the heat accounting. When supply temperature is below target, zones accumulate quota slower, allowing them to stay open longer to compensate for reduced heat delivery.
+**How it works:** The controller uses this sensor to calculate a supply coefficient for each zone, which scales quota consumption. When supply temperature is below target, zones consume quota slower, allowing them to stay open longer to compensate for the reduced heating effectiveness.
 
 **Example:** `sensor.manifold_supply_temperature`
 
@@ -469,15 +469,15 @@ A temperature sensor measuring the supply water temperature at the heating manif
 
 The expected supply temperature when the boiler is operating normally.
 
-**How it works:** This is the baseline for calculating the supply coefficient. When supply equals target, zones accumulate quota at 100% rate. When supply is lower, the rate decreases proportionally.
+**How it works:** This is the baseline for calculating the supply coefficient. When supply equals target, zones consume quota at 100% rate. When supply is lower, the rate decreases proportionally.
 
-**Formula:** `supply_coefficient = (supply_temp - room_temp) / (supply_target_temp - room_temp) × 100`
+**Formula:** `supply_coefficient = (supply_temp - room_temp) / (supply_target_temp - setpoint) × 100`
 
-**Examples:**
+**Examples:** (assuming setpoint = 20°C)
 - Supply at 40°C, room at 20°C, target 40°C → coefficient = 100% (normal rate)
 - Supply at 30°C, room at 20°C, target 40°C → coefficient = 50% (half rate)
 - Supply at 50°C, room at 20°C, target 40°C → coefficient = 150% (accelerated rate, capped at 200%)
 
-**Fallback behavior:** When no supply_temp_entity is configured, zones accumulate quota based on simple time (1 second = 1 second of quota used).
+**Fallback behavior:** When no supply_temp_entity is configured, zones consume quota based on simple time (1 second = 1 second of quota used).
 
 ---
