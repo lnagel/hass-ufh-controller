@@ -281,7 +281,7 @@ class ZoneRuntime:
         """
         Update supply_coefficient based on supply vs target temperatures.
 
-        Formula: (supply_temp - room_temp) / (supply_target_temp - room_temp) * 100
+        Formula: (supply_temp - room_temp) / (supply_target_temp - setpoint) * 100
         Result is % of expected heat delivery (100% = at target, >100% = above).
 
         Args:
@@ -296,9 +296,9 @@ class ZoneRuntime:
             self.state.supply_coefficient = None
             return
 
-        denominator = supply_target_temp - room_temp
+        denominator = supply_target_temp - self.state.setpoint
         if denominator <= 0:
-            # Room at/above target - no meaningful ratio
+            # Invalid config: setpoint >= supply target temp
             self.state.supply_coefficient = None
             return
 
