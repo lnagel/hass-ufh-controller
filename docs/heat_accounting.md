@@ -1,10 +1,10 @@
-## Motivation
+# Heat Accounting
 
 Underfloor heating systems need accurate heat accounting to fairly allocate heating time quotas across zones. When
 multiple zones share a single heat source, simply tracking valve-open duration doesn't reflect actual heat delivered—a
 zone with its valve open while the boiler is cold receives far less heat than one open during peak supply temperature.
 
-### Supply Temperature Weighting
+## Supply Temperature Weighting
 
 The chosen approach requires only a single additional sensor (manifold supply temperature) and naturally handles boiler
 cycling: when the boiler fires, supply temperature rises and quota accumulates faster; during coast-down, supply
@@ -15,7 +15,32 @@ When no supply temperature sensor is configured, the system falls back to simple
 
 See [Configuration](configuration.md#heat-accounting) for detailed parameter documentation.
 
-### Alternatives Considered
+### Supply Coefficient
+
+When a supply temperature sensor is configured, the controller calculates a supply coefficient for each zone:
+
+```
+supply_coefficient = (supply_temp - room_temp) / (supply_target_temp - room_temp) × 100
+```
+
+- **100%**: Supply at target temperature (normal operation)
+- **50%**: Supply halfway between room and target (boiler warming up)
+- **150%**: Supply above target (boiler overshooting)
+- **0%**: Supply at room temperature (no heat delivery)
+
+The coefficient is capped at 200% to prevent runaway accumulation.
+
+### Used Duration Accumulation
+
+Each update cycle, `used_duration` accumulates when the zone is receiving heat:
+
+1. **Flow requirement**: Only accumulates when `flow=True` (valve open ≥85% of detection window)
+2. **Weighted**: `used_duration += dt × (supply_coefficient / 100)`
+3. **Fallback**: Without a supply sensor, uses simple time: `used_duration += dt`
+
+At each observation period boundary (default: every 2 hours) all zones' `used_duration` resets to 0
+
+## Alternatives Considered
 
 **1. Full ΔT-based thermal energy calculation (Q = ṁ × c × ΔT)**
 
