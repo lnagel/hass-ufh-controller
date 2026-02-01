@@ -51,7 +51,7 @@ Multi-zone systems need fair quota allocation. Simply tracking valve-open time p
 - **Single sensor simplicity** - Only needs one manifold supply temperature sensor
 - **Automatic fallback** - Works with simple time-based tracking if no sensor configured
 
-[See heat accounting documentation →](docs/heat_accounting.md)
+See [Heat Accounting](docs/heat_accounting.md) for detailed documentation.
 
 ### EMS-ESP Integration
 

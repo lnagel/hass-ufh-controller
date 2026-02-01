@@ -58,7 +58,7 @@ Heat accounting tracks how much of its quota each zone has consumed during the o
 - When a supply temperature sensor is configured, accumulation is weighted by the supply coefficient
 - At period boundaries, all zones reset to fresh quota
 
-See [Heat Accounting](heat_accounting.md) for detailed documentation including motivation, alternatives considered, and configuration.
+See [Heat Accounting](heat_accounting.md) for detailed documentation.
 
 ### Zone Decision Tree
 

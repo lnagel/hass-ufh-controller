@@ -469,15 +469,6 @@ A temperature sensor measuring the supply water temperature at the heating manif
 
 The expected supply temperature when the boiler is operating normally.
 
-**How it works:** This is the baseline for calculating the supply coefficient. When supply equals target, zones consume quota at 100% rate. When supply is lower, the rate decreases proportionally.
-
-**Formula:** `supply_coefficient = (supply_temp - room_temp) / (supply_target_temp - setpoint) × 100`
-
-**Examples:** (assuming setpoint = 20°C)
-- Supply at 40°C, room at 20°C, target 40°C → coefficient = 100% (normal rate)
-- Supply at 30°C, room at 20°C, target 40°C → coefficient = 50% (half rate)
-- Supply at 50°C, room at 20°C, target 40°C → coefficient = 150% (accelerated rate, capped at 200%)
-
-**Fallback behavior:** When no supply_temp_entity is configured, zones consume quota based on simple time (1 second = 1 second of quota used).
+**How it works:** See [Heat Accounting](heat_accounting.md) for detailed documentation.
 
 ---
