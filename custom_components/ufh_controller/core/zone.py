@@ -364,7 +364,6 @@ class ZoneRuntime:
         now: datetime,
         *,
         temp_unavailable: bool,
-        recorder_failure: bool,
         valve_unavailable: bool,
     ) -> FailureStateResult:
         """
@@ -376,7 +375,6 @@ class ZoneRuntime:
         Args:
             now: Current timestamp.
             temp_unavailable: Whether temperature reading is unavailable.
-            recorder_failure: Whether Recorder query failed.
             valve_unavailable: Whether valve entity is unavailable or unknown.
 
         Returns:
@@ -391,7 +389,7 @@ class ZoneRuntime:
             else FAIL_SAFE_TIMEOUT
         )
 
-        if temp_unavailable or recorder_failure or valve_unavailable:
+        if temp_unavailable or valve_unavailable:
             # Zone has a failure - increment counter and check for fail-safe
             self.state.consecutive_failures += 1
 

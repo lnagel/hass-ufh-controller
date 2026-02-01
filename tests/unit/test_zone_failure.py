@@ -41,7 +41,6 @@ class TestUpdateFailureStateTimeoutSelection:
         runtime.update_failure_state(
             now,
             temp_unavailable=True,
-            recorder_failure=False,
             valve_unavailable=False,
         )
 
@@ -50,7 +49,6 @@ class TestUpdateFailureStateTimeoutSelection:
         result = runtime.update_failure_state(
             later,
             temp_unavailable=True,
-            recorder_failure=False,
             valve_unavailable=False,
         )
 
@@ -67,7 +65,6 @@ class TestUpdateFailureStateTimeoutSelection:
         runtime.update_failure_state(
             now,
             temp_unavailable=True,
-            recorder_failure=False,
             valve_unavailable=False,
         )
 
@@ -76,7 +73,6 @@ class TestUpdateFailureStateTimeoutSelection:
         result = runtime.update_failure_state(
             later,
             temp_unavailable=True,
-            recorder_failure=False,
             valve_unavailable=False,
         )
 
@@ -95,7 +91,6 @@ class TestUpdateFailureStateTimeoutSelection:
         result = runtime.update_failure_state(
             later,
             temp_unavailable=True,
-            recorder_failure=False,
             valve_unavailable=False,
         )
 
@@ -115,7 +110,6 @@ class TestUpdateFailureStateTimeoutSelection:
         result = runtime.update_failure_state(
             later,
             temp_unavailable=True,
-            recorder_failure=False,
             valve_unavailable=False,
         )
         assert result.transition == ZoneStatusTransition.ENTERED_FAIL_SAFE
@@ -133,7 +127,6 @@ class TestUpdateFailureStateTimeoutSelection:
         result = runtime.update_failure_state(
             later,
             temp_unavailable=True,
-            recorder_failure=False,
             valve_unavailable=False,
         )
 
