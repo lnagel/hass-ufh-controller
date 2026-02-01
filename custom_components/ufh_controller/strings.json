@@ -23,7 +23,7 @@
         "menu_options": {
           "control_entities": "Control Entities",
           "timing": "Timing Parameters",
-          "supply_temperature": "Supply Temperature"
+          "heat_accounting": "Heat Accounting"
         }
       },
       "control_entities": {
@@ -46,9 +46,9 @@
           "flush_duration": "Flush duration after DHW"
         }
       },
-      "supply_temperature": {
-        "title": "Supply Temperature",
-        "description": "Configure supply temperature sensor for supply coefficient calculation.",
+      "heat_accounting": {
+        "title": "Heat Accounting",
+        "description": "Configure supply temperature sensor for weighted heat accounting.",
         "data": {
           "supply_temp_entity": "Supply temperature sensor",
           "supply_target_temp": "Target supply temperature"
