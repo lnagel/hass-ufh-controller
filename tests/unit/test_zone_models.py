@@ -228,7 +228,7 @@ class TestZoneRuntimeSupplyCoefficient:
 
     @pytest.fixture
     def zone_runtime(self) -> ZoneRuntime:
-        """Create a zone runtime for testing."""
+        """Create a zone runtime for testing with setpoint=20°C."""
         config = ZoneConfig(
             zone_id="test",
             name="Test Zone",
@@ -244,39 +244,46 @@ class TestZoneRuntimeSupplyCoefficient:
             kd=config.kd,
         )
         state = ZoneState(zone_id="test")
+        state.setpoint = 20.0  # Explicit setpoint for formula clarity
         return ZoneRuntime(config=config, pid=pid, state=state)
 
-    def test_supply_at_target_returns_100_percent(
-        self, zone_runtime: ZoneRuntime
+    @pytest.mark.parametrize(
+        ("supply_temp", "room_temp", "setpoint", "supply_target", "expected"),
+        [
+            # Design conditions: (40-20)/(40-20) = 100%
+            (40.0, 20.0, 20.0, 40.0, 100.0),
+            # Cold room: (40-15)/(40-20) = 125%
+            (40.0, 15.0, 20.0, 40.0, 125.0),
+            # Very cold room: (40-10)/(40-20) = 150%
+            (40.0, 10.0, 20.0, 40.0, 150.0),
+            # Room overshooting: (40-22)/(40-20) = 90%
+            (40.0, 22.0, 20.0, 40.0, 90.0),
+            # Room way above setpoint: (40-25)/(40-20) = 75%
+            (40.0, 25.0, 20.0, 40.0, 75.0),
+            # Boiler warming up: (30-20)/(40-20) = 50%
+            (30.0, 20.0, 20.0, 40.0, 50.0),
+            # Hot supply: (45-20)/(40-20) = 125%
+            (45.0, 20.0, 20.0, 40.0, 125.0),
+            # Different setpoint (22°C): (40-20)/(40-22) ≈ 111.1%
+            (40.0, 20.0, 22.0, 40.0, pytest.approx(111.1, rel=0.01)),
+        ],
+    )
+    def test_supply_coefficient_calculation(
+        self,
+        zone_runtime: ZoneRuntime,
+        supply_temp: float,
+        room_temp: float,
+        setpoint: float,
+        supply_target: float,
+        expected: float,
     ) -> None:
-        """Supply at target temperature gives 100% coefficient."""
-        zone_runtime.state.current = 20.0  # Room temp
+        """Test supply coefficient formula with various scenarios."""
+        zone_runtime.state.current = room_temp
+        zone_runtime.state.setpoint = setpoint
         zone_runtime.update_supply_coefficient(
-            supply_temp=40.0, supply_target_temp=40.0
+            supply_temp=supply_temp, supply_target_temp=supply_target
         )
-        assert zone_runtime.state.supply_coefficient == 100.0
-
-    def test_supply_above_target_returns_above_100_percent(
-        self, zone_runtime: ZoneRuntime
-    ) -> None:
-        """Supply above target gives >100% coefficient."""
-        zone_runtime.state.current = 20.0  # Room temp
-        # (45-20)/(40-20)*100 = 125%
-        zone_runtime.update_supply_coefficient(
-            supply_temp=45.0, supply_target_temp=40.0
-        )
-        assert zone_runtime.state.supply_coefficient == 125.0
-
-    def test_supply_below_target_returns_below_100_percent(
-        self, zone_runtime: ZoneRuntime
-    ) -> None:
-        """Supply below target gives <100% coefficient."""
-        zone_runtime.state.current = 20.0  # Room temp
-        # (30-20)/(40-20)*100 = 50%
-        zone_runtime.update_supply_coefficient(
-            supply_temp=30.0, supply_target_temp=40.0
-        )
-        assert zone_runtime.state.supply_coefficient == 50.0
+        assert zone_runtime.state.supply_coefficient == expected
 
     def test_supply_at_room_temp_returns_zero(self, zone_runtime: ZoneRuntime) -> None:
         """Supply at room temp gives 0% coefficient."""
@@ -296,9 +303,23 @@ class TestZoneRuntimeSupplyCoefficient:
         )
         assert zone_runtime.state.supply_coefficient == 0.0
 
-    def test_room_above_target_returns_none(self, zone_runtime: ZoneRuntime) -> None:
-        """Room at/above target returns None (no meaningful ratio)."""
-        zone_runtime.state.current = 45.0  # Room above target
+    def test_setpoint_at_supply_target_returns_none(
+        self, zone_runtime: ZoneRuntime
+    ) -> None:
+        """Setpoint at/above supply target returns None (invalid config)."""
+        zone_runtime.state.current = 20.0
+        zone_runtime.state.setpoint = 40.0  # Setpoint equals supply target
+        zone_runtime.update_supply_coefficient(
+            supply_temp=40.0, supply_target_temp=40.0
+        )
+        assert zone_runtime.state.supply_coefficient is None
+
+    def test_setpoint_above_supply_target_returns_none(
+        self, zone_runtime: ZoneRuntime
+    ) -> None:
+        """Setpoint above supply target returns None (invalid config)."""
+        zone_runtime.state.current = 20.0
+        zone_runtime.state.setpoint = 45.0  # Setpoint above supply target
         zone_runtime.update_supply_coefficient(
             supply_temp=40.0, supply_target_temp=40.0
         )
@@ -325,7 +346,7 @@ class TestZoneRuntimeSupplyCoefficient:
         assert zone_runtime.state.supply_coefficient is None
 
     def test_caps_at_200_percent(self, zone_runtime: ZoneRuntime) -> None:
-        """Supply coefficient caps at 200%."""
+        """Supply coefficient caps at 200% to prevent runaway accumulation."""
         zone_runtime.state.current = 20.0
         # (80-20)/(40-20)*100 = 300%, but should cap at 200%
         zone_runtime.update_supply_coefficient(
