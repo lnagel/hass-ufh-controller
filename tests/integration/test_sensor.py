@@ -179,10 +179,10 @@ async def test_zone_sensor_unavailable_during_fail_safe(
     ("error_value", "expected_icon"),
     [
         (None, "mdi:thermometer-off"),
-        (1.0, "mdi:thermometer-chevron-up"),  # Cold, needs heating
-        (ICON_PID_ERROR_THRESHOLD + 0.01, "mdi:thermometer-chevron-up"),
-        (-1.0, "mdi:thermometer-chevron-down"),  # Warm, above setpoint
-        (-ICON_PID_ERROR_THRESHOLD - 0.01, "mdi:thermometer-chevron-down"),
+        (1.0, "mdi:thermometer-plus"),  # Cold, needs heating
+        (ICON_PID_ERROR_THRESHOLD + 0.01, "mdi:thermometer-plus"),
+        (-1.0, "mdi:thermometer-minus"),  # Warm, above setpoint
+        (-ICON_PID_ERROR_THRESHOLD - 0.01, "mdi:thermometer-minus"),
         (0.0, "mdi:thermometer-check"),  # At setpoint
         (ICON_PID_ERROR_THRESHOLD - 0.01, "mdi:thermometer-check"),
         (-ICON_PID_ERROR_THRESHOLD + 0.01, "mdi:thermometer-check"),

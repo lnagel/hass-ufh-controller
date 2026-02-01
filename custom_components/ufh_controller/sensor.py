@@ -206,9 +206,9 @@ class UFHPidErrorSensor(UFHZoneSensor):
         if value is None:
             return "mdi:thermometer-off"
         if value > ICON_PID_ERROR_THRESHOLD:
-            return "mdi:thermometer-chevron-up"
+            return "mdi:thermometer-plus"
         if value < -ICON_PID_ERROR_THRESHOLD:
-            return "mdi:thermometer-chevron-down"
+            return "mdi:thermometer-minus"
         return "mdi:thermometer-check"
 
 
