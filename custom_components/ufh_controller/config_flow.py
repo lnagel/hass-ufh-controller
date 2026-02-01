@@ -611,7 +611,7 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
         """Show menu with configuration options."""
         return self.async_show_menu(
             step_id="init",
-            menu_options=["control_entities", "timing", "supply_temperature"],
+            menu_options=["control_entities", "timing", "heat_accounting"],
         )
 
     async def async_step_control_entities(
@@ -712,11 +712,11 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
             data_schema=get_timing_schema(timing),
         )
 
-    async def async_step_supply_temperature(
+    async def async_step_heat_accounting(
         self,
         user_input: dict[str, Any] | None = None,
     ) -> config_entries.ConfigFlowResult:
-        """Configure supply temperature sensor and target."""
+        """Configure heat accounting settings (supply temperature sensor and target)."""
         if user_input is not None:
             # Update the config entry data with supply temperature settings
             new_data = {
@@ -736,7 +736,7 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
         current_data = self.config_entry.data
 
         return self.async_show_form(
-            step_id="supply_temperature",
+            step_id="heat_accounting",
             data_schema=vol.Schema(
                 {
                     vol.Optional(
