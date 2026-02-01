@@ -32,7 +32,9 @@ Coordinator._async_update_data()
     │       ├─► zone.update_temperature(raw_temp, dt)
     │       ├─► zone.update_pid(dt, mode)
     │       ├─► Query Recorder for historical averages
-    │       ├─► zone.update_historical(period_avg, open_avg, ...)
+    │       ├─► zone.update_historical(open_avg, window_recently_open)
+    │       ├─► zone.update_supply_coefficient(supply_temp, supply_target_temp)
+    │       ├─► zone.update_used_duration(dt)
     │       ├─► Sync valve state from HA entity
     │       └─► zone.update_failure_state(now, temp_unavail, recorder_fail, valve_unavail)
     │
