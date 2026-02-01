@@ -4,6 +4,7 @@ import logging
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from homeassistant.core import HomeAssistant, ServiceCall
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from sqlalchemy.exc import OperationalError
@@ -66,7 +67,8 @@ class TestCoordinatorUpdateZoneFailure:
     ) -> None:
         """Test that zone stays initializing on first failure (no false alarms)."""
         mock_config_entry.add_to_hass(hass)
-        hass.states.async_set("sensor.zone1_temp", "20.5")
+        # Temperature unavailable - this is a failure condition
+        hass.states.async_set("sensor.zone1_temp", "unavailable")
         hass.states.async_set("switch.zone1_valve", "off")
 
         coordinator = UFHControllerDataUpdateCoordinator(hass, mock_config_entry)
@@ -80,11 +82,8 @@ class TestCoordinatorUpdateZoneFailure:
         now = datetime.now(UTC)
         coordinator._controller.state.observation_start = now - timedelta(hours=1)
 
-        # Make the query fail with a SQLAlchemy error
         mock_recorder = MagicMock()
-        mock_recorder.async_add_executor_job = AsyncMock(
-            side_effect=OperationalError("statement", {}, Exception("DB unavailable"))
-        )
+        mock_recorder.async_add_executor_job = AsyncMock(return_value={})
 
         with patch(
             "homeassistant.components.recorder.get_instance",
@@ -96,12 +95,12 @@ class TestCoordinatorUpdateZoneFailure:
         # before first success
         assert runtime.state.zone_status == ZoneStatus.INITIALIZING
 
-    async def test_period_state_failure_sets_zone_degraded_after_normal(
+    async def test_temp_unavailable_sets_zone_degraded_after_normal(
         self,
         hass: HomeAssistant,
         mock_config_entry: MockConfigEntry,
     ) -> None:
-        """Test that period_state query failure sets zone to degraded after normal."""
+        """Test that temp unavailable sets zone to degraded after normal."""
         mock_config_entry.add_to_hass(hass)
         hass.states.async_set("sensor.zone1_temp", "20.5")
         hass.states.async_set("switch.zone1_valve", "off")
@@ -118,7 +117,47 @@ class TestCoordinatorUpdateZoneFailure:
         now = datetime.now(UTC)
         coordinator._controller.state.observation_start = now - timedelta(hours=1)
 
-        # Make the query fail with a SQLAlchemy error
+        # Make temp unavailable
+        hass.states.async_set("sensor.zone1_temp", "unavailable")
+
+        mock_recorder = MagicMock()
+        mock_recorder.async_add_executor_job = AsyncMock(return_value={})
+
+        with patch(
+            "homeassistant.components.recorder.get_instance",
+            return_value=mock_recorder,
+        ):
+            await coordinator._update_zone("zone1", now, 60.0)
+
+        # Zone should be in degraded state now
+        assert runtime.state.zone_status == ZoneStatus.DEGRADED
+
+    @pytest.mark.parametrize(
+        ("valve_state", "expected_fallback"),
+        [
+            ("on", 1.0),
+            ("off", 0.0),
+            ("unavailable", 0.0),
+        ],
+    )
+    async def test_open_state_failure_uses_fallback(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry: MockConfigEntry,
+        valve_state: str,
+        expected_fallback: float,
+    ) -> None:
+        """Test that open_state query failure uses fallback from current valve state."""
+        mock_config_entry.add_to_hass(hass)
+        hass.states.async_set("sensor.zone1_temp", "20.5")
+        hass.states.async_set("switch.zone1_valve", valve_state)
+
+        coordinator = UFHControllerDataUpdateCoordinator(hass, mock_config_entry)
+
+        now = datetime.now(UTC)
+        coordinator._controller.state.observation_start = now - timedelta(hours=1)
+
+        # Make recorder query fail - non-critical, should use fallback
         mock_recorder = MagicMock()
         mock_recorder.async_add_executor_job = AsyncMock(
             side_effect=OperationalError("statement", {}, Exception("DB unavailable"))
@@ -130,128 +169,14 @@ class TestCoordinatorUpdateZoneFailure:
         ):
             await coordinator._update_zone("zone1", now, 60.0)
 
-        # Zone should be in degraded state now
-        assert runtime.state.zone_status == ZoneStatus.DEGRADED
-
-    async def test_open_state_failure_uses_fallback(
-        self,
-        hass: HomeAssistant,
-        mock_config_entry: MockConfigEntry,
-    ) -> None:
-        """Test that open_state query failure uses fallback from current state."""
-        mock_config_entry.add_to_hass(hass)
-        hass.states.async_set("sensor.zone1_temp", "20.5")
-        hass.states.async_set("switch.zone1_valve", "on")  # Valve is ON
-
-        coordinator = UFHControllerDataUpdateCoordinator(hass, mock_config_entry)
-
-        # Set observation_start to make it timezone-aware
-        now = datetime.now(UTC)
-        coordinator._controller.state.observation_start = now - timedelta(hours=1)
-
-        call_count = 0
-
-        def mock_executor(*args: object, **kwargs: object) -> dict:
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                # First call (period_state_avg) succeeds
-                return {"switch.zone1_valve": []}
-            # Second call (open_state_avg) fails with SQLAlchemy error
-            raise OperationalError("statement", {}, Exception("DB unavailable"))
-
-        mock_recorder = MagicMock()
-        mock_recorder.async_add_executor_job = AsyncMock(side_effect=mock_executor)
-
-        with patch(
-            "homeassistant.components.recorder.get_instance",
-            return_value=mock_recorder,
-        ):
-            await coordinator._update_zone("zone1", now, 60.0)
-
-        # Zone should be in normal state (non-critical failure uses fallback)
         runtime = coordinator._controller.get_zone_runtime("zone1")
         assert runtime is not None
-        assert runtime.state.zone_status == ZoneStatus.NORMAL
-
-        # Verify fallback was used - zone should have open_state_avg = 1.0
-        # since current valve state is "on"
-        assert runtime.state.open_state_avg == 1.0
-
-    async def test_open_state_fallback_with_unavailable_state(
-        self,
-        hass: HomeAssistant,
-        mock_config_entry: MockConfigEntry,
-    ) -> None:
-        """Test that unavailable valve state falls back to 0.0 (closed)."""
-        mock_config_entry.add_to_hass(hass)
-        hass.states.async_set("sensor.zone1_temp", "20.5")
-        hass.states.async_set("switch.zone1_valve", "unavailable")
-
-        coordinator = UFHControllerDataUpdateCoordinator(hass, mock_config_entry)
-
-        now = datetime.now(UTC)
-        coordinator._controller.state.observation_start = now - timedelta(hours=1)
-
-        call_count = 0
-
-        def mock_executor(*args: object, **kwargs: object) -> dict:
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                return {"switch.zone1_valve": []}
-            raise OperationalError("statement", {}, Exception("DB unavailable"))
-
-        mock_recorder = MagicMock()
-        mock_recorder.async_add_executor_job = AsyncMock(side_effect=mock_executor)
-
-        with patch(
-            "homeassistant.components.recorder.get_instance",
-            return_value=mock_recorder,
-        ):
-            await coordinator._update_zone("zone1", now, 60.0)
-
-        runtime = coordinator._controller.get_zone_runtime("zone1")
-        assert runtime is not None
-        # Unavailable state should fall back to 0.0 (assume closed)
-        assert runtime.state.open_state_avg == 0.0
-
-    async def test_open_state_fallback_with_off_state(
-        self,
-        hass: HomeAssistant,
-        mock_config_entry: MockConfigEntry,
-    ) -> None:
-        """Test that off valve state falls back to 0.0."""
-        mock_config_entry.add_to_hass(hass)
-        hass.states.async_set("sensor.zone1_temp", "20.5")
-        hass.states.async_set("switch.zone1_valve", "off")
-
-        coordinator = UFHControllerDataUpdateCoordinator(hass, mock_config_entry)
-
-        now = datetime.now(UTC)
-        coordinator._controller.state.observation_start = now - timedelta(hours=1)
-
-        call_count = 0
-
-        def mock_executor(*args: object, **kwargs: object) -> dict:
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                return {"switch.zone1_valve": []}
-            raise OperationalError("statement", {}, Exception("DB unavailable"))
-
-        mock_recorder = MagicMock()
-        mock_recorder.async_add_executor_job = AsyncMock(side_effect=mock_executor)
-
-        with patch(
-            "homeassistant.components.recorder.get_instance",
-            return_value=mock_recorder,
-        ):
-            await coordinator._update_zone("zone1", now, 60.0)
-
-        runtime = coordinator._controller.get_zone_runtime("zone1")
-        assert runtime is not None
-        assert runtime.state.open_state_avg == 0.0
+        # Recorder failure alone doesn't cause degraded - only valve_unavailable does
+        if valve_state == "unavailable":
+            assert runtime.state.zone_status == ZoneStatus.INITIALIZING
+        else:
+            assert runtime.state.zone_status == ZoneStatus.NORMAL
+        assert runtime.state.open_state_avg == expected_fallback
 
 
 class TestExecuteFailSafeActions:
@@ -322,10 +247,8 @@ class TestCriticalFailureDuringUpdate:
         assert zone1.state.zone_status == ZoneStatus.NORMAL
         assert coordinator.status == ControllerStatus.NORMAL
 
-        # Now make recorder query fail
-        mock_recorder.async_add_executor_job = AsyncMock(
-            side_effect=OperationalError("statement", {}, Exception("DB unavailable"))
-        )
+        # Now make temp unavailable to trigger degraded mode
+        hass.states.async_set("sensor.zone1_temp", "unavailable")
 
         with patch(
             "homeassistant.components.recorder.get_instance",
