@@ -51,33 +51,14 @@ This prevents the common problem of integral windup where the integral term accu
 
 ### Heat Accounting
 
-Heat accounting tracks how much of its quota each zone has used during the observation period.
+Heat accounting tracks how much of its quota each zone has used during the observation period, with optional supply-temperature weighting for more accurate heat delivery tracking.
 
-#### Used Duration Calculation
+**Key concepts:**
+- `used_duration` accumulates only when `flow=True` (valve confirmed open)
+- When a supply temperature sensor is configured, accumulation is weighted by the supply coefficient
+- At period boundaries, all zones reset to fresh quota
 
-`used_duration` accumulates based on actual heat delivery:
-
-1. **Flow requirement:** Only accumulates when `flow=True` (valve has been open for ≥85% of the valve open detection window)
-
-2. **Supply coefficient weighting:** When a supply temperature sensor is configured:
-   - `used_duration += dt × (supply_coefficient / 100)`
-   - Cold supply (50% coefficient) → accumulates at half speed
-   - Hot supply (150% coefficient) → accumulates at 1.5× speed
-
-3. **Fallback:** Without a supply sensor:
-   - `used_duration += dt` (simple time accumulation)
-
-#### Period Reset
-
-At the start of each observation period:
-- All zones' `used_duration` resets to 0
-- This is tracked via the `last_force_update` timestamp
-
-#### Persistence
-
-`used_duration` and `last_force_update` are persisted to storage, ensuring:
-- Restarts within the same observation period preserve accumulated quota
-- Restarts in a new period correctly trigger a reset
+See [Heat Accounting](heat_accounting.md) for detailed documentation including motivation, alternatives considered, and configuration.
 
 ### Zone Decision Tree
 
