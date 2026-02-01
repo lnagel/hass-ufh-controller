@@ -19,6 +19,7 @@ The Home Assistant thermostat ecosystem has excellent options for TRVs ([Better 
 | **Multi-zone heat aggregation** | Each zone fires boiler independently | Zones coordinate through shared heat request |
 | **Boiler/heat pump signaling** | Basic on/off or none | Valve pre-opening, quota-aware requests |
 | **EMS-ESP boiler integration** | Manual automations required | Native summer mode, DHW detection |
+| **Heat accounting** | Not supported | Supply temperature weighted quota allocation |
 | **DHW priority handling** | Not supported | Blocks new heating during DHW, captures latent heat |
 | **UFH thermal response** | Adapted from radiator/TRV logic | Native PID tuned for slow thermal mass |
 
@@ -41,6 +42,16 @@ Multiple zones sharing one heat source need coordination. The controller:
 - **Waits for valves to open** before firing the boiler (configurable delay)
 - **Manages quota intelligently** - stops requesting heat before a zone's time expires
 - **Supports summer mode** - automatically enables/disables the boiler's heating circuit
+
+### Heat Accounting
+
+Multi-zone systems need fair quota allocation. Simply tracking valve-open time doesn't reflect actual heat delivered—a zone open during boiler coast-down receives less heat than one open at peak temperature.
+
+- **Supply-temperature weighting** - Quota accumulates faster when supply is hot, slower during coast-down
+- **Single sensor simplicity** - Only needs one manifold supply temperature sensor
+- **Automatic fallback** - Works with simple time-based tracking if no sensor configured
+
+[See heat accounting documentation →](docs/heat_accounting.md)
 
 ### EMS-ESP Integration
 
@@ -118,6 +129,7 @@ Sensor failures in one zone don't bring down your heating:
 - **[Full Documentation](docs/index.md)** - Architecture, algorithms, configuration reference
 - **[Control Algorithm](docs/control_algorithm.md)** - PID controller and scheduling details
 - **[Fault Isolation](docs/fault_isolation.md)** - How zone failures are handled
+- **[Heat Accounting](docs/heat_accounting.md)** - Fair quota allocation with supply temperature weighting
 - **[Configuration](docs/configuration.md)** - All parameters explained
 - **[Tasmota Relay Configuration](docs/tasmota.md)** - Setting up Tasmota-controlled relay boards
 
