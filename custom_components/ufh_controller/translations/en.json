@@ -48,13 +48,23 @@
       },
       "heat_accounting": {
         "title": "Heat Accounting",
-        "description": "Configure supply temperature sensor for weighted heat accounting.",
+        "description": "Configure supply temperature sensor and optional outdoor temperature compensation for weighted heat accounting.",
         "data": {
           "supply_temp_entity": "Supply temperature sensor",
-          "supply_target_temp": "Target supply temperature"
+          "supply_target_temp": "Fallback supply target",
+          "outdoor_temp_entity": "Outdoor temperature sensor",
+          "outdoor_temp_warm": "Outdoor temp (warm design point)",
+          "outdoor_temp_cold": "Outdoor temp (cold design point)",
+          "supply_temp_warm": "Supply target at warm point",
+          "supply_temp_cold": "Supply target at cold point"
         },
         "data_description": {
-          "supply_target_temp": "Expected supply temperature when boiler is firing at full capacity. Used to calculate supply coefficient percentage."
+          "supply_target_temp": "Fixed supply target used when outdoor sensor is unavailable. Also serves as fallback if heating curve is invalid.",
+          "outdoor_temp_entity": "Optional. When configured, enables heating curve to dynamically calculate supply target based on outdoor temperature.",
+          "outdoor_temp_warm": "Outdoor temperature at the warm design point (e.g., 15°C). Supply target equals supply_temp_warm when outdoor temp is at or above this value.",
+          "outdoor_temp_cold": "Outdoor temperature at the cold design point (e.g., -10°C). Supply target equals supply_temp_cold when outdoor temp is at or below this value.",
+          "supply_temp_warm": "Target supply temperature at the warm design point (e.g., 25°C for UFH).",
+          "supply_temp_cold": "Target supply temperature at the cold design point (e.g., 45°C for UFH)."
         }
       },
       "zone_entities": {
@@ -225,6 +235,9 @@
       },
       "supply_coefficient": {
         "name": "Supply Coefficient"
+      },
+      "supply_target": {
+        "name": "Supply Target"
       }
     },
     "binary_sensor": {
