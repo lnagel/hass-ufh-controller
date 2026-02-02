@@ -13,6 +13,9 @@ from typing import TYPE_CHECKING, Any
 from homeassistant.config_entries import ConfigSubentry
 from homeassistant.const import Platform
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
+from slugify import slugify
 
 from .const import (
     DEFAULT_TIMING,
@@ -26,7 +29,6 @@ from .data import UFHControllerData
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
-    from homeassistant.helpers import device_registry as dr
 
     from .data import UFHControllerConfigEntry
 
@@ -50,6 +52,9 @@ async def async_setup_entry(
 
     # Ensure controller subentry exists (auto-create if missing)
     await _async_ensure_controller_subentry(hass, entry)
+
+    # Migrate zone IDs if any subentries were renamed via HA's native rename
+    await _async_migrate_renamed_zones(hass, entry)
 
     coordinator = UFHControllerDataUpdateCoordinator(hass=hass, entry=entry)
     await coordinator.async_config_entry_first_refresh()
@@ -106,6 +111,55 @@ async def _async_ensure_controller_subentry(
 
     hass.config_entries.async_add_subentry(entry, controller_subentry)
     LOGGER.debug("Created controller subentry for: %s", controller_name)
+
+
+async def _async_migrate_renamed_zones(
+    hass: HomeAssistant,
+    entry: UFHControllerConfigEntry,
+) -> None:
+    """Migrate zone IDs when subentries are renamed via HA's native rename action."""
+    entity_reg = er.async_get(hass)
+    device_reg = dr.async_get(hass)
+    controller_id = entry.data.get("controller_id", "")
+
+    for subentry in list(entry.subentries.values()):
+        if subentry.subentry_type != SUBENTRY_TYPE_ZONE:
+            continue
+        if subentry.title == subentry.data.get("name"):
+            continue  # Not renamed
+
+        old_id = subentry.data.get("id", "")
+        new_id = slugify(subentry.title)
+        if old_id == new_id:
+            continue  # Slug unchanged
+
+        LOGGER.info("Migrating zone ID '%s' -> '%s'", old_id, new_id)
+
+        # Update entity unique_ids
+        old_prefix = f"{controller_id}_{old_id}_"
+        new_prefix = f"{controller_id}_{new_id}_"
+        for ent in er.async_entries_for_config_entry(entity_reg, entry.entry_id):
+            if (
+                ent.config_subentry_id == subentry.subentry_id
+                and ent.unique_id.startswith(old_prefix)
+            ):
+                entity_reg.async_update_entity(
+                    ent.entity_id,
+                    new_unique_id=ent.unique_id.replace(old_prefix, new_prefix, 1),
+                )
+
+        # Update device identifier
+        old_ident = (DOMAIN, f"{entry.entry_id}_{old_id}")
+        new_ident = (DOMAIN, f"{entry.entry_id}_{new_id}")
+        if device := device_reg.async_get_device(identifiers={old_ident}):
+            device_reg.async_update_device(device.id, new_identifiers={new_ident})
+
+        # Update subentry data
+        hass.config_entries.async_update_subentry(
+            entry,
+            subentry,
+            data={**subentry.data, "id": new_id, "name": subentry.title},
+        )
 
 
 async def async_unload_entry(
