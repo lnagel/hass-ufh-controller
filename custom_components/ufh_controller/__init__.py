@@ -152,16 +152,21 @@ async def _async_handle_config_update(
         if subentry.subentry_type == SUBENTRY_TYPE_ZONE
     }
 
-    # Detect structural change: zones added or removed
-    if old_zone_ids != new_zone_ids:
-        added = new_zone_ids - old_zone_ids
-        removed = old_zone_ids - new_zone_ids
-        LOGGER.info(
-            "Structural change detected: zones added=%s, removed=%s, "
-            "performing full reload",
-            added or "none",
-            removed or "none",
-        )
+    # Check entity-creating config options (affect which entities are created)
+    old_entity_config = (
+        coordinator.controller.config.supply_temp_entity,
+        coordinator.controller.config.outdoor_temp_entity,
+        coordinator.controller.config.dhw_active_entity,
+    )
+    new_entity_config = (
+        entry.data.get("supply_temp_entity"),
+        entry.data.get("outdoor_temp_entity"),
+        entry.data.get("dhw_active_entity"),
+    )
+
+    # Detect structural change: zones or entity-creating config changed
+    if old_zone_ids != new_zone_ids or old_entity_config != new_entity_config:
+        LOGGER.info("Structural change detected, performing full reload")
         await hass.config_entries.async_reload(entry.entry_id)
     else:
         # Just parameter changes: update in-place

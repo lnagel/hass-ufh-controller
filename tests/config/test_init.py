@@ -3,6 +3,7 @@
 from types import MappingProxyType
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from homeassistant.config_entries import ConfigSubentry
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -180,6 +181,43 @@ async def test_config_update_structural_change_full_reload(
         await hass.async_block_till_done()
 
         # Verify async_reload WAS called (full reload for structural change)
+        mock_reload.assert_called_once_with(mock_config_entry.entry_id)
+
+
+@pytest.mark.parametrize(
+    ("config_key", "config_value"),
+    [
+        ("supply_temp_entity", "sensor.supply_temp"),
+        ("outdoor_temp_entity", "sensor.outdoor_temp"),
+        ("dhw_active_entity", "binary_sensor.dhw"),
+    ],
+)
+async def test_config_update_entity_config_change_triggers_reload(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    config_key: str,
+    config_value: str,
+) -> None:
+    """Test entity-creating config change triggers full reload."""
+    mock_config_entry.add_to_hass(hass)
+    hass.states.async_set("sensor.zone1_temp", "20.5")
+
+    # Setup entry
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    # Patch async_reload to verify it IS called for entity config changes
+    with patch(
+        "homeassistant.config_entries.ConfigEntries.async_reload",
+        new_callable=AsyncMock,
+    ) as mock_reload:
+        hass.config_entries.async_update_entry(
+            mock_config_entry,
+            data={**mock_config_entry.data, config_key: config_value},
+        )
+        await hass.async_block_till_done()
+
+        # Verify async_reload WAS called (entity config changed)
         mock_reload.assert_called_once_with(mock_config_entry.entry_id)
 
 
