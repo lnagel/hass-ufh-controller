@@ -251,7 +251,24 @@
         "name": "Flow"
       },
       "status": {
-        "name": "Status"
+        "name": "Status",
+        "state_attributes": {
+          "status": {
+            "name": "Status",
+            "state": {
+              "initializing": "Initializing",
+              "normal": "Normal",
+              "degraded": "Degraded",
+              "fail_safe": "Fail-Safe"
+            }
+          },
+          "consecutive_failures": {
+            "name": "Consecutive Failures"
+          },
+          "last_successful_update": {
+            "name": "Last Successful Update"
+          }
+        }
       },
       "flush_request": {
         "name": "Flush Request"
@@ -259,7 +276,15 @@
     },
     "select": {
       "mode": {
-        "name": "Mode"
+        "name": "Mode",
+        "state": {
+          "heat": "Heat",
+          "flush": "Flush",
+          "cycle": "Cycle",
+          "all_on": "All On",
+          "all_off": "All Off",
+          "off": "Off"
+        }
       }
     },
     "switch": {
