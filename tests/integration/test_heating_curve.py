@@ -1,7 +1,5 @@
 """Integration tests for heating curve with outdoor temperature compensation."""
 
-from typing import Any
-
 import pytest
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -9,8 +7,6 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.ufh_controller.const import (
     DEFAULT_OUTDOOR_TEMP_COLD,
     DEFAULT_OUTDOOR_TEMP_WARM,
-    DEFAULT_PID,
-    DEFAULT_SETPOINT,
     DEFAULT_SUPPLY_TARGET_TEMP,
     DEFAULT_SUPPLY_TEMP_COLD,
     DEFAULT_SUPPLY_TEMP_WARM,
@@ -18,18 +14,7 @@ from custom_components.ufh_controller.const import (
     DOMAIN,
     SUBENTRY_TYPE_ZONE,
 )
-
-MOCK_ZONE_DATA: dict[str, Any] = {
-    "id": "zone1",
-    "name": "Test Zone 1",
-    "circuit_type": "regular",
-    "temp_sensor": "sensor.zone1_temp",
-    "valve_switch": "switch.zone1_valve",
-    "setpoint": DEFAULT_SETPOINT,
-    "pid": DEFAULT_PID,
-    "window_sensors": [],
-    "presets": {},
-}
+from tests.conftest import MOCK_ZONE_DATA
 
 
 @pytest.fixture
