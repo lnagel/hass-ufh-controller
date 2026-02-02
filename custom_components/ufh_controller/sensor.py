@@ -300,7 +300,6 @@ class UFHSupplyTargetSensor(UFHControllerEntity, SensorEntity):
     """Sensor showing calculated supply target temperature from heating curve."""
 
     _attr_translation_key = "supply_target"
-    _attr_name = "Supply Target"
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
     _attr_suggested_display_precision = 1

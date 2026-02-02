@@ -211,7 +211,7 @@
   "entity": {
     "climate": {
       "thermostat": {
-        "name": "Climate"
+        "name": "Thermostat"
       }
     },
     "sensor": {
