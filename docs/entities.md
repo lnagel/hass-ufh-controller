@@ -10,6 +10,7 @@ All controller entities belong to a device named after the controller (user-defi
 | select | `select.{controller_id}_mode`              | "{name} Mode"              | Control mode selector |
 | switch | `switch.{controller_id}_flush_enabled`     | "{name} Flush Enabled"     | DHW latent heat capture toggle (only when `dhw_active_entity` configured) |
 | sensor | `sensor.{controller_id}_requesting_zones`  | "{name} Requesting Zones"  | Count of zones currently requesting heat |
+| sensor | `sensor.{controller_id}_supply_target`     | "{name} Supply Target"     | Calculated supply target from heating curve (only when `outdoor_temp_entity` configured) |
 | binary_sensor | `binary_sensor.{controller_id}_status` | "{name} Status" | Controller operational status (problem when degraded/fail-safe) |
 | binary_sensor | `binary_sensor.{controller_id}_flush_request` | "{name} Flush Request" | Flush is actively running (only when `dhw_active_entity` configured) |
 
