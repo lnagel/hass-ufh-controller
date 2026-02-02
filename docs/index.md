@@ -10,6 +10,7 @@ A custom Home Assistant integration for multi-zone hydronic heating control with
 - [Entities](entities.md) - Controller and zone entity details
 - [Control Algorithm](control_algorithm.md) - PID controller and zone scheduling logic
 - [Heat Accounting](heat_accounting.md) - Supply-temperature-normalized quota consumption
+- [Heating Curve](heating_curve.md) - Outdoor temperature compensation for supply target
 - [Operation Modes](operation_modes.md) - Heat, flush, cycle, and manual modes
 - [Fault Isolation](fault_isolation.md) - Zone failure handling and recovery
 - [Configuration](configuration.md) - Detailed parameter reference

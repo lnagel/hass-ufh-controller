@@ -20,9 +20,13 @@ from homeassistant.helpers.update_coordinator import TimestampDataUpdateCoordina
 from sqlalchemy.exc import SQLAlchemyError
 
 from .const import (
+    DEFAULT_OUTDOOR_TEMP_COLD,
+    DEFAULT_OUTDOOR_TEMP_WARM,
     DEFAULT_PID,
     DEFAULT_SETPOINT,
     DEFAULT_SUPPLY_TARGET_TEMP,
+    DEFAULT_SUPPLY_TEMP_COLD,
+    DEFAULT_SUPPLY_TEMP_WARM,
     DEFAULT_TEMP_EMA_TIME_CONSTANT,
     DEFAULT_TIMING,
     DOMAIN,
@@ -38,6 +42,7 @@ from .const import (
     ZoneStatus,
 )
 from .core.controller import ControllerConfig, HeatingController
+from .core.heating_curve import HeatingCurveConfig
 from .core.history import get_observation_start, get_valve_open_window
 from .core.pid import PIDState
 from .core.zone import (
@@ -178,6 +183,17 @@ class UFHControllerDataUpdateCoordinator(
                 )
             )
 
+        # Build heating curve config from entry data
+        heating_curve = HeatingCurveConfig(
+            supply_target_temp=data.get(
+                "supply_target_temp", DEFAULT_SUPPLY_TARGET_TEMP
+            ),
+            outdoor_temp_warm=data.get("outdoor_temp_warm", DEFAULT_OUTDOOR_TEMP_WARM),
+            outdoor_temp_cold=data.get("outdoor_temp_cold", DEFAULT_OUTDOOR_TEMP_COLD),
+            supply_temp_warm=data.get("supply_temp_warm", DEFAULT_SUPPLY_TEMP_WARM),
+            supply_temp_cold=data.get("supply_temp_cold", DEFAULT_SUPPLY_TEMP_COLD),
+        )
+
         config = ControllerConfig(
             controller_id=data["controller_id"],
             name=data["name"],
@@ -185,9 +201,8 @@ class UFHControllerDataUpdateCoordinator(
             dhw_active_entity=data.get("dhw_active_entity"),
             summer_mode_entity=data.get("summer_mode_entity"),
             supply_temp_entity=data.get("supply_temp_entity"),
-            supply_target_temp=data.get(
-                "supply_target_temp", DEFAULT_SUPPLY_TARGET_TEMP
-            ),
+            outdoor_temp_entity=data.get("outdoor_temp_entity"),
+            heating_curve=heating_curve,
             timing=timing,
             zones=zones,
         )
@@ -505,6 +520,9 @@ class UFHControllerDataUpdateCoordinator(
         # Check DHW active state
         await self._update_dhw_state()
 
+        # Update outdoor temperature and calculate supply target for heating curve
+        self._set_outdoor_temp()
+
         # Update each zone (each zone tracks its own failure state)
         for zone_id in self._controller.zone_ids:
             await self._update_zone(zone_id, now, dt)
@@ -641,6 +659,41 @@ class UFHControllerDataUpdateCoordinator(
         except (ValueError, TypeError):
             return None
 
+    def _get_outdoor_temp(self) -> float | None:
+        """Get current outdoor temperature if available."""
+        outdoor_entity = self._controller.config.outdoor_temp_entity
+        if outdoor_entity is None:
+            return None
+        outdoor_state = self.hass.states.get(outdoor_entity)
+        if outdoor_state is None:
+            return None
+        try:
+            return float(outdoor_state.state)
+        except (ValueError, TypeError):
+            return None
+
+    def _set_outdoor_temp(self) -> None:
+        """
+        Update outdoor temperature on the controller.
+
+        Reads the outdoor sensor and calls the controller's update method,
+        which calculates the supply target from the heating curve.
+        This must be called once per update cycle, before zone evaluation.
+        """
+        outdoor_temp = self._get_outdoor_temp()
+        curve_config = self._controller.config.heating_curve
+
+        # Log warning for invalid curve configuration
+        if outdoor_temp is not None and not curve_config.is_valid():
+            LOGGER.warning(
+                "Invalid heating curve: outdoor_temp_warm (%.1f) must be > "
+                "outdoor_temp_cold (%.1f), using fallback supply_target_temp",
+                curve_config.outdoor_temp_warm,
+                curve_config.outdoor_temp_cold,
+            )
+
+        self._controller.set_outdoor_temp(outdoor_temp)
+
     def _is_any_window_open(self, window_sensors: list[str]) -> bool:
         """Check if any window sensor is currently in 'on' state."""
         for sensor_id in window_sensors:
@@ -751,11 +804,14 @@ class UFHControllerDataUpdateCoordinator(
         )
 
         # Update supply coefficient from supply temperature
+        # Supply target is calculated once per cycle and stored in controller state
         supply_temp = self._get_supply_temp()
-        runtime.update_supply_coefficient(
-            supply_temp=supply_temp,
-            supply_target_temp=self._controller.config.supply_target_temp,
-        )
+        supply_target = self._controller.state.supply_target_temp
+        if supply_target is not None:
+            runtime.update_supply_coefficient(
+                supply_temp=supply_temp,
+                supply_target_temp=supply_target,
+            )
 
         # Update used_duration based on flow and heat performance
         runtime.update_used_duration(dt)
@@ -1063,6 +1119,8 @@ class UFHControllerDataUpdateCoordinator(
             "zones_degraded": zones_degraded,
             "zones_fail_safe": zones_fail_safe,
             "flush_request": self._controller.state.flush_request,
+            "outdoor_temp": self._controller.state.outdoor_temp,
+            "supply_target_temp": self._controller.state.supply_target_temp,
             "zones": {},
         }
 

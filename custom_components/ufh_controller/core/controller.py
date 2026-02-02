@@ -18,6 +18,7 @@ from custom_components.ufh_controller.const import (
     ValveState,
 )
 
+from .heating_curve import HeatingCurveConfig, calculate_supply_target
 from .pid import PIDController
 from .zone import (
     CircuitType,
@@ -43,6 +44,8 @@ class ControllerState:
     flush_until: datetime | None = None
     flush_request: bool = False
     zones: dict[str, ZoneState] = field(default_factory=dict)
+    outdoor_temp: float | None = None
+    supply_target_temp: float | None = None
 
 
 @dataclass
@@ -55,7 +58,8 @@ class ControllerConfig:
     dhw_active_entity: str | None = None
     summer_mode_entity: str | None = None
     supply_temp_entity: str | None = None
-    supply_target_temp: float = 40.0
+    outdoor_temp_entity: str | None = None
+    heating_curve: HeatingCurveConfig = field(default_factory=HeatingCurveConfig)
     timing: TimingParams = field(default_factory=TimingParams)
     zones: list[ZoneConfig] = field(default_factory=list)
 
@@ -215,6 +219,21 @@ class HeatingController:
             return False
         runtime.set_enabled(enabled=enabled)
         return True
+
+    def set_outdoor_temp(self, outdoor_temp: float | None) -> None:
+        """
+        Set outdoor temperature and recalculate supply target.
+
+        Called once per update cycle, before zone evaluation.
+
+        Args:
+            outdoor_temp: Current outdoor temperature, or None if unavailable.
+
+        """
+        self._state.outdoor_temp = outdoor_temp
+        self._state.supply_target_temp = calculate_supply_target(
+            self.config.heating_curve, outdoor_temp
+        )
 
     # -------------------------------------------------------------------------
     # Mode-specific evaluation functions

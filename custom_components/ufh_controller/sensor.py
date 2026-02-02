@@ -109,12 +109,20 @@ async def async_setup_entry(
 
     # Check if supply temp is configured (enables heat performance sensors)
     supply_entity = entry.data.get("supply_temp_entity")
+    # Check if outdoor temp is configured (enables heating curve sensor)
+    outdoor_entity = entry.data.get("outdoor_temp_entity")
 
     # Add controller-level sensors
     if controller_subentry_id is not None:
         controller_sensors: list[SensorEntity] = [
             UFHRequestingZonesSensor(coordinator, controller_subentry_id)
         ]
+
+        # Add supply target sensor if outdoor temp entity is configured
+        if outdoor_entity:
+            controller_sensors.append(
+                UFHSupplyTargetSensor(coordinator, controller_subentry_id)
+            )
 
         async_add_entities(
             controller_sensors,
@@ -286,3 +294,29 @@ class UFHRequestingZonesSensor(UFHControllerEntity, SensorEntity):
     def native_value(self) -> int:
         """Return the count of zones requesting heat."""
         return self.coordinator.data.get("zones_requesting_heat", 0)
+
+
+class UFHSupplyTargetSensor(UFHControllerEntity, SensorEntity):
+    """Sensor showing calculated supply target temperature from heating curve."""
+
+    _attr_translation_key = "supply_target"
+    _attr_name = "Supply Target"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
+    _attr_suggested_display_precision = 1
+
+    def __init__(
+        self,
+        coordinator: UFHControllerDataUpdateCoordinator,
+        subentry_id: str,
+    ) -> None:
+        """Initialize the sensor entity."""
+        super().__init__(coordinator, subentry_id)
+
+        controller_id = coordinator.config_entry.data.get("controller_id", "")
+        self._attr_unique_id = f"{controller_id}_supply_target"
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the calculated supply target temperature."""
+        return self.coordinator.data.get("supply_target_temp")

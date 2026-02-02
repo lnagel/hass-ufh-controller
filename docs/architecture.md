@@ -66,14 +66,14 @@ Each layer has one job:
 ### 2. Dependency Direction
 
 Dependencies flow downward:
-- Coordinator depends on Controller, Zone, Recorder (HA-specific)
-- Controller depends on Zone (ZoneRuntime + pure functions)
+- Coordinator depends on Controller, Zone, HeatingCurve, Recorder (HA-specific)
+- Controller depends on Zone (ZoneRuntime + pure functions), HeatingCurve
 - Zone depends on PID, EMA (pure utilities)
-- PID, EMA, History depend on nothing (stdlib only)
+- PID, EMA, History, HeatingCurve depend on nothing (stdlib only)
 
 ### 3. Testability
 
-- **PID, EMA, History**: Unit testable, no dependencies
+- **PID, EMA, History, HeatingCurve**: Unit testable, no dependencies
 - **Zone (pure functions)**: Unit testable without HA or mocks
 - **Controller**: Unit testable without HA or mocks
 - **Coordinator**: Integration testable with mocked HA

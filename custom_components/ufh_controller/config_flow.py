@@ -17,16 +17,22 @@ from homeassistant.helpers import selector
 from slugify import slugify
 
 from .const import (
+    DEFAULT_OUTDOOR_TEMP_COLD,
+    DEFAULT_OUTDOOR_TEMP_WARM,
     DEFAULT_PID,
     DEFAULT_PRESETS,
     DEFAULT_SETPOINT,
     DEFAULT_SUPPLY_TARGET_TEMP,
+    DEFAULT_SUPPLY_TEMP_COLD,
+    DEFAULT_SUPPLY_TEMP_WARM,
     DEFAULT_TEMP_EMA_TIME_CONSTANT,
     DEFAULT_TIMING,
     DOMAIN,
     LOGGER,
     SUBENTRY_TYPE_CONTROLLER,
     SUBENTRY_TYPE_ZONE,
+    UI_HEATING_CURVE_SUPPLY,
+    UI_OUTDOOR_TEMP,
     UI_PRESET_TEMPERATURE,
     UI_SETPOINT_DEFAULT,
     UI_SETPOINT_MAX,
@@ -51,6 +57,11 @@ CONF_DHW_ACTIVE_ENTITY = "dhw_active_entity"
 CONF_SUMMER_MODE_ENTITY = "summer_mode_entity"
 CONF_SUPPLY_TEMP_ENTITY = "supply_temp_entity"
 CONF_SUPPLY_TARGET_TEMP = "supply_target_temp"
+CONF_OUTDOOR_TEMP_ENTITY = "outdoor_temp_entity"
+CONF_OUTDOOR_TEMP_WARM = "outdoor_temp_warm"
+CONF_OUTDOOR_TEMP_COLD = "outdoor_temp_cold"
+CONF_SUPPLY_TEMP_WARM = "supply_temp_warm"
+CONF_SUPPLY_TEMP_COLD = "supply_temp_cold"
 
 
 def get_timing_schema(timing: TimingDefaults | None = None) -> vol.Schema:
@@ -716,7 +727,7 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
         self,
         user_input: dict[str, Any] | None = None,
     ) -> config_entries.ConfigFlowResult:
-        """Configure heat accounting settings (supply temperature sensor and target)."""
+        """Configure heat accounting settings (supply temperature and heating curve)."""
         if user_input is not None:
             # Update the config entry data with supply temperature settings
             new_data = {
@@ -724,6 +735,19 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
                 CONF_SUPPLY_TEMP_ENTITY: user_input.get(CONF_SUPPLY_TEMP_ENTITY),
                 CONF_SUPPLY_TARGET_TEMP: user_input.get(
                     CONF_SUPPLY_TARGET_TEMP, DEFAULT_SUPPLY_TARGET_TEMP
+                ),
+                CONF_OUTDOOR_TEMP_ENTITY: user_input.get(CONF_OUTDOOR_TEMP_ENTITY),
+                CONF_OUTDOOR_TEMP_WARM: user_input.get(
+                    CONF_OUTDOOR_TEMP_WARM, DEFAULT_OUTDOOR_TEMP_WARM
+                ),
+                CONF_OUTDOOR_TEMP_COLD: user_input.get(
+                    CONF_OUTDOOR_TEMP_COLD, DEFAULT_OUTDOOR_TEMP_COLD
+                ),
+                CONF_SUPPLY_TEMP_WARM: user_input.get(
+                    CONF_SUPPLY_TEMP_WARM, DEFAULT_SUPPLY_TEMP_WARM
+                ),
+                CONF_SUPPLY_TEMP_COLD: user_input.get(
+                    CONF_SUPPLY_TEMP_COLD, DEFAULT_SUPPLY_TEMP_COLD
                 ),
             }
             self.hass.config_entries.async_update_entry(
@@ -757,6 +781,72 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
                             min=UI_SUPPLY_TARGET_TEMP["min"],
                             max=UI_SUPPLY_TARGET_TEMP["max"],
                             step=UI_SUPPLY_TARGET_TEMP["step"],
+                            unit_of_measurement=UnitOfTemperature.CELSIUS,
+                            mode=selector.NumberSelectorMode.SLIDER,
+                        )
+                    ),
+                    vol.Optional(
+                        CONF_OUTDOOR_TEMP_ENTITY,
+                        description={
+                            "suggested_value": current_data.get(
+                                CONF_OUTDOOR_TEMP_ENTITY
+                            )
+                        },
+                    ): selector.EntitySelector(
+                        selector.EntitySelectorConfig(domain="sensor")
+                    ),
+                    vol.Optional(
+                        CONF_OUTDOOR_TEMP_WARM,
+                        default=current_data.get(
+                            CONF_OUTDOOR_TEMP_WARM, DEFAULT_OUTDOOR_TEMP_WARM
+                        ),
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=UI_OUTDOOR_TEMP["min"],
+                            max=UI_OUTDOOR_TEMP["max"],
+                            step=UI_OUTDOOR_TEMP["step"],
+                            unit_of_measurement=UnitOfTemperature.CELSIUS,
+                            mode=selector.NumberSelectorMode.SLIDER,
+                        )
+                    ),
+                    vol.Optional(
+                        CONF_OUTDOOR_TEMP_COLD,
+                        default=current_data.get(
+                            CONF_OUTDOOR_TEMP_COLD, DEFAULT_OUTDOOR_TEMP_COLD
+                        ),
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=UI_OUTDOOR_TEMP["min"],
+                            max=UI_OUTDOOR_TEMP["max"],
+                            step=UI_OUTDOOR_TEMP["step"],
+                            unit_of_measurement=UnitOfTemperature.CELSIUS,
+                            mode=selector.NumberSelectorMode.SLIDER,
+                        )
+                    ),
+                    vol.Optional(
+                        CONF_SUPPLY_TEMP_WARM,
+                        default=current_data.get(
+                            CONF_SUPPLY_TEMP_WARM, DEFAULT_SUPPLY_TEMP_WARM
+                        ),
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=UI_HEATING_CURVE_SUPPLY["min"],
+                            max=UI_HEATING_CURVE_SUPPLY["max"],
+                            step=UI_HEATING_CURVE_SUPPLY["step"],
+                            unit_of_measurement=UnitOfTemperature.CELSIUS,
+                            mode=selector.NumberSelectorMode.SLIDER,
+                        )
+                    ),
+                    vol.Optional(
+                        CONF_SUPPLY_TEMP_COLD,
+                        default=current_data.get(
+                            CONF_SUPPLY_TEMP_COLD, DEFAULT_SUPPLY_TEMP_COLD
+                        ),
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=UI_HEATING_CURVE_SUPPLY["min"],
+                            max=UI_HEATING_CURVE_SUPPLY["max"],
+                            step=UI_HEATING_CURVE_SUPPLY["step"],
                             unit_of_measurement=UnitOfTemperature.CELSIUS,
                             mode=selector.NumberSelectorMode.SLIDER,
                         )

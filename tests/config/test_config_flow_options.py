@@ -7,6 +7,10 @@ from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ufh_controller.const import (
+    DEFAULT_OUTDOOR_TEMP_COLD,
+    DEFAULT_OUTDOOR_TEMP_WARM,
+    DEFAULT_SUPPLY_TEMP_COLD,
+    DEFAULT_SUPPLY_TEMP_WARM,
     DOMAIN,
     SUBENTRY_TYPE_CONTROLLER,
 )
@@ -279,3 +283,137 @@ async def test_options_flow_update_supply_target_temp(
 
     # Verify the config entry data was updated
     assert mock_config_entry.data["supply_target_temp"] == 45.0
+
+
+async def test_options_flow_update_heating_curve(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Test updating heating curve parameters via options flow."""
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    result = await hass.config_entries.options.async_init(mock_config_entry.entry_id)
+
+    # Navigate to heat_accounting
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={"next_step_id": "heat_accounting"},
+    )
+
+    # Update with heating curve parameters
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={
+            "supply_temp_entity": "sensor.supply_temp",
+            "supply_target_temp": 40.0,
+            "outdoor_temp_entity": "sensor.outdoor_temp",
+            "outdoor_temp_warm": 20.0,
+            "outdoor_temp_cold": -15.0,
+            "supply_temp_warm": 30.0,
+            "supply_temp_cold": 50.0,
+        },
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+
+    # Verify all heating curve parameters were saved
+    assert mock_config_entry.data["outdoor_temp_entity"] == "sensor.outdoor_temp"
+    assert mock_config_entry.data["outdoor_temp_warm"] == 20.0
+    assert mock_config_entry.data["outdoor_temp_cold"] == -15.0
+    assert mock_config_entry.data["supply_temp_warm"] == 30.0
+    assert mock_config_entry.data["supply_temp_cold"] == 50.0
+
+
+async def test_options_flow_heating_curve_defaults(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Test heating curve fields have correct defaults when not configured."""
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    result = await hass.config_entries.options.async_init(mock_config_entry.entry_id)
+
+    # Navigate to heat_accounting
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={"next_step_id": "heat_accounting"},
+    )
+
+    # Submit without setting heating curve values (use defaults)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={
+            # Only supply entity and target
+            "supply_temp_entity": "sensor.supply_temp",
+            "supply_target_temp": 40.0,
+        },
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+
+    # Verify defaults were applied for heating curve
+    assert mock_config_entry.data.get("outdoor_temp_entity") is None
+    assert mock_config_entry.data["outdoor_temp_warm"] == DEFAULT_OUTDOOR_TEMP_WARM
+    assert mock_config_entry.data["outdoor_temp_cold"] == DEFAULT_OUTDOOR_TEMP_COLD
+    assert mock_config_entry.data["supply_temp_warm"] == DEFAULT_SUPPLY_TEMP_WARM
+    assert mock_config_entry.data["supply_temp_cold"] == DEFAULT_SUPPLY_TEMP_COLD
+
+
+async def test_options_flow_backwards_compatible(
+    hass: HomeAssistant,
+) -> None:
+    """Test existing config entries without heating curve work correctly."""
+    # Create entry with only old-style heat accounting (no heating curve fields)
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            "name": "Test",
+            "controller_id": "test_backwards",
+            "supply_temp_entity": "sensor.supply_temp",
+            "supply_target_temp": 42.0,
+            # No heating curve fields - simulates pre-heating-curve config
+        },
+        options={},
+        subentries_data=[],
+    )
+    entry.add_to_hass(hass)
+
+    with patch(
+        "custom_components.ufh_controller.async_setup_entry",
+        return_value=True,
+    ):
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+
+    # Navigate to heat_accounting
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={"next_step_id": "heat_accounting"},
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "heat_accounting"
+
+    # The form should show with existing supply_target_temp and defaults for new fields
+    # Submit to verify backwards compatibility
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={
+            "supply_temp_entity": "sensor.supply_temp",
+            "supply_target_temp": 42.0,
+            # Heating curve fields will use defaults
+        },
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+
+    # Original field preserved, new fields get defaults
+    assert entry.data["supply_target_temp"] == 42.0
+    assert entry.data["outdoor_temp_warm"] == DEFAULT_OUTDOOR_TEMP_WARM
+    assert entry.data["outdoor_temp_cold"] == DEFAULT_OUTDOOR_TEMP_COLD

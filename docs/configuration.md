@@ -464,11 +464,67 @@ A temperature sensor measuring the supply water temperature at the heating manif
 
 **Type:** Number
 **Default:** 40.0°C
-**Range:** 25.0-60.0°C
+**Range:** 20.0-60.0°C
 **Config location:** ConfigEntry → `data.supply_target_temp`
 
-The expected supply temperature when the boiler is operating normally.
+The fallback supply target temperature, used when outdoor temperature sensor is unavailable or heating curve is invalid.
 
 **How it works:** See [Heat Accounting](heat_accounting.md) for detailed documentation.
+
+#### outdoor_temp_entity
+
+**Type:** Sensor entity
+**Required:** No
+**Config location:** ConfigEntry → `data.outdoor_temp_entity`
+
+An outdoor temperature sensor for heating curve calculation. When configured, enables dynamic supply target adjustment based on weather conditions.
+
+**How it works:** The controller reads this sensor and uses the heating curve to calculate a dynamic supply target. When the sensor is unavailable, the system falls back to `supply_target_temp`.
+
+**Example:** `sensor.outdoor_temperature`
+
+#### outdoor_temp_warm
+
+**Type:** Number
+**Default:** 15.0°C
+**Range:** -30.0 to 30.0°C
+**Config location:** ConfigEntry → `data.outdoor_temp_warm`
+
+The outdoor temperature at the "warm" design point. At or above this temperature, the supply target equals `supply_temp_warm`.
+
+**Example:** With `outdoor_temp_warm=15.0`, when outdoor temperature is 15°C or warmer, the supply target is at its minimum (warmest outdoor = lowest supply needed).
+
+#### outdoor_temp_cold
+
+**Type:** Number
+**Default:** -10.0°C
+**Range:** -30.0 to 30.0°C
+**Config location:** ConfigEntry → `data.outdoor_temp_cold`
+
+The outdoor temperature at the "cold" design point. At or below this temperature, the supply target equals `supply_temp_cold`. Must be less than `outdoor_temp_warm`.
+
+**Example:** With `outdoor_temp_cold=-10.0`, when outdoor temperature is -10°C or colder, the supply target is at its maximum (coldest outdoor = highest supply needed).
+
+#### supply_temp_warm
+
+**Type:** Number
+**Default:** 25.0°C
+**Range:** 20.0-60.0°C
+**Config location:** ConfigEntry → `data.supply_temp_warm`
+
+The target supply temperature at the warm design point. This is the minimum supply target when outdoor conditions are mild.
+
+**Example:** With `supply_temp_warm=25.0`, when outdoor temp is at or above `outdoor_temp_warm`, the system expects 25°C supply water.
+
+#### supply_temp_cold
+
+**Type:** Number
+**Default:** 45.0°C
+**Range:** 20.0-60.0°C
+**Config location:** ConfigEntry → `data.supply_temp_cold`
+
+The target supply temperature at the cold design point. This is the maximum supply target when outdoor conditions are extreme.
+
+**Example:** With `supply_temp_cold=45.0`, when outdoor temp is at or below `outdoor_temp_cold`, the system expects 45°C supply water.
 
 ---

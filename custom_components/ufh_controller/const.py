@@ -212,8 +212,18 @@ DEFAULT_WINDOW_OPEN_THRESHOLD = 0.1  # 10% threshold for window open detection
 DEFAULT_SUPPLY_TARGET_TEMP = 40.0
 DEFAULT_SUPPLY_COEFFICIENT_CAP = 200.0  # Maximum supply coefficient percentage
 
+# Heating curve defaults (outdoor temp compensation)
+DEFAULT_OUTDOOR_TEMP_WARM = 15.0  # Outdoor temp at warm design point (°C)
+DEFAULT_OUTDOOR_TEMP_COLD = -10.0  # Outdoor temp at cold design point (°C)
+DEFAULT_SUPPLY_TEMP_WARM = 25.0  # Supply target at warm point (°C)
+DEFAULT_SUPPLY_TEMP_COLD = 45.0  # Supply target at cold point (°C)
+
 # UI validation constraints for flow monitoring
-UI_SUPPLY_TARGET_TEMP = {"min": 25.0, "max": 60.0, "step": 0.5}
+UI_SUPPLY_TARGET_TEMP = {"min": 20.0, "max": 60.0, "step": 0.5}
+
+# UI validation constraints for heating curve
+UI_OUTDOOR_TEMP = {"min": -30.0, "max": 30.0, "step": 1.0}
+UI_HEATING_CURVE_SUPPLY = {"min": 20.0, "max": 60.0, "step": 1.0}
 
 # UI validation constraints for timing parameters
 UI_TIMING_OBSERVATION_PERIOD = {"min": 1800, "max": 14400, "step": 600}
