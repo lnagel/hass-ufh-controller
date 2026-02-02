@@ -18,6 +18,9 @@
       },
       "supply_coefficient": {
         "default": "mdi:gauge"
+      },
+      "supply_target": {
+        "default": "mdi:thermometer-auto"
       }
     },
     "binary_sensor": {
