@@ -108,10 +108,8 @@ Sensor failures in one zone don't bring down your heating:
 
 ## Quick Start
 
-1. **Add Integration**: Settings → Devices & Services → Add Integration → "Underfloor Heating Controller"
-2. **Configure Boiler** (optional): Connect heat request switch, DHW sensor, summer mode select
-3. **Add Zones**: Each zone needs a temperature sensor and valve switch
-4. **Set Presets**: Configure Home/Away/Eco/Comfort/Boost temperatures per zone
+1. **Install**: See [Installation](#installation) above
+2. **Follow the guide**: The [Quickstart Guide](docs/quickstart.md) walks you through controller setup, adding your first zone, and verifying everything works
 
 ## Operation Modes
 
@@ -126,6 +124,7 @@ Sensor failures in one zone don't bring down your heating:
 
 ## Documentation
 
+- **[Quickstart Guide](docs/quickstart.md)** - Get up and running with your first zone
 - **[Full Documentation](docs/index.md)** - Architecture, algorithms, configuration reference
 - **[Control Algorithm](docs/control_algorithm.md)** - PID controller and scheduling details
 - **[Fault Isolation](docs/fault_isolation.md)** - How zone failures are handled

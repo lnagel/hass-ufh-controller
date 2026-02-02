@@ -4,6 +4,7 @@ A custom Home Assistant integration for multi-zone hydronic heating control with
 
 ## Documentation
 
+- [Quickstart Guide](quickstart.md) - Get up and running with your first zone
 - [Architecture](architecture.md) - Layered design and data flow
 - [Config Flow](config_flow.md) - UI-based configuration for controller and zones
 - [Entities](entities.md) - Controller and zone entity details
