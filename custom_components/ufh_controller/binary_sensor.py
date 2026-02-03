@@ -39,10 +39,8 @@ class UFHZoneBinarySensorEntityDescription(BinarySensorEntityDescription):
 class UFHControllerBinarySensorEntityDescription(BinarySensorEntityDescription):
     """Describes UFH controller binary sensor entity."""
 
-    value_fn: Callable[[UFHControllerDataUpdateCoordinator], bool]
-    attrs_fn: Callable[[UFHControllerDataUpdateCoordinator], dict[str, Any]] | None = (
-        None
-    )
+    value_fn: Callable[[dict[str, Any]], bool]
+    attrs_fn: Callable[[dict[str, Any]], dict[str, Any]] | None = None
     entity_registry_visible_default: bool = False
 
 
@@ -51,42 +49,36 @@ ZONE_BINARY_SENSORS: tuple[UFHZoneBinarySensorEntityDescription, ...] = (
         key="blocked",
         translation_key="blocked",
         device_class=BinarySensorDeviceClass.PROBLEM,
-        value_fn=lambda data: data.get("blocked", False),
+        value_fn=lambda data: data.get("blocked"),
     ),
     UFHZoneBinarySensorEntityDescription(
         key="heat_request",
         translation_key="heat_request",
         device_class=BinarySensorDeviceClass.HEAT,
-        value_fn=lambda data: data.get("heat_request", False),
+        value_fn=lambda data: data.get("heat_request"),
     ),
     UFHZoneBinarySensorEntityDescription(
         key="flow",
         translation_key="flow",
         device_class=BinarySensorDeviceClass.RUNNING,
-        value_fn=lambda data: data.get("flow", False),
+        value_fn=lambda data: data.get("flow"),
     ),
 )
 
 
-def _status_value(coordinator: UFHControllerDataUpdateCoordinator) -> bool:
+def _status_value(data: dict[str, Any]) -> bool:
     """Return True if there is a problem (degraded or fail-safe)."""
-    return coordinator.status in (ControllerStatus.DEGRADED, ControllerStatus.FAIL_SAFE)
+    status = data.get("status")
+    return status in (ControllerStatus.DEGRADED.value, ControllerStatus.FAIL_SAFE.value)
 
 
-def _status_attrs(coordinator: UFHControllerDataUpdateCoordinator) -> dict[str, Any]:
+def _status_attrs(data: dict[str, Any]) -> dict[str, Any]:
     """Return additional status attributes."""
     return {
-        "controller_status": coordinator.status.value,
-        "zones_degraded": coordinator.data.get("zones_degraded", 0),
-        "zones_fail_safe": coordinator.data.get("zones_fail_safe", 0),
+        "status": data.get("status"),
+        "zones_degraded": data.get("zones_degraded"),
+        "zones_fail_safe": data.get("zones_fail_safe"),
     }
-
-
-def _flush_request_value(coordinator: UFHControllerDataUpdateCoordinator) -> bool:
-    """Return True if flush is currently requested."""
-    if not coordinator.controller.state.flush_enabled:
-        return False
-    return coordinator.data.get("flush_request", False)
 
 
 # Controller-level binary sensor descriptions
@@ -102,7 +94,7 @@ FLUSH_REQUEST_SENSOR = UFHControllerBinarySensorEntityDescription(
     key="flush_request",
     translation_key="flush_request",
     device_class=BinarySensorDeviceClass.HEAT,
-    value_fn=_flush_request_value,
+    value_fn=lambda data: data.get("flush_request"),
 )
 
 
@@ -220,11 +212,13 @@ class UFHControllerBinarySensor(UFHControllerEntity, BinarySensorEntity):
     @property
     def is_on(self) -> bool:
         """Return the sensor state."""
-        return self.entity_description.value_fn(self.coordinator)
+        controller_data = self.coordinator.data.get("controller", {})
+        return self.entity_description.value_fn(controller_data)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
         """Return additional state attributes if defined."""
         if self.entity_description.attrs_fn is not None:
-            return self.entity_description.attrs_fn(self.coordinator)
+            controller_data = self.coordinator.data.get("controller", {})
+            return self.entity_description.attrs_fn(controller_data)
         return None

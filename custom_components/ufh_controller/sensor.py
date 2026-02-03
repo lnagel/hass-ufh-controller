@@ -138,7 +138,7 @@ REQUESTING_ZONES_SENSOR = UFHControllerSensorEntityDescription(
     translation_key="requesting_zones",
     native_unit_of_measurement="zones",
     state_class=SensorStateClass.MEASUREMENT,
-    value_fn=lambda data: data.get("zones_requesting_heat", 0),
+    value_fn=lambda data: data.get("requesting_zones"),
 )
 
 SUPPLY_TARGET_SENSOR = UFHControllerSensorEntityDescription(
@@ -288,4 +288,5 @@ class UFHControllerSensor(UFHControllerEntity, SensorEntity):
     @property
     def native_value(self) -> float | int | None:
         """Return the sensor value."""
-        return self.entity_description.value_fn(self.coordinator.data)
+        controller_data = self.coordinator.data.get("controller", {})
+        return self.entity_description.value_fn(controller_data)

@@ -1109,18 +1109,21 @@ class UFHControllerDataUpdateCoordinator(
                     zones_fail_safe += 1
 
         # Count zones requesting heat from controller state
-        zones_requesting_heat = sum(self._controller.state.heat_requests.values())
+        requesting_zones = sum(self._controller.state.heat_requests.values())
 
         result: dict[str, Any] = {
-            "mode": self._controller.mode,
-            "zones_requesting_heat": zones_requesting_heat,
-            "observation_start": self._controller.state.observation_start,
-            "controller_status": self._status.value,
-            "zones_degraded": zones_degraded,
-            "zones_fail_safe": zones_fail_safe,
-            "flush_request": self._controller.state.flush_request,
-            "outdoor_temp": self._controller.state.outdoor_temp,
-            "supply_target_temp": self._controller.state.supply_target_temp,
+            "controller": {
+                "mode": self._controller.mode,
+                "requesting_zones": requesting_zones,
+                "observation_start": self._controller.state.observation_start,
+                "status": self._status.value,
+                "zones_degraded": zones_degraded,
+                "zones_fail_safe": zones_fail_safe,
+                "flush_enabled": self._controller.state.flush_enabled,
+                "flush_request": self._controller.state.flush_request,
+                "outdoor_temp": self._controller.state.outdoor_temp,
+                "supply_target_temp": self._controller.state.supply_target_temp,
+            },
             "zones": {},
         }
 

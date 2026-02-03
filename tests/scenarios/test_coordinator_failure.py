@@ -50,11 +50,13 @@ class TestCoordinatorStatus:
 
         state_dict = coordinator._build_state_dict()
 
-        assert "controller_status" in state_dict
+        assert "controller" in state_dict
+        controller_data = state_dict["controller"]
+        assert "status" in controller_data
         # Before first update, zones are initializing
-        assert state_dict["controller_status"] == "initializing"
-        assert "zones_degraded" in state_dict
-        assert "zones_fail_safe" in state_dict
+        assert controller_data["status"] == "initializing"
+        assert "zones_degraded" in controller_data
+        assert "zones_fail_safe" in controller_data
 
 
 class TestCoordinatorUpdateZoneFailure:
@@ -603,9 +605,11 @@ class TestZoneIsolation:
         # Before first update, zone is initializing
         assert state_dict["zones"]["zone1"]["zone_status"] == "initializing"
 
-        # Check zone counts
-        assert "zones_degraded" in state_dict
-        assert "zones_fail_safe" in state_dict
+        # Check zone counts are in controller data
+        assert "controller" in state_dict
+        controller_data = state_dict["controller"]
+        assert "zones_degraded" in controller_data
+        assert "zones_fail_safe" in controller_data
 
 
 class TestValveUnavailability:

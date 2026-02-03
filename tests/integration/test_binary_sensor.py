@@ -47,8 +47,8 @@ async def test_controller_status_extra_attributes(
     attrs = state.attributes
 
     # Check extra attributes are present with correct values
-    assert "controller_status" in attrs
-    assert attrs["controller_status"] == "normal"
+    assert "status" in attrs
+    assert attrs["status"] == "normal"
     assert "zones_degraded" in attrs
     assert attrs["zones_degraded"] == 0
     assert "zones_fail_safe" in attrs
@@ -136,7 +136,7 @@ async def test_controller_status_off_when_initializing(
     # Initializing is NOT a problem, so sensor should be OFF
     assert state.state == "off"
     # But status attribute should show "initializing"
-    assert state.attributes["controller_status"] == "initializing"
+    assert state.attributes["status"] == "initializing"
 
 
 async def test_zone_binary_sensor_available_during_initializing(

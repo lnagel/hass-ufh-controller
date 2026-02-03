@@ -192,7 +192,8 @@ class TestSupplyTargetSensorEntity:
 
         state = hass.states.get("sensor.test_controller_heating_curve_supply_target")
         assert state is not None
-        assert float(state.state) == coordinator.data.get("supply_target_temp")
+        controller_data = coordinator.data.get("controller", {})
+        assert float(state.state) == controller_data.get("supply_target_temp")
 
 
 class TestOutdoorSensorStateChanges:
