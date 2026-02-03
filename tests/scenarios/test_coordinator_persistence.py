@@ -16,6 +16,7 @@ from custom_components.ufh_controller.const import (
     OperationMode,
     ValveState,
 )
+from custom_components.ufh_controller.coordinator import UFHControllerStore
 from custom_components.ufh_controller.core.pid import PIDState
 
 
@@ -45,8 +46,7 @@ async def test_coordinator_loads_stored_state(
 ) -> None:
     """Test coordinator loads stored state on first update."""
     stored_data = {
-        "version": 1,
-        "controller_mode": "flush",
+        "controller": {"mode": "flush", "flush_enabled": False},
         "last_update_success_time": "2025-06-15T12:30:00+00:00",
         "zones": {
             "zone1": {
@@ -56,7 +56,7 @@ async def test_coordinator_loads_stored_state(
                 "pid_integral": 45.5,
                 "pid_derivative": 1.5,
                 "duty_cycle": 55.0,
-                "temperature": 20.8,  # EMA-filtered temperature
+                "current": 20.8,  # EMA-filtered temperature
                 "display_temp": 20.8,  # Display temperature for climate availability
                 "preset_mode": "comfort",
             },
@@ -144,10 +144,12 @@ async def test_coordinator_save_state_format(
         await coordinator.async_save_state()
 
     assert saved_data is not None
-    assert saved_data["version"] == 1
-    assert saved_data["controller_mode"] == OperationMode.CYCLE
     assert "zones" in saved_data
     assert "zone1" in saved_data["zones"]
+
+    # Verify V2 format structure
+    assert "controller" in saved_data
+    assert saved_data["controller"]["mode"] == OperationMode.CYCLE
 
     # Verify last_update_success_time is saved
     assert "last_update_success_time" in saved_data
@@ -159,8 +161,8 @@ async def test_coordinator_save_state_format(
     assert saved_data["zones"]["zone1"]["pid_derivative"] == 0.8
     assert saved_data["zones"]["zone1"]["duty_cycle"] == 65.0
 
-    # Verify EMA temperature is saved
-    assert saved_data["zones"]["zone1"]["temperature"] == 21.5
+    # Verify EMA temperature is saved (V2 uses 'current' key)
+    assert saved_data["zones"]["zone1"]["current"] == 21.5
     # Verify display temperature is saved
     assert saved_data["zones"]["zone1"]["display_temp"] == 21.5
     # Verify preset_mode is saved
@@ -173,8 +175,7 @@ async def test_coordinator_handles_invalid_timestamp_format(
 ) -> None:
     """Test coordinator handles invalid timestamp format gracefully."""
     stored_data = {
-        "version": 1,
-        "controller_mode": "heat",
+        "controller": {"mode": "heat", "flush_enabled": False},
         "last_update_success_time": "not-a-valid-timestamp",
         "zones": {
             "zone1": {
@@ -214,8 +215,7 @@ async def test_coordinator_caps_dt_after_long_downtime(
 
     # Stored timestamp from 1 day ago
     stored_data = {
-        "version": 1,
-        "controller_mode": "heat",
+        "controller": {"mode": "heat", "flush_enabled": False},
         "last_update_success_time": "2020-01-01T00:00:00+00:00",  # Very old
         "zones": {
             "zone1": {
@@ -226,7 +226,7 @@ async def test_coordinator_caps_dt_after_long_downtime(
                 "duty_cycle": 50.0,
                 "setpoint": 22.0,
                 "enabled": True,
-                "temperature": 20.0,
+                "current": 20.0,
                 "display_temp": 20.0,
             },
         },
@@ -299,8 +299,7 @@ async def test_crash_recovery_mid_update_valve_remains_safe(
     """
     # Setup initial state with accumulated integral (zone wants heat)
     stored_data = {
-        "version": 1,
-        "controller_mode": "heat",
+        "controller": {"mode": "heat", "flush_enabled": False},
         "zones": {
             "zone1": {
                 "pid_error": 1.0,
@@ -361,8 +360,7 @@ async def test_crash_recovery_preserves_valve_off_when_duty_cycle_zero(
     """
     # Setup: room at setpoint, no heating needed
     stored_data = {
-        "version": 1,
-        "controller_mode": "heat",
+        "controller": {"mode": "heat", "flush_enabled": False},
         "zones": {
             "zone1": {
                 "pid_error": 0.0,
@@ -413,8 +411,7 @@ async def test_crash_recovery_no_integral_windup_during_disabled_period(
     Expected: Integral should not accumulate while zone is disabled.
     """
     stored_data = {
-        "version": 1,
-        "controller_mode": "heat",
+        "controller": {"mode": "heat", "flush_enabled": False},
         "zones": {
             "zone1": {
                 "pid_error": 0.5,
@@ -500,8 +497,7 @@ async def test_crash_recovery_no_integral_windup_with_window_open(
     )
 
     stored_data = {
-        "version": 1,
-        "controller_mode": "heat",
+        "controller": {"mode": "heat", "flush_enabled": False},
         "zones": {
             "zone1": {
                 "pid_error": 1.0,
@@ -612,8 +608,10 @@ async def test_crash_recovery_state_consistency_after_multiple_restarts(
 
     # Prepare state for "second boot"
     saved_state = {
-        "version": 1,
-        "controller_mode": coordinator.controller.mode,
+        "controller": {
+            "mode": coordinator.controller.mode,
+            "flush_enabled": False,
+        },
         "zones": {
             "zone1": {
                 "pid_error": pid_state.error,
@@ -667,8 +665,7 @@ async def test_crash_recovery_valve_action_sequence_integrity(
     hass.states.async_set("sensor.zone1_temp", "18.0")  # Cold room
 
     stored_data = {
-        "version": 1,
-        "controller_mode": "heat",
+        "controller": {"mode": "heat", "flush_enabled": False},
         "zones": {
             "zone1": {
                 "pid_error": 2.0,
@@ -741,8 +738,7 @@ async def test_crash_recovery_mode_preserved_across_restart(
         OperationMode.ALL_OFF,
     ]:
         stored_data = {
-            "version": 1,
-            "controller_mode": test_mode,
+            "controller": {"mode": test_mode, "flush_enabled": False},
             "zones": {
                 "zone1": {
                     "pid_error": 0.0,
@@ -816,8 +812,7 @@ async def test_crash_recovery_partial_zone_state_restoration(
 
     # Stored state with only some PID fields (uses defaults for missing)
     stored_data = {
-        "version": 1,
-        "controller_mode": "heat",
+        "controller": {"mode": "heat", "flush_enabled": False},
         "zones": {
             "zone1": {
                 "pid_integral": 35.0,
@@ -859,7 +854,7 @@ async def test_flush_enabled_saved_in_state(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
 ) -> None:
-    """Test that flush_enabled is saved in coordinator state."""
+    """Test that flush_enabled is saved in coordinator state (V2 format)."""
     mock_config_entry.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
@@ -880,8 +875,8 @@ async def test_flush_enabled_saved_in_state(
         await coordinator.async_save_state()
 
     assert saved_data is not None
-    assert "flush_enabled" in saved_data
-    assert saved_data["flush_enabled"] is True
+    assert "controller" in saved_data
+    assert saved_data["controller"]["flush_enabled"] is True
 
     # Also test with False
     coordinator.controller.state.flush_enabled = False
@@ -891,18 +886,16 @@ async def test_flush_enabled_saved_in_state(
         await coordinator.async_save_state()
 
     assert saved_data is not None
-    assert saved_data["flush_enabled"] is False
+    assert saved_data["controller"]["flush_enabled"] is False
 
 
 async def test_flush_enabled_restored_from_state(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
 ) -> None:
-    """Test that flush_enabled is restored from stored state."""
+    """Test that flush_enabled is restored from stored state (V2 format)."""
     stored_data = {
-        "version": 1,
-        "controller_mode": "heat",
-        "flush_enabled": True,
+        "controller": {"mode": "heat", "flush_enabled": True},
         "zones": {
             "zone1": {
                 "pid_error": 0.0,
@@ -933,10 +926,9 @@ async def test_flush_enabled_defaults_to_false_when_not_stored(
     mock_config_entry: MockConfigEntry,
 ) -> None:
     """Test that flush_enabled defaults to False when not in stored state."""
-    # Stored data without flush_enabled (simulates old storage format)
+    # Stored data without flush_enabled in controller dict
     stored_data = {
-        "version": 1,
-        "controller_mode": "heat",
+        "controller": {"mode": "heat"},
         "zones": {
             "zone1": {
                 "pid_error": 0.0,
@@ -1014,8 +1006,7 @@ async def test_valve_actions_execute_after_initialization(
 
     # Set up stored state with high duty cycle to ensure valve should turn on
     stored_data = {
-        "version": 1,
-        "controller_mode": "heat",
+        "controller": {"mode": "heat", "flush_enabled": False},
         "zones": {
             "zone1": {
                 "pid_error": 2.0,
@@ -1097,8 +1088,7 @@ async def test_crash_recovery_stale_zone_in_stored_state(
 
     # Stored state has a zone that doesn't exist in current config
     stored_data = {
-        "version": 1,
-        "controller_mode": "heat",
+        "controller": {"mode": "heat", "flush_enabled": False},
         "zones": {
             "zone1": {
                 "pid_error": 0.5,
@@ -1155,8 +1145,7 @@ async def test_coordinator_handles_timestamp_type_error(
 ) -> None:
     """Test coordinator handles TypeError in timestamp restoration (None)."""
     stored_data = {
-        "version": 1,
-        "controller_mode": "heat",
+        "controller": {"mode": "heat", "flush_enabled": False},
         "last_update_success_time": None,  # None causes TypeError in fromisoformat
         "zones": {
             "zone1": {
@@ -1240,11 +1229,10 @@ async def test_load_stored_state_skipped_when_already_restored(
     """
     Test that async_load_stored_state returns early if already restored.
 
-    This tests the early return at line 187 when _state_restored is True.
+    This tests the early return when _state_restored is True.
     """
     stored_data = {
-        "version": 1,
-        "controller_mode": "flush",
+        "controller": {"mode": "flush", "flush_enabled": False},
         "zones": {
             "zone1": {
                 "setpoint": 25.0,
@@ -1295,8 +1283,7 @@ async def test_used_duration_preserved_across_restart_within_same_period(
     now_iso = now.isoformat()
 
     stored_data = {
-        "version": 1,
-        "controller_mode": "heat",
+        "controller": {"mode": "heat", "flush_enabled": False},
         "last_update_success_time": now_iso,
         "last_force_update": now_iso,
         "zones": {
@@ -1341,8 +1328,7 @@ async def test_invalid_last_force_update_timestamp_handled_gracefully(
     be ignored (set to None) and the coordinator should recover normally.
     """
     stored_data = {
-        "version": 1,
-        "controller_mode": "heat",
+        "controller": {"mode": "heat", "flush_enabled": False},
         "last_update_success_time": "2026-01-31T12:00:00+00:00",
         "last_force_update": "not-a-valid-timestamp",  # Invalid!
         "zones": {
@@ -1365,8 +1351,8 @@ async def test_invalid_last_force_update_timestamp_handled_gracefully(
 
     coordinator = mock_config_entry.runtime_data.coordinator
 
-    # Should recover gracefully - _last_force_update becomes None
-    # which triggers a reset on first update (expected behavior for invalid data)
+    # Should recover gracefully - _last_force_update stays None (invalid parse)
+    # OR becomes a datetime if the coordinator ran a refresh that set it
     assert coordinator._last_force_update is None or isinstance(
         coordinator._last_force_update, datetime
     )
@@ -1387,8 +1373,7 @@ async def test_used_duration_reset_when_restarting_in_new_period(
     old_timestamp = (now - timedelta(hours=3)).isoformat()
 
     stored_data = {
-        "version": 1,
-        "controller_mode": "heat",
+        "controller": {"mode": "heat", "flush_enabled": False},
         "last_update_success_time": old_timestamp,
         "last_force_update": old_timestamp,
         "zones": {
@@ -1419,3 +1404,76 @@ async def test_used_duration_reset_when_restarting_in_new_period(
         f"used_duration was {runtime.state.used_duration}, "
         "expected ~0 (reset for new observation period)"
     )
+
+
+async def test_v1_storage_migration_on_load(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """
+    Test that V1 storage format is migrated to V2 on load.
+
+    The Store migration automatically converts V1 format to V2 before
+    the coordinator sees it. We simulate this by returning already-migrated data.
+    """
+    # V1 format storage data
+    v1_stored_data = {
+        "version": 1,
+        "controller_mode": "flush",
+        "flush_enabled": True,
+        "last_update_success_time": "2025-06-15T12:30:00+00:00",
+        "zones": {
+            "zone1": {
+                # V1 PID keys (error, p_term, etc.)
+                "error": 2.0,
+                "p_term": 30.0,
+                "i_term": 45.5,
+                "d_term": 1.5,
+                "duty_cycle": 55.0,
+                "temperature": 20.8,  # V1 uses "temperature"
+                "display_temp": 20.8,
+                "preset_mode": "comfort",
+                "setpoint": 22.0,
+                "enabled": True,
+            },
+        },
+    }
+
+    # Pre-migrate to V2 format (simulating what Store does internally)
+    v2_stored_data = UFHControllerStore._migrate_v1_to_v2(v1_stored_data)
+
+    hass.states.async_set("sensor.zone1_temp", "21.5")
+
+    # Return the migrated V2 data (simulates Store handling the migration)
+    with patch(
+        "homeassistant.helpers.storage.Store.async_load",
+        return_value=v2_stored_data,
+    ):
+        mock_config_entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    coordinator = mock_config_entry.runtime_data.coordinator
+
+    # Check mode was restored (from V1 controller_mode -> V2 controller.mode)
+    assert coordinator.controller.mode == OperationMode.FLUSH
+
+    # Check flush_enabled was restored (from V1 top-level)
+    assert coordinator.controller.state.flush_enabled is True
+
+    # Check full PID state was restored (V1 keys migrated to V2 keys)
+    runtime = coordinator.controller.get_zone_runtime("zone1")
+    assert runtime is not None
+    assert runtime.pid.state is not None
+    assert runtime.pid.state.error == 2.0
+    assert runtime.pid.state.p_term == 30.0
+    assert runtime.pid.state.i_term == 45.5
+    assert runtime.pid.state.d_term == 1.5
+    assert runtime.pid.state.duty_cycle == 55.0
+
+    # Check EMA temperature was restored (V1 "temperature" -> V2 "current")
+    assert runtime.state.current is not None
+    assert 20.8 <= runtime.state.current <= 21.5
+
+    # Check preset_mode was restored
+    assert runtime.state.preset_mode == "comfort"
