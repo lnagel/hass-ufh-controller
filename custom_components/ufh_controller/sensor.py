@@ -82,7 +82,7 @@ ZONE_SENSORS: tuple[UFHZoneSensorEntityDescription, ...] = (
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=1,
-        value_fn=lambda data: data.get("p_term"),
+        value_fn=lambda data: data.get("pid_proportional"),
     ),
     UFHZoneSensorEntityDescription(
         key="pid_integral",
@@ -90,7 +90,7 @@ ZONE_SENSORS: tuple[UFHZoneSensorEntityDescription, ...] = (
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=1,
-        value_fn=lambda data: data.get("i_term"),
+        value_fn=lambda data: data.get("pid_integral"),
     ),
     UFHZoneSensorEntityDescription(
         key="pid_derivative",
@@ -98,7 +98,7 @@ ZONE_SENSORS: tuple[UFHZoneSensorEntityDescription, ...] = (
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
-        value_fn=lambda data: data.get("d_term"),
+        value_fn=lambda data: data.get("pid_derivative"),
     ),
 )
 
@@ -109,7 +109,7 @@ PID_ERROR_SENSOR = UFHZoneSensorEntityDescription(
     device_class=SensorDeviceClass.TEMPERATURE,
     state_class=SensorStateClass.MEASUREMENT,
     suggested_display_precision=2,
-    value_fn=lambda data: data.get("error"),
+    value_fn=lambda data: data.get("pid_error"),
     icon_fn=_pid_error_icon,
 )
 
@@ -142,8 +142,8 @@ REQUESTING_ZONES_SENSOR = UFHControllerSensorEntityDescription(
 )
 
 SUPPLY_TARGET_SENSOR = UFHControllerSensorEntityDescription(
-    key="supply_target",
-    translation_key="supply_target",
+    key="supply_target_temp",
+    translation_key="supply_target_temp",
     native_unit_of_measurement=UnitOfTemperature.CELSIUS,
     state_class=SensorStateClass.MEASUREMENT,
     suggested_display_precision=1,

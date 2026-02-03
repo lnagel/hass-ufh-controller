@@ -164,7 +164,9 @@ class TestSupplyTargetSensorEntity:
         """Supply target sensor is created when outdoor entity is configured."""
         await _setup_entry(hass, mock_config_entry_with_heating_curve, "5.0")
 
-        state = hass.states.get("sensor.test_controller_heating_curve_supply_target")
+        state = hass.states.get(
+            "sensor.test_controller_heating_curve_supply_target_temperature"
+        )
         assert state is not None
 
     async def test_sensor_not_created_without_outdoor_entity(
@@ -175,7 +177,9 @@ class TestSupplyTargetSensorEntity:
         """Supply target sensor is NOT created without outdoor entity."""
         await _setup_entry(hass, mock_config_entry_no_heating_curve)
 
-        state = hass.states.get("sensor.test_controller_no_curve_supply_target")
+        state = hass.states.get(
+            "sensor.test_controller_no_curve_supply_target_temperature"
+        )
         assert state is None
 
     async def test_sensor_value_matches_coordinator_data(
@@ -190,7 +194,9 @@ class TestSupplyTargetSensorEntity:
         await coordinator.async_refresh()
         await hass.async_block_till_done()
 
-        state = hass.states.get("sensor.test_controller_heating_curve_supply_target")
+        state = hass.states.get(
+            "sensor.test_controller_heating_curve_supply_target_temperature"
+        )
         assert state is not None
         controller_data = coordinator.data.get("controller", {})
         assert float(state.state) == controller_data.get("supply_target_temp")

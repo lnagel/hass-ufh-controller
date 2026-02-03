@@ -345,10 +345,10 @@ class UFHControllerDataUpdateCoordinator(
         # Restore full PID state if available (only if not yet calculated)
         if runtime.pid.state is None and "duty_cycle" in zone_state:
             pid_state = PIDState(
-                error=zone_state.get("error", 0.0),
-                p_term=zone_state.get("p_term", 0.0),
-                i_term=zone_state.get("i_term", 0.0),
-                d_term=zone_state.get("d_term", 0.0),
+                error=zone_state.get("pid_error", 0.0),
+                p_term=zone_state.get("pid_proportional", 0.0),
+                i_term=zone_state.get("pid_integral", 0.0),
+                d_term=zone_state.get("pid_derivative", 0.0),
                 duty_cycle=zone_state.get("duty_cycle", 0.0),
             )
             runtime.pid.set_state(pid_state)
@@ -394,10 +394,10 @@ class UFHControllerDataUpdateCoordinator(
                 }
                 # Save full PID state if available
                 if runtime.pid.state is not None:
-                    zone_data["error"] = runtime.pid.state.error
-                    zone_data["p_term"] = runtime.pid.state.p_term
-                    zone_data["i_term"] = runtime.pid.state.i_term
-                    zone_data["d_term"] = runtime.pid.state.d_term
+                    zone_data["pid_error"] = runtime.pid.state.error
+                    zone_data["pid_proportional"] = runtime.pid.state.p_term
+                    zone_data["pid_integral"] = runtime.pid.state.i_term
+                    zone_data["pid_derivative"] = runtime.pid.state.d_term
                     zone_data["duty_cycle"] = runtime.pid.state.duty_cycle
                 # Include preset_mode if set
                 if runtime.state.preset_mode is not None:
@@ -1139,10 +1139,10 @@ class UFHControllerDataUpdateCoordinator(
                     "current": state.display_temp,
                     "setpoint": state.setpoint,
                     "duty_cycle": pid_state.duty_cycle if pid_state else None,
-                    "error": pid_state.error if pid_state else None,
-                    "p_term": pid_state.p_term if pid_state else None,
-                    "i_term": pid_state.i_term if pid_state else None,
-                    "d_term": pid_state.d_term if pid_state else None,
+                    "pid_error": pid_state.error if pid_state else None,
+                    "pid_proportional": pid_state.p_term if pid_state else None,
+                    "pid_integral": pid_state.i_term if pid_state else None,
+                    "pid_derivative": pid_state.d_term if pid_state else None,
                     "valve_state": state.valve_state.value,
                     "enabled": state.enabled,
                     "blocked": blocked,

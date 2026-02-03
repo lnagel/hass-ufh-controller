@@ -236,8 +236,8 @@
       "supply_coefficient": {
         "name": "Supply Coefficient"
       },
-      "supply_target": {
-        "name": "Supply Target"
+      "supply_target_temp": {
+        "name": "Supply Target Temperature"
       }
     },
     "binary_sensor": {

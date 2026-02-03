@@ -175,11 +175,11 @@ class UFHZoneClimate(UFHControllerZoneEntity, ClimateEntity):
         zone_data = self.coordinator.data.get("zones", {}).get(self._zone_id, {})
         return {
             "duty_cycle": zone_data.get("duty_cycle"),
-            "pid_error": zone_data.get("error"),
-            "pid_p_term": zone_data.get("p_term"),
-            "pid_i_term": zone_data.get("i_term"),
-            "pid_d_term": zone_data.get("d_term"),
-            "blocked": zone_data.get("blocked", False),
-            "heat_request": zone_data.get("heat_request", False),
-            "zone_status": zone_data.get("zone_status", "normal"),
+            "pid_error": zone_data.get("pid_error"),
+            "pid_proportional": zone_data.get("pid_proportional"),
+            "pid_integral": zone_data.get("pid_integral"),
+            "pid_derivative": zone_data.get("pid_derivative"),
+            "blocked": zone_data.get("blocked"),
+            "heat_request": zone_data.get("heat_request"),
+            "zone_status": zone_data.get("zone_status"),
         }

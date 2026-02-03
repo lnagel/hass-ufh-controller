@@ -19,7 +19,7 @@
       "supply_coefficient": {
         "default": "mdi:gauge"
       },
-      "supply_target": {
+      "supply_target_temp": {
         "default": "mdi:thermometer-auto"
       }
     },

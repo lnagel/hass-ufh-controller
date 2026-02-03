@@ -51,10 +51,10 @@ async def test_coordinator_loads_stored_state(
         "zones": {
             "zone1": {
                 # Full PID state to be restored
-                "error": 2.0,
-                "p_term": 30.0,
-                "i_term": 45.5,
-                "d_term": 1.5,
+                "pid_error": 2.0,
+                "pid_proportional": 30.0,
+                "pid_integral": 45.5,
+                "pid_derivative": 1.5,
                 "duty_cycle": 55.0,
                 "temperature": 20.8,  # EMA-filtered temperature
                 "display_temp": 20.8,  # Display temperature for climate availability
@@ -153,10 +153,10 @@ async def test_coordinator_save_state_format(
     assert "last_update_success_time" in saved_data
 
     # Verify full PID state is saved
-    assert saved_data["zones"]["zone1"]["error"] == 1.5
-    assert saved_data["zones"]["zone1"]["p_term"] == 25.0
-    assert saved_data["zones"]["zone1"]["i_term"] == 75.0
-    assert saved_data["zones"]["zone1"]["d_term"] == 0.8
+    assert saved_data["zones"]["zone1"]["pid_error"] == 1.5
+    assert saved_data["zones"]["zone1"]["pid_proportional"] == 25.0
+    assert saved_data["zones"]["zone1"]["pid_integral"] == 75.0
+    assert saved_data["zones"]["zone1"]["pid_derivative"] == 0.8
     assert saved_data["zones"]["zone1"]["duty_cycle"] == 65.0
 
     # Verify EMA temperature is saved
@@ -219,10 +219,10 @@ async def test_coordinator_caps_dt_after_long_downtime(
         "last_update_success_time": "2020-01-01T00:00:00+00:00",  # Very old
         "zones": {
             "zone1": {
-                "error": 1.0,
-                "p_term": 10.0,
-                "i_term": 5.0,  # Some existing integral
-                "d_term": 0.0,
+                "pid_error": 1.0,
+                "pid_proportional": 10.0,
+                "pid_integral": 5.0,  # Some existing integral
+                "pid_derivative": 0.0,
                 "duty_cycle": 50.0,
                 "setpoint": 22.0,
                 "enabled": True,
@@ -303,10 +303,10 @@ async def test_crash_recovery_mid_update_valve_remains_safe(
         "controller_mode": "heat",
         "zones": {
             "zone1": {
-                "error": 1.0,
-                "p_term": 50.0,
-                "i_term": 50.0,  # Significant integral = heating demand
-                "d_term": 0.0,
+                "pid_error": 1.0,
+                "pid_proportional": 50.0,
+                "pid_integral": 50.0,  # Significant integral = heating demand
+                "pid_derivative": 0.0,
                 "duty_cycle": 100.0,
                 "setpoint": 22.0,
                 "enabled": True,
@@ -365,10 +365,10 @@ async def test_crash_recovery_preserves_valve_off_when_duty_cycle_zero(
         "controller_mode": "heat",
         "zones": {
             "zone1": {
-                "error": 0.0,
-                "p_term": 0.0,
-                "i_term": 0.0,
-                "d_term": 0.0,
+                "pid_error": 0.0,
+                "pid_proportional": 0.0,
+                "pid_integral": 0.0,
+                "pid_derivative": 0.0,
                 "duty_cycle": 0.0,
                 "setpoint": 20.0,
                 "enabled": True,
@@ -417,10 +417,10 @@ async def test_crash_recovery_no_integral_windup_during_disabled_period(
         "controller_mode": "heat",
         "zones": {
             "zone1": {
-                "error": 0.5,
-                "p_term": 25.0,
-                "i_term": 25.0,
-                "d_term": 0.0,
+                "pid_error": 0.5,
+                "pid_proportional": 25.0,
+                "pid_integral": 25.0,
+                "pid_derivative": 0.0,
                 "duty_cycle": 50.0,
                 "setpoint": 22.0,
                 "enabled": False,  # Zone was disabled
@@ -504,10 +504,10 @@ async def test_crash_recovery_no_integral_windup_with_window_open(
         "controller_mode": "heat",
         "zones": {
             "zone1": {
-                "error": 1.0,
-                "p_term": 50.0,
-                "i_term": 30.0,
-                "d_term": 0.0,
+                "pid_error": 1.0,
+                "pid_proportional": 50.0,
+                "pid_integral": 30.0,
+                "pid_derivative": 0.0,
                 "duty_cycle": 80.0,
                 "setpoint": 22.0,
                 "enabled": True,
@@ -616,10 +616,10 @@ async def test_crash_recovery_state_consistency_after_multiple_restarts(
         "controller_mode": coordinator.controller.mode,
         "zones": {
             "zone1": {
-                "error": pid_state.error,
-                "p_term": pid_state.p_term,
-                "i_term": pid_state.i_term,
-                "d_term": pid_state.d_term,
+                "pid_error": pid_state.error,
+                "pid_proportional": pid_state.p_term,
+                "pid_integral": pid_state.i_term,
+                "pid_derivative": pid_state.d_term,
                 "duty_cycle": pid_state.duty_cycle,
                 "setpoint": setpoint_session1,
                 "enabled": runtime.state.enabled,
@@ -671,10 +671,10 @@ async def test_crash_recovery_valve_action_sequence_integrity(
         "controller_mode": "heat",
         "zones": {
             "zone1": {
-                "error": 2.0,
-                "p_term": 100.0,
-                "i_term": 60.0,  # High demand
-                "d_term": 0.0,
+                "pid_error": 2.0,
+                "pid_proportional": 100.0,
+                "pid_integral": 60.0,  # High demand
+                "pid_derivative": 0.0,
                 "duty_cycle": 100.0,
                 "setpoint": 22.0,
                 "enabled": True,
@@ -720,7 +720,7 @@ async def test_crash_recovery_valve_action_sequence_integrity(
 
     # Verify the saved integral matches the current state
     # (proving state was saved AFTER the full update completed)
-    assert last_saved["zones"]["zone1"]["i_term"] == runtime.pid.state.i_term
+    assert last_saved["zones"]["zone1"]["pid_integral"] == runtime.pid.state.i_term
 
 
 async def test_crash_recovery_mode_preserved_across_restart(
@@ -745,10 +745,10 @@ async def test_crash_recovery_mode_preserved_across_restart(
             "controller_mode": test_mode,
             "zones": {
                 "zone1": {
-                    "error": 0.0,
-                    "p_term": 0.0,
-                    "i_term": 0.0,
-                    "d_term": 0.0,
+                    "pid_error": 0.0,
+                    "pid_proportional": 0.0,
+                    "pid_integral": 0.0,
+                    "pid_derivative": 0.0,
                     "duty_cycle": 0.0,
                     "setpoint": 21.0,
                     "enabled": True,
@@ -820,9 +820,9 @@ async def test_crash_recovery_partial_zone_state_restoration(
         "controller_mode": "heat",
         "zones": {
             "zone1": {
-                "i_term": 35.0,
+                "pid_integral": 35.0,
                 "duty_cycle": 35.0,  # Required to trigger restore
-                # Missing: error, p_term, d_term, setpoint, enabled
+                # Missing: pid_error, pid_proportional, pid_derivative, setpoint
             },
         },
     }
@@ -905,10 +905,10 @@ async def test_flush_enabled_restored_from_state(
         "flush_enabled": True,
         "zones": {
             "zone1": {
-                "error": 0.0,
-                "p_term": 0.0,
-                "i_term": 0.0,
-                "d_term": 0.0,
+                "pid_error": 0.0,
+                "pid_proportional": 0.0,
+                "pid_integral": 0.0,
+                "pid_derivative": 0.0,
                 "duty_cycle": 0.0,
             },
         },
@@ -939,10 +939,10 @@ async def test_flush_enabled_defaults_to_false_when_not_stored(
         "controller_mode": "heat",
         "zones": {
             "zone1": {
-                "error": 0.0,
-                "p_term": 0.0,
-                "i_term": 0.0,
-                "d_term": 0.0,
+                "pid_error": 0.0,
+                "pid_proportional": 0.0,
+                "pid_integral": 0.0,
+                "pid_derivative": 0.0,
                 "duty_cycle": 0.0,
             },
         },
@@ -1018,10 +1018,10 @@ async def test_valve_actions_execute_after_initialization(
         "controller_mode": "heat",
         "zones": {
             "zone1": {
-                "error": 2.0,
-                "p_term": 100.0,
-                "i_term": 50.0,
-                "d_term": 0.0,
+                "pid_error": 2.0,
+                "pid_proportional": 100.0,
+                "pid_integral": 50.0,
+                "pid_derivative": 0.0,
                 "duty_cycle": 100.0,
                 "setpoint": 22.0,
                 "enabled": True,
@@ -1101,19 +1101,19 @@ async def test_crash_recovery_stale_zone_in_stored_state(
         "controller_mode": "heat",
         "zones": {
             "zone1": {
-                "error": 0.5,
-                "p_term": 10.0,
-                "i_term": 20.0,
-                "d_term": 0.0,
+                "pid_error": 0.5,
+                "pid_proportional": 10.0,
+                "pid_integral": 20.0,
+                "pid_derivative": 0.0,
                 "duty_cycle": 30.0,
                 "setpoint": 21.0,
                 "enabled": True,
             },
             "zone_deleted": {  # This zone no longer exists
-                "error": 1.0,
-                "p_term": 50.0,
-                "i_term": 50.0,
-                "d_term": 0.0,
+                "pid_error": 1.0,
+                "pid_proportional": 50.0,
+                "pid_integral": 50.0,
+                "pid_derivative": 0.0,
                 "duty_cycle": 100.0,
                 "setpoint": 22.0,
                 "enabled": True,
@@ -1290,15 +1290,15 @@ async def test_used_duration_preserved_across_restart_within_same_period(
     Fix: Persist last_force_update timestamp so we can correctly detect whether
     we're still in the same observation period after a restart.
     """
-    # Create a timestamp within the current observation period (recent)
+    # Create a timestamp within the current observation period
     now = datetime.now(UTC)
-    recent_timestamp = (now - timedelta(minutes=5)).isoformat()
+    now_iso = now.isoformat()
 
     stored_data = {
         "version": 1,
         "controller_mode": "heat",
-        "last_update_success_time": recent_timestamp,
-        "last_force_update": recent_timestamp,  # Same as last update
+        "last_update_success_time": now_iso,
+        "last_force_update": now_iso,
         "zones": {
             "zone1": {
                 "setpoint": 21.0,
