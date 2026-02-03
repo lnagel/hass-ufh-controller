@@ -35,6 +35,17 @@ class UFHZoneBinarySensorEntityDescription(BinarySensorEntityDescription):
     value_fn: Callable[[dict[str, Any]], bool]
 
 
+@dataclass(frozen=True, kw_only=True)
+class UFHControllerBinarySensorEntityDescription(BinarySensorEntityDescription):
+    """Describes UFH controller binary sensor entity."""
+
+    value_fn: Callable[[UFHControllerDataUpdateCoordinator], bool]
+    attrs_fn: Callable[[UFHControllerDataUpdateCoordinator], dict[str, Any]] | None = (
+        None
+    )
+    entity_registry_visible_default: bool = False
+
+
 ZONE_BINARY_SENSORS: tuple[UFHZoneBinarySensorEntityDescription, ...] = (
     UFHZoneBinarySensorEntityDescription(
         key="blocked",
@@ -57,6 +68,44 @@ ZONE_BINARY_SENSORS: tuple[UFHZoneBinarySensorEntityDescription, ...] = (
 )
 
 
+def _status_value(coordinator: UFHControllerDataUpdateCoordinator) -> bool:
+    """Return True if there is a problem (degraded or fail-safe)."""
+    return coordinator.status in (ControllerStatus.DEGRADED, ControllerStatus.FAIL_SAFE)
+
+
+def _status_attrs(coordinator: UFHControllerDataUpdateCoordinator) -> dict[str, Any]:
+    """Return additional status attributes."""
+    return {
+        "controller_status": coordinator.status.value,
+        "zones_degraded": coordinator.data.get("zones_degraded", 0),
+        "zones_fail_safe": coordinator.data.get("zones_fail_safe", 0),
+    }
+
+
+def _flush_request_value(coordinator: UFHControllerDataUpdateCoordinator) -> bool:
+    """Return True if flush is currently requested."""
+    if not coordinator.controller.state.flush_enabled:
+        return False
+    return coordinator.data.get("flush_request", False)
+
+
+# Controller-level binary sensor descriptions
+STATUS_SENSOR = UFHControllerBinarySensorEntityDescription(
+    key="status",
+    translation_key="status",
+    device_class=BinarySensorDeviceClass.PROBLEM,
+    value_fn=_status_value,
+    attrs_fn=_status_attrs,
+)
+
+FLUSH_REQUEST_SENSOR = UFHControllerBinarySensorEntityDescription(
+    key="flush_request",
+    translation_key="flush_request",
+    device_class=BinarySensorDeviceClass.HEAT,
+    value_fn=_flush_request_value,
+)
+
+
 async def async_setup_entry(
     _hass: HomeAssistant,
     entry: UFHControllerConfigEntry,
@@ -68,15 +117,19 @@ async def async_setup_entry(
     # Add controller-level sensors
     controller_subentry_id = get_controller_subentry_id(entry)
     if controller_subentry_id is not None:
-        entities: list[BinarySensorEntity] = [
-            UFHControllerStatusSensor(coordinator, controller_subentry_id)
-        ]
+        controller_descriptions = [STATUS_SENSOR]
 
         # Only create flush_request sensor if DHW entity is configured
         if entry.data.get("dhw_active_entity"):
-            entities.append(UFHFlushRequestSensor(coordinator, controller_subentry_id))
+            controller_descriptions.append(FLUSH_REQUEST_SENSOR)
 
-        async_add_entities(entities, config_subentry_id=controller_subentry_id)
+        async_add_entities(
+            [
+                UFHControllerBinarySensor(coordinator, controller_subentry_id, desc)
+                for desc in controller_descriptions
+            ],
+            config_subentry_id=controller_subentry_id,
+        )
 
     # Add zone-level binary sensors for each zone subentry
     for subentry in entry.subentries.values():
@@ -143,76 +196,35 @@ class UFHZoneBinarySensor(UFHControllerZoneEntity, BinarySensorEntity):
         return zone_status != ZoneStatus.FAIL_SAFE.value
 
 
-class UFHControllerStatusSensor(UFHControllerEntity, BinarySensorEntity):
-    """
-    Binary sensor indicating controller operational status.
+class UFHControllerBinarySensor(UFHControllerEntity, BinarySensorEntity):
+    """Generic binary sensor entity for controller-level status."""
 
-    This sensor is ON when there is a problem (degraded or fail-safe mode),
-    and OFF when the controller is operating normally.
-    """
-
-    _attr_translation_key = "status"
-    _attr_device_class = BinarySensorDeviceClass.PROBLEM
-    _attr_entity_registry_visible_default = False
+    entity_description: UFHControllerBinarySensorEntityDescription
 
     def __init__(
         self,
         coordinator: UFHControllerDataUpdateCoordinator,
         subentry_id: str,
+        description: UFHControllerBinarySensorEntityDescription,
     ) -> None:
-        """Initialize the status sensor."""
+        """Initialize the binary sensor entity."""
         super().__init__(coordinator, subentry_id)
-
-        controller_id = coordinator.config_entry.data.get("controller_id", "")
-        self._attr_unique_id = f"{controller_id}_status"
-
-    @property
-    def is_on(self) -> bool:
-        """Return True if there is a problem (degraded or fail-safe)."""
-        return self.coordinator.status in (
-            ControllerStatus.DEGRADED,
-            ControllerStatus.FAIL_SAFE,
+        self.entity_description = description
+        self._attr_entity_registry_visible_default = (
+            description.entity_registry_visible_default
         )
 
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        """Return additional status attributes."""
-        return {
-            "controller_status": self.coordinator.status.value,
-            "zones_degraded": self.coordinator.data.get("zones_degraded", 0),
-            "zones_fail_safe": self.coordinator.data.get("zones_fail_safe", 0),
-        }
-
-
-class UFHFlushRequestSensor(UFHControllerEntity, BinarySensorEntity):
-    """
-    Binary sensor indicating when flush is actively requested.
-
-    This sensor is ON when:
-    - DHW is active AND flush_enabled is ON, OR
-    - Post-DHW flush period is active AND flush_enabled is ON
-    """
-
-    _attr_translation_key = "flush_request"
-    _attr_device_class = BinarySensorDeviceClass.HEAT
-    _attr_name = "Flush Request"
-    _attr_entity_registry_visible_default = False
-
-    def __init__(
-        self,
-        coordinator: UFHControllerDataUpdateCoordinator,
-        subentry_id: str,
-    ) -> None:
-        """Initialize the flush request sensor."""
-        super().__init__(coordinator, subentry_id)
-
         controller_id = coordinator.config_entry.data.get("controller_id", "")
-        self._attr_unique_id = f"{controller_id}_flush_request"
+        self._attr_unique_id = f"{controller_id}_{description.key}"
 
     @property
     def is_on(self) -> bool:
-        """Return True if flush is currently requested."""
-        # Only return True if flush_enabled is also True
-        if not self.coordinator.controller.state.flush_enabled:
-            return False
-        return self.coordinator.data.get("flush_request", False)
+        """Return the sensor state."""
+        return self.entity_description.value_fn(self.coordinator)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Return additional state attributes if defined."""
+        if self.entity_description.attrs_fn is not None:
+            return self.entity_description.attrs_fn(self.coordinator)
+        return None

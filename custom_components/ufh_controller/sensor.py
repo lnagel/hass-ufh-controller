@@ -35,11 +35,44 @@ if TYPE_CHECKING:
     from .data import UFHControllerConfigEntry
 
 
+def _pid_error_icon(value: float | None) -> str:
+    """Return icon based on PID error value."""
+    if value is None:
+        return "mdi:thermometer-off"
+    if value > ICON_PID_ERROR_THRESHOLD:
+        return "mdi:thermometer-plus"
+    if value < -ICON_PID_ERROR_THRESHOLD:
+        return "mdi:thermometer-minus"
+    return "mdi:thermometer-check"
+
+
+def _duty_cycle_icon(value: float | None) -> str:
+    """Return icon based on duty cycle value."""
+    if value is None:
+        return "mdi:gauge-empty"
+    if value >= ICON_DUTY_CYCLE_THRESHOLDS[2]:
+        return "mdi:gauge-full"
+    if value >= ICON_DUTY_CYCLE_THRESHOLDS[1]:
+        return "mdi:gauge"
+    if value >= ICON_DUTY_CYCLE_THRESHOLDS[0]:
+        return "mdi:gauge-low"
+    return "mdi:gauge-empty"
+
+
 @dataclass(frozen=True, kw_only=True)
 class UFHZoneSensorEntityDescription(SensorEntityDescription):
     """Describes UFH zone sensor entity."""
 
     value_fn: Callable[[dict[str, Any]], float | None]
+    icon_fn: Callable[[float | None], str] | None = None
+
+
+@dataclass(frozen=True, kw_only=True)
+class UFHControllerSensorEntityDescription(SensorEntityDescription):
+    """Describes UFH controller sensor entity."""
+
+    value_fn: Callable[[dict[str, Any]], float | int | None]
+    entity_registry_visible_default: bool = False
 
 
 ZONE_SENSORS: tuple[UFHZoneSensorEntityDescription, ...] = (
@@ -77,6 +110,7 @@ PID_ERROR_SENSOR = UFHZoneSensorEntityDescription(
     state_class=SensorStateClass.MEASUREMENT,
     suggested_display_precision=2,
     value_fn=lambda data: data.get("error"),
+    icon_fn=_pid_error_icon,
 )
 
 DUTY_CYCLE_SENSOR = UFHZoneSensorEntityDescription(
@@ -86,6 +120,7 @@ DUTY_CYCLE_SENSOR = UFHZoneSensorEntityDescription(
     state_class=SensorStateClass.MEASUREMENT,
     suggested_display_precision=1,
     value_fn=lambda data: data.get("duty_cycle"),
+    icon_fn=_duty_cycle_icon,
 )
 
 SUPPLY_COEFFICIENT_SENSOR = UFHZoneSensorEntityDescription(
@@ -95,6 +130,24 @@ SUPPLY_COEFFICIENT_SENSOR = UFHZoneSensorEntityDescription(
     state_class=SensorStateClass.MEASUREMENT,
     suggested_display_precision=0,
     value_fn=lambda data: data.get("supply_coefficient"),
+)
+
+# Controller-level sensor descriptions
+REQUESTING_ZONES_SENSOR = UFHControllerSensorEntityDescription(
+    key="requesting_zones",
+    translation_key="requesting_zones",
+    native_unit_of_measurement="zones",
+    state_class=SensorStateClass.MEASUREMENT,
+    value_fn=lambda data: data.get("zones_requesting_heat", 0),
+)
+
+SUPPLY_TARGET_SENSOR = UFHControllerSensorEntityDescription(
+    key="supply_target",
+    translation_key="supply_target",
+    native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+    state_class=SensorStateClass.MEASUREMENT,
+    suggested_display_precision=1,
+    value_fn=lambda data: data.get("supply_target_temp"),
 )
 
 
@@ -114,18 +167,17 @@ async def async_setup_entry(
 
     # Add controller-level sensors
     if controller_subentry_id is not None:
-        controller_sensors: list[SensorEntity] = [
-            UFHRequestingZonesSensor(coordinator, controller_subentry_id)
-        ]
+        controller_descriptions = [REQUESTING_ZONES_SENSOR]
 
         # Add supply target sensor if outdoor temp entity is configured
         if outdoor_entity:
-            controller_sensors.append(
-                UFHSupplyTargetSensor(coordinator, controller_subentry_id)
-            )
+            controller_descriptions.append(SUPPLY_TARGET_SENSOR)
 
         async_add_entities(
-            controller_sensors,
+            [
+                UFHControllerSensor(coordinator, controller_subentry_id, description)
+                for description in controller_descriptions
+            ],
             config_subentry_id=controller_subentry_id,
         )
 
@@ -137,6 +189,13 @@ async def async_setup_entry(
         zone_name = subentry.data["name"]
         subentry_id = subentry.subentry_id
 
+        # Build list of descriptions for this zone
+        zone_descriptions = [*ZONE_SENSORS, PID_ERROR_SENSOR, DUTY_CYCLE_SENSOR]
+
+        # Add supply_coefficient sensor only if supply_temp_entity is configured
+        if supply_entity:
+            zone_descriptions.append(SUPPLY_COEFFICIENT_SENSOR)
+
         zone_sensors: list[SensorEntity] = [
             UFHZoneSensor(
                 coordinator=coordinator,
@@ -145,37 +204,8 @@ async def async_setup_entry(
                 description=description,
                 subentry_id=subentry_id,
             )
-            for description in ZONE_SENSORS
+            for description in zone_descriptions
         ]
-        zone_sensors.extend(
-            [
-                UFHPidErrorSensor(
-                    coordinator=coordinator,
-                    zone_id=zone_id,
-                    zone_name=zone_name,
-                    subentry_id=subentry_id,
-                ),
-                UFHDutyCycleSensor(
-                    coordinator=coordinator,
-                    zone_id=zone_id,
-                    zone_name=zone_name,
-                    description=DUTY_CYCLE_SENSOR,
-                    subentry_id=subentry_id,
-                ),
-            ]
-        )
-
-        # Add supply_coefficient sensor only if supply_temp_entity is configured
-        if supply_entity:
-            zone_sensors.append(
-                UFHDutyCycleSensor(
-                    coordinator=coordinator,
-                    zone_id=zone_id,
-                    zone_name=zone_name,
-                    description=SUPPLY_COEFFICIENT_SENSOR,
-                    subentry_id=subentry_id,
-                )
-            )
 
         async_add_entities(
             zone_sensors,
@@ -211,6 +241,13 @@ class UFHZoneSensor(UFHControllerZoneEntity, SensorEntity):
         return self.entity_description.value_fn(zone_data)
 
     @property
+    def icon(self) -> str | None:
+        """Return dynamic icon if icon_fn is defined."""
+        if self.entity_description.icon_fn is not None:
+            return self.entity_description.icon_fn(self.native_value)
+        return None
+
+    @property
     def available(self) -> bool:
         """
         Return True if entity is available.
@@ -227,95 +264,28 @@ class UFHZoneSensor(UFHControllerZoneEntity, SensorEntity):
         return self.native_value is not None
 
 
-class UFHPidErrorSensor(UFHZoneSensor):
-    """Sensor entity for PID error with dynamic icon based on value sign."""
+class UFHControllerSensor(UFHControllerEntity, SensorEntity):
+    """Generic sensor entity for controller-level metrics."""
 
-    def __init__(
-        self,
-        coordinator: UFHControllerDataUpdateCoordinator,
-        zone_id: str,
-        zone_name: str,
-        subentry_id: str,
-    ) -> None:
-        """Initialize the PID error sensor entity."""
-        super().__init__(coordinator, zone_id, zone_name, PID_ERROR_SENSOR, subentry_id)
-
-    @property
-    def icon(self) -> str | None:
-        """Return icon based on error value."""
-        value = self.native_value
-        if value is None:
-            return "mdi:thermometer-off"
-        if value > ICON_PID_ERROR_THRESHOLD:
-            return "mdi:thermometer-plus"
-        if value < -ICON_PID_ERROR_THRESHOLD:
-            return "mdi:thermometer-minus"
-        return "mdi:thermometer-check"
-
-
-class UFHDutyCycleSensor(UFHZoneSensor):
-    """Sensor entity for duty cycle with dynamic icon based on value."""
-
-    @property
-    def icon(self) -> str | None:
-        """Return icon based on duty cycle value."""
-        value = self.native_value
-        if value is None:
-            return "mdi:gauge-empty"
-        if value >= ICON_DUTY_CYCLE_THRESHOLDS[2]:
-            return "mdi:gauge-full"
-        if value >= ICON_DUTY_CYCLE_THRESHOLDS[1]:
-            return "mdi:gauge"
-        if value >= ICON_DUTY_CYCLE_THRESHOLDS[0]:
-            return "mdi:gauge-low"
-        return "mdi:gauge-empty"
-
-
-class UFHRequestingZonesSensor(UFHControllerEntity, SensorEntity):
-    """Sensor showing count of zones requesting heat."""
-
-    _attr_translation_key = "requesting_zones"
-    _attr_state_class = SensorStateClass.MEASUREMENT
-    _attr_native_unit_of_measurement = "zones"
-    _attr_entity_registry_visible_default = False
+    entity_description: UFHControllerSensorEntityDescription
 
     def __init__(
         self,
         coordinator: UFHControllerDataUpdateCoordinator,
         subentry_id: str,
+        description: UFHControllerSensorEntityDescription,
     ) -> None:
         """Initialize the sensor entity."""
         super().__init__(coordinator, subentry_id)
+        self.entity_description = description
+        self._attr_entity_registry_visible_default = (
+            description.entity_registry_visible_default
+        )
 
         controller_id = coordinator.config_entry.data.get("controller_id", "")
-        self._attr_unique_id = f"{controller_id}_requesting_zones"
+        self._attr_unique_id = f"{controller_id}_{description.key}"
 
     @property
-    def native_value(self) -> int:
-        """Return the count of zones requesting heat."""
-        return self.coordinator.data.get("zones_requesting_heat", 0)
-
-
-class UFHSupplyTargetSensor(UFHControllerEntity, SensorEntity):
-    """Sensor showing calculated supply target temperature from heating curve."""
-
-    _attr_translation_key = "supply_target"
-    _attr_state_class = SensorStateClass.MEASUREMENT
-    _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
-    _attr_suggested_display_precision = 1
-
-    def __init__(
-        self,
-        coordinator: UFHControllerDataUpdateCoordinator,
-        subentry_id: str,
-    ) -> None:
-        """Initialize the sensor entity."""
-        super().__init__(coordinator, subentry_id)
-
-        controller_id = coordinator.config_entry.data.get("controller_id", "")
-        self._attr_unique_id = f"{controller_id}_supply_target"
-
-    @property
-    def native_value(self) -> float | None:
-        """Return the calculated supply target temperature."""
-        return self.coordinator.data.get("supply_target_temp")
+    def native_value(self) -> float | int | None:
+        """Return the sensor value."""
+        return self.entity_description.value_fn(self.coordinator.data)
