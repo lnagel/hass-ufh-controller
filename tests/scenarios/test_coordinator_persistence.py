@@ -135,6 +135,9 @@ async def test_coordinator_save_state_format(
     # Set used_duration that should be persisted
     runtime.state.used_duration = 1234.5
 
+    # Refresh to update self.data with the new state
+    await coordinator.async_refresh()
+
     saved_data = None
 
     async def capture_save(data: dict) -> None:
@@ -867,6 +870,8 @@ async def test_flush_enabled_saved_in_state(
 
     # Set flush_enabled to True
     coordinator.controller.state.flush_enabled = True
+    # Refresh to update self.data
+    await coordinator.async_refresh()
 
     saved_data = None
 
@@ -884,6 +889,8 @@ async def test_flush_enabled_saved_in_state(
 
     # Also test with False
     coordinator.controller.state.flush_enabled = False
+    # Refresh to update self.data
+    await coordinator.async_refresh()
 
     # Patch the coordinator's store instance directly
     with patch.object(coordinator._store, "async_save", side_effect=capture_save):

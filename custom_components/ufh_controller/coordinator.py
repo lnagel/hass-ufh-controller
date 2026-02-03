@@ -422,55 +422,10 @@ class UFHControllerDataUpdateCoordinator(
             runtime.state.used_duration = zone_state["used_duration"]
 
     def _build_storage_state(self) -> dict[str, Any]:
-        """
-        Build state dictionary for persistent storage (V2 format).
-
-        Reads zone data directly from runtime objects to capture any changes
-        made between refreshes. Uses the same key names as _build_state_dict()
-        for consistency, but only includes keys that need to survive restarts.
-
-        Runtime-only values (valve_state, blocked, heat_request, flow, zone_status,
-        supply_coefficient) are excluded as they're recalculated on each update.
-        """
-        zones_data: dict[str, dict[str, Any]] = {}
-
-        for zone_id in self._controller.zone_ids:
-            runtime = self._controller.get_zone_runtime(zone_id)
-            state = runtime.state
-            pid_state = runtime.pid.state
-
-            # Build zone dict with same keys as _build_state_dict() but only
-            # persisted values; None values are excluded
-            zone_dict: dict[str, Any] = {
-                "setpoint": state.setpoint,
-                "enabled": state.enabled,
-                "used_duration": state.used_duration,
-            }
-
-            # Optional values - only include if not None
-            if state.preset_mode is not None:
-                zone_dict["preset_mode"] = state.preset_mode
-            if state.current is not None:
-                zone_dict["current"] = state.current
-            if state.display_temp is not None:
-                zone_dict["display_temp"] = state.display_temp
-
-            # PID state - only include if available
-            if pid_state is not None:
-                zone_dict["duty_cycle"] = pid_state.duty_cycle
-                zone_dict["pid_error"] = pid_state.error
-                zone_dict["pid_proportional"] = pid_state.p_term
-                zone_dict["pid_integral"] = pid_state.i_term
-                zone_dict["pid_derivative"] = pid_state.d_term
-
-            zones_data[zone_id] = zone_dict
-
+        """Build state dictionary for persistent storage."""
         data: dict[str, Any] = {
-            "controller": {
-                "mode": self._controller.mode,
-                "flush_enabled": self._controller.state.flush_enabled,
-            },
-            "zones": zones_data,
+            "controller": self.data["controller"],
+            "zones": self.data["zones"],
         }
 
         # Include last update timestamp from base class
@@ -1241,6 +1196,9 @@ class UFHControllerDataUpdateCoordinator(
         async_load_stored_state() to ensure consistency and avoid duplication.
         """
         LOGGER.debug("Reloading controller config in-place")
+
+        # Refresh to update self.data with latest runtime state before capturing
+        await self.async_refresh()
 
         # Capture current state using existing state management
         old_zone_ids = set(self._controller.zone_ids)
