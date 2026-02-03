@@ -38,7 +38,7 @@ def setup_zone_pid(
     zone_id: str,
     current_temp: float | None,
     dt: float,
-) -> float | None:
+) -> None:
     """
     Set up zone with current temperature and update PID.
 
@@ -51,15 +51,13 @@ def setup_zone_pid(
         current_temp: Current temperature (set directly, no EMA smoothing).
         dt: Time delta for PID update.
 
-    Returns:
-        The duty cycle, or None if zone not found.
+    Raises:
+        KeyError: If zone_id is not found.
 
     """
     runtime = controller.get_zone_runtime(zone_id)
-    if runtime is None:
-        return None
     runtime.state.current = current_temp
-    return runtime.update_pid(dt, controller.mode)
+    runtime.update_pid(dt, controller.mode)
 
 
 def setup_zone_historical(
@@ -81,10 +79,11 @@ def setup_zone_historical(
         open_state_avg: Average valve state for open detection (0.0-1.0).
         window_recently_open: Whether any window was open recently.
 
+    Raises:
+        KeyError: If zone_id is not found.
+
     """
     runtime = controller.get_zone_runtime(zone_id)
-    if runtime is None:
-        return
     runtime.update_historical(
         open_state_avg=open_state_avg,
         window_recently_open=window_recently_open,

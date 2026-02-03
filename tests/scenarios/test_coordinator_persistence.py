@@ -1133,11 +1133,10 @@ async def test_crash_recovery_stale_zone_in_stored_state(
     # zone1 should be restored correctly
     # (integral may have increased after first refresh)
     runtime = coordinator.controller.get_zone_runtime("zone1")
-    assert runtime is not None
     assert runtime.pid.state.i_term >= 20.0  # Started from stored value
 
     # zone_deleted should not exist
-    assert coordinator.controller.get_zone_runtime("zone_deleted") is None
+    assert "zone_deleted" not in coordinator.controller.zone_ids
 
     # Cleanup
     await hass.config_entries.async_unload(config_entry.entry_id)

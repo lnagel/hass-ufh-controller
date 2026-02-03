@@ -191,18 +191,13 @@ class TestUpdateZonePID:
         controller = HeatingController(basic_config)
         controller.set_zone_setpoint("living_room", 22.0)
 
-        duty_cycle = setup_zone_pid(controller, "living_room", 20.0, 60.0)
+        setup_zone_pid(controller, "living_room", 20.0, 60.0)
 
         # With 2 degree error and Kp=50, expect significant duty cycle
-        assert duty_cycle is not None
-        assert duty_cycle > 0.0
-        state = controller.get_zone_state("living_room")
-        assert state is not None
-        assert state.current == 20.0
         runtime = controller.get_zone_runtime("living_room")
-        assert runtime is not None
         assert runtime.pid.state is not None
-        assert runtime.pid.state.duty_cycle == duty_cycle
+        assert runtime.pid.state.duty_cycle > 0.0
+        assert runtime.state.current == 20.0
 
     def test_update_with_none_temperature(self, basic_config: ControllerConfig) -> None:
         """Test PID update with no temperature reading."""
@@ -211,19 +206,18 @@ class TestUpdateZonePID:
         # First update with valid temp
         setup_zone_pid(controller, "living_room", 20.0, 60.0)
         runtime = controller.get_zone_runtime("living_room")
-        assert runtime is not None
         assert runtime.pid.state is not None
         first_duty = runtime.pid.state.duty_cycle
 
         # Update with None - should maintain duty cycle
-        duty_cycle = setup_zone_pid(controller, "living_room", None, 60.0)
-        assert duty_cycle == first_duty
+        setup_zone_pid(controller, "living_room", None, 60.0)
+        assert runtime.pid.state.duty_cycle == first_duty
 
     def test_update_unknown_zone(self, basic_config: ControllerConfig) -> None:
-        """Test PID update for unknown zone returns None."""
+        """Test PID update for unknown zone raises KeyError."""
         controller = HeatingController(basic_config)
-        duty_cycle = setup_zone_pid(controller, "unknown", 20.0, 60.0)
-        assert duty_cycle is None
+        with pytest.raises(KeyError):
+            setup_zone_pid(controller, "unknown", 20.0, 60.0)
 
 
 class TestPIDIntegrationPause:
@@ -415,8 +409,7 @@ class TestPIDIntegrationPause:
         controller.mode = OperationMode.ALL_OFF
 
         # Update with different temperature - duty cycle should be maintained
-        returned_duty = setup_zone_pid(controller, "living_room", 15.0, 60.0)
-        assert returned_duty == initial_duty_cycle
+        setup_zone_pid(controller, "living_room", 15.0, 60.0)
         assert runtime.pid.state is not None
         assert runtime.pid.state.duty_cycle == initial_duty_cycle
 
@@ -488,12 +481,12 @@ class TestPIDIntegrationPause:
         initial_duty_cycle = runtime.pid.state.duty_cycle
 
         # Update with None temperature
-        returned_duty = setup_zone_pid(controller, "living_room", None, 60.0)
+        setup_zone_pid(controller, "living_room", None, 60.0)
 
         # Integral should be unchanged, duty cycle maintained
         assert runtime.pid.state is not None
         assert runtime.pid.state.i_term == initial_integral
-        assert returned_duty == initial_duty_cycle
+        assert runtime.pid.state.duty_cycle == initial_duty_cycle
 
 
 class TestUpdateZoneHistorical:
@@ -538,15 +531,15 @@ class TestUpdateZoneHistorical:
         assert state.flow is False
 
     def test_update_unknown_zone(self, basic_config: ControllerConfig) -> None:
-        """Test updating unknown zone does nothing."""
+        """Test updating unknown zone raises KeyError."""
         controller = HeatingController(basic_config)
-        # Should not raise
-        setup_zone_historical(
-            controller,
-            "unknown",
-            open_state_avg=0.9,
-            window_recently_open=False,
-        )
+        with pytest.raises(KeyError):
+            setup_zone_historical(
+                controller,
+                "unknown",
+                open_state_avg=0.9,
+                window_recently_open=False,
+            )
 
     def test_quota_based_evaluation_with_used_duration(
         self, basic_config: ControllerConfig

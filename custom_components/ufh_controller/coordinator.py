@@ -286,7 +286,8 @@ class UFHControllerDataUpdateCoordinator(
 
         zones_data = stored_data.get("zones", {})
         for zone_id, zone_state in zones_data.items():
-            self._restore_zone_state(zone_id, zone_state)
+            if zone_id in self._controller.zone_ids:
+                self._restore_zone_state(zone_id, zone_state)
 
         self._state_restored = True
 
@@ -385,8 +386,6 @@ class UFHControllerDataUpdateCoordinator(
     def _restore_zone_state(self, zone_id: str, zone_state: dict[str, Any]) -> None:
         """Restore state for a single zone from V2 storage format."""
         runtime = self._controller.get_zone_runtime(zone_id)
-        if runtime is None:
-            return
 
         # Restore full PID state if available (only if not yet calculated)
         if runtime.pid.state is None and "duty_cycle" in zone_state:
@@ -437,9 +436,6 @@ class UFHControllerDataUpdateCoordinator(
 
         for zone_id in self._controller.zone_ids:
             runtime = self._controller.get_zone_runtime(zone_id)
-            if runtime is None:
-                continue
-
             state = runtime.state
             pid_state = runtime.pid.state
 
@@ -520,12 +516,9 @@ class UFHControllerDataUpdateCoordinator(
         # Close all valves
         for zone_id in self._controller.zone_ids:
             runtime = self._controller.get_zone_runtime(zone_id)
-            if runtime:
-                await self._call_switch_service(
-                    runtime.config.valve_switch, turn_on=False
-                )
-                # Update zone state to reflect valve is off
-                runtime.state.valve_state = ValveState.OFF
+            await self._call_switch_service(runtime.config.valve_switch, turn_on=False)
+            # Update zone state to reflect valve is off
+            runtime.state.valve_state = ValveState.OFF
 
         # Turn off heat request
         await self._execute_heat_request(heat_request=False)
@@ -771,8 +764,6 @@ class UFHControllerDataUpdateCoordinator(
         Zone failures are tracked per-zone and don't affect other zones.
         """
         runtime = self._controller.get_zone_runtime(zone_id)
-        if runtime is None:
-            return  # Zone doesn't exist
 
         # Read current temperature and update zone
         temp_state = self.hass.states.get(runtime.config.temp_sensor)
@@ -941,11 +932,10 @@ class UFHControllerDataUpdateCoordinator(
 
     def _update_controller_status_from_zones(self) -> None:
         """Update controller status based on zone statuses."""
-        zone_statuses: list[ZoneStatus] = []
-        for zone_id in self._controller.zone_ids:
-            runtime = self._controller.get_zone_runtime(zone_id)
-            if runtime is not None:
-                zone_statuses.append(runtime.state.zone_status)
+        zone_statuses = [
+            self._controller.get_zone_runtime(zone_id).state.zone_status
+            for zone_id in self._controller.zone_ids
+        ]
 
         if not zone_statuses:
             self._status = ControllerStatus.NORMAL
@@ -990,14 +980,11 @@ class UFHControllerDataUpdateCoordinator(
 
     def _any_zone_in_fail_safe(self) -> bool:
         """Check if any zone is in fail-safe mode."""
-        for zone_id in self._controller.zone_ids:
-            runtime = self._controller.get_zone_runtime(zone_id)
-            if (
-                runtime is not None
-                and runtime.state.zone_status == ZoneStatus.FAIL_SAFE
-            ):
-                return True
-        return False
+        return any(
+            self._controller.get_zone_runtime(zone_id).state.zone_status
+            == ZoneStatus.FAIL_SAFE
+            for zone_id in self._controller.zone_ids
+        )
 
     async def _execute_valve_actions(
         self,
@@ -1006,9 +993,6 @@ class UFHControllerDataUpdateCoordinator(
         """Execute valve actions by calling switch services."""
         for zone_id, action in actions.items():
             runtime = self._controller.get_zone_runtime(zone_id)
-            if runtime is None:
-                continue
-
             valve_entity = runtime.config.valve_switch
 
             if action == ZoneAction.TURN_ON:
@@ -1026,9 +1010,6 @@ class UFHControllerDataUpdateCoordinator(
         """Execute valve actions respecting zone-level fail-safe."""
         for zone_id, action in actions.items():
             runtime = self._controller.get_zone_runtime(zone_id)
-            if runtime is None:
-                continue
-
             valve_entity = runtime.config.valve_switch
 
             # Zone in fail-safe: force valve closed, ignore normal action
@@ -1155,15 +1136,12 @@ class UFHControllerDataUpdateCoordinator(
     def _build_state_dict(self) -> dict[str, Any]:
         """Build state dictionary for entities to consume."""
         # Count zones in each state
-        zones_degraded = 0
-        zones_fail_safe = 0
-        for zone_id in self._controller.zone_ids:
-            runtime = self._controller.get_zone_runtime(zone_id)
-            if runtime is not None:
-                if runtime.state.zone_status == ZoneStatus.DEGRADED:
-                    zones_degraded += 1
-                elif runtime.state.zone_status == ZoneStatus.FAIL_SAFE:
-                    zones_fail_safe += 1
+        zone_statuses = [
+            self._controller.get_zone_runtime(zone_id).state.zone_status
+            for zone_id in self._controller.zone_ids
+        ]
+        zones_degraded = sum(1 for s in zone_statuses if s == ZoneStatus.DEGRADED)
+        zones_fail_safe = sum(1 for s in zone_statuses if s == ZoneStatus.FAIL_SAFE)
 
         # Count zones requesting heat from controller state
         requesting_zones = sum(self._controller.state.heat_requests.values())
@@ -1186,33 +1164,32 @@ class UFHControllerDataUpdateCoordinator(
 
         for zone_id in self._controller.zone_ids:
             runtime = self._controller.get_zone_runtime(zone_id)
-            if runtime is not None:
-                state = runtime.state
-                pid_state = runtime.pid.state
-                # Blocked now means PID is paused due to recent window activity
-                blocked = state.window_recently_open
+            state = runtime.state
+            pid_state = runtime.pid.state
+            # Blocked now means PID is paused due to recent window activity
+            blocked = state.window_recently_open
 
-                result["zones"][zone_id] = {
-                    "current": state.current,
-                    "display_temp": state.display_temp,
-                    "setpoint": state.setpoint,
-                    "duty_cycle": pid_state.duty_cycle if pid_state else None,
-                    "pid_error": pid_state.error if pid_state else None,
-                    "pid_proportional": pid_state.p_term if pid_state else None,
-                    "pid_integral": pid_state.i_term if pid_state else None,
-                    "pid_derivative": pid_state.d_term if pid_state else None,
-                    "valve_state": state.valve_state.value,
-                    "enabled": state.enabled,
-                    "blocked": blocked,
-                    "heat_request": self._controller.state.heat_requests.get(
-                        zone_id, False
-                    ),
-                    "flow": state.flow,
-                    "preset_mode": state.preset_mode,
-                    "zone_status": state.zone_status.value,
-                    "supply_coefficient": state.supply_coefficient,
-                    "used_duration": state.used_duration,
-                }
+            result["zones"][zone_id] = {
+                "current": state.current,
+                "display_temp": state.display_temp,
+                "setpoint": state.setpoint,
+                "duty_cycle": pid_state.duty_cycle if pid_state else None,
+                "pid_error": pid_state.error if pid_state else None,
+                "pid_proportional": pid_state.p_term if pid_state else None,
+                "pid_integral": pid_state.i_term if pid_state else None,
+                "pid_derivative": pid_state.d_term if pid_state else None,
+                "valve_state": state.valve_state.value,
+                "enabled": state.enabled,
+                "blocked": blocked,
+                "heat_request": self._controller.state.heat_requests.get(
+                    zone_id, False
+                ),
+                "flow": state.flow,
+                "preset_mode": state.preset_mode,
+                "zone_status": state.zone_status.value,
+                "supply_coefficient": state.supply_coefficient,
+                "used_duration": state.used_duration,
+            }
 
         return result
 
@@ -1234,9 +1211,8 @@ class UFHControllerDataUpdateCoordinator(
     async def set_zone_preset_mode(self, zone_id: str, preset_mode: str | None) -> None:
         """Set zone preset mode and trigger refresh."""
         runtime = self._controller.get_zone_runtime(zone_id)
-        if runtime is not None:
-            runtime.state.preset_mode = preset_mode
-            await self.async_request_refresh()
+        runtime.state.preset_mode = preset_mode
+        await self.async_request_refresh()
 
     async def set_flush_enabled(self, *, enabled: bool) -> None:
         """Enable or disable flush and trigger refresh."""

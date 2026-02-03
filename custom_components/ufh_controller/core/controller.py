@@ -174,14 +174,13 @@ class HeatingController:
         """Set the operation mode."""
         self._state.mode = OperationMode(value)
 
-    def get_zone_state(self, zone_id: str) -> ZoneState | None:
-        """Get the state of a specific zone."""
-        runtime = self._zones.get(zone_id)
-        return runtime.state if runtime else None
+    def get_zone_state(self, zone_id: str) -> ZoneState:
+        """Get the state of a specific zone. Raises KeyError if zone_id is invalid."""
+        return self._zones[zone_id].state
 
-    def get_zone_runtime(self, zone_id: str) -> ZoneRuntime | None:
-        """Get the runtime data for a specific zone."""
-        return self._zones.get(zone_id)
+    def get_zone_runtime(self, zone_id: str) -> ZoneRuntime:
+        """Get runtime data for a specific zone. Raises KeyError if zone_id invalid."""
+        return self._zones[zone_id]
 
     def set_zone_setpoint(self, zone_id: str, setpoint: float) -> bool:
         """

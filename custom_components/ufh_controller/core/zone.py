@@ -188,7 +188,7 @@ class ZoneRuntime:
             self.state.display_temp,
         )
 
-    def update_pid(self, dt: float, controller_mode: OperationMode) -> float | None:
+    def update_pid(self, dt: float, controller_mode: OperationMode) -> None:
         """
         Update the PID controller for this zone.
 
@@ -202,24 +202,19 @@ class ZoneRuntime:
             dt: Time delta since last update in seconds.
             controller_mode: Current controller operation mode.
 
-        Returns:
-            The duty cycle (0-100), None if not yet calculated.
-
         """
         if self.state.current is None:
             # No temperature reading - maintain last duty cycle
-            return self.pid.state.duty_cycle if self.pid.state else None
+            return
 
         if self._should_pause_pid(controller_mode):
-            return self.pid.state.duty_cycle if self.pid.state else None
+            return
 
-        pid_state = self.pid.update(
+        self.pid.update(
             setpoint=self.state.setpoint,
             current=self.state.current,
             dt=dt,
         )
-
-        return pid_state.duty_cycle if pid_state else None
 
     def _should_pause_pid(self, controller_mode: OperationMode) -> bool:
         """
