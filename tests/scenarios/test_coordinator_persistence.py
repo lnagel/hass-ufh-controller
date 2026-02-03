@@ -132,6 +132,8 @@ async def test_coordinator_save_state_format(
     runtime.state.display_temp = 21.5
     # Set preset_mode that should be persisted
     runtime.state.preset_mode = "eco"
+    # Set used_duration that should be persisted
+    runtime.state.used_duration = 1234.5
 
     saved_data = None
 
@@ -167,6 +169,8 @@ async def test_coordinator_save_state_format(
     assert saved_data["zones"]["zone1"]["display_temp"] == 21.5
     # Verify preset_mode is saved
     assert saved_data["zones"]["zone1"]["preset_mode"] == "eco"
+    # Verify used_duration is saved
+    assert saved_data["zones"]["zone1"]["used_duration"] == 1234.5
 
 
 async def test_coordinator_handles_invalid_timestamp_format(

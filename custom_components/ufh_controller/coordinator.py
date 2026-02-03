@@ -423,35 +423,51 @@ class UFHControllerDataUpdateCoordinator(
             runtime.state.used_duration = zone_state["used_duration"]
 
     def _build_storage_state(self) -> dict[str, Any]:
-        """Build state dictionary for persistent storage (V2 format)."""
+        """
+        Build state dictionary for persistent storage (V2 format).
+
+        Reads zone data directly from runtime objects to capture any changes
+        made between refreshes. Uses the same key names as _build_state_dict()
+        for consistency, but only includes keys that need to survive restarts.
+
+        Runtime-only values (valve_state, blocked, heat_request, flow, zone_status,
+        supply_coefficient) are excluded as they're recalculated on each update.
+        """
         zones_data: dict[str, dict[str, Any]] = {}
 
         for zone_id in self._controller.zone_ids:
             runtime = self._controller.get_zone_runtime(zone_id)
-            if runtime is not None:
-                zone_data: dict[str, Any] = {
-                    "setpoint": runtime.state.setpoint,
-                    "enabled": runtime.state.enabled,
-                }
-                # Save full PID state if available
-                if runtime.pid.state is not None:
-                    zone_data["pid_error"] = runtime.pid.state.error
-                    zone_data["pid_proportional"] = runtime.pid.state.p_term
-                    zone_data["pid_integral"] = runtime.pid.state.i_term
-                    zone_data["pid_derivative"] = runtime.pid.state.d_term
-                    zone_data["duty_cycle"] = runtime.pid.state.duty_cycle
-                # Include preset_mode if set
-                if runtime.state.preset_mode is not None:
-                    zone_data["preset_mode"] = runtime.state.preset_mode
-                # Save EMA-smoothed temperature for PID continuity across restarts
-                if runtime.state.current is not None:
-                    zone_data["current"] = runtime.state.current
-                # Save display temperature for immediate climate entity availability
-                if runtime.state.display_temp is not None:
-                    zone_data["display_temp"] = runtime.state.display_temp
-                # Save used_duration for continuity within observation period
-                zone_data["used_duration"] = runtime.state.used_duration
-                zones_data[zone_id] = zone_data
+            if runtime is None:
+                continue
+
+            state = runtime.state
+            pid_state = runtime.pid.state
+
+            # Build zone dict with same keys as _build_state_dict() but only
+            # persisted values; None values are excluded
+            zone_dict: dict[str, Any] = {
+                "setpoint": state.setpoint,
+                "enabled": state.enabled,
+                "used_duration": state.used_duration,
+            }
+
+            # Optional values - only include if not None
+            if state.preset_mode is not None:
+                zone_dict["preset_mode"] = state.preset_mode
+            if state.current is not None:
+                zone_dict["current"] = state.current
+            if state.display_temp is not None:
+                zone_dict["display_temp"] = state.display_temp
+
+            # PID state - only include if available
+            if pid_state is not None:
+                zone_dict["duty_cycle"] = pid_state.duty_cycle
+                zone_dict["pid_error"] = pid_state.error
+                zone_dict["pid_proportional"] = pid_state.p_term
+                zone_dict["pid_integral"] = pid_state.i_term
+                zone_dict["pid_derivative"] = pid_state.d_term
+
+            zones_data[zone_id] = zone_dict
 
         data: dict[str, Any] = {
             "controller": {
@@ -1195,6 +1211,7 @@ class UFHControllerDataUpdateCoordinator(
                     "preset_mode": state.preset_mode,
                     "zone_status": state.zone_status.value,
                     "supply_coefficient": state.supply_coefficient,
+                    "used_duration": state.used_duration,
                 }
 
         return result
