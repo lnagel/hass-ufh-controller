@@ -71,11 +71,18 @@ custom_components/ufh_controller/
 ├── coordinator.py       # DataUpdateCoordinator (main control loop)
 ├── config_flow.py       # UI configuration flows
 ├── const.py             # Constants, defaults, enums
+├── data.py              # Custom types (UFHControllerConfigEntry, UFHControllerData)
+├── device.py            # Device info helpers
+├── entity.py            # Base entity classes (UFHControllerEntity, UFHControllerZoneEntity)
+├── recorder.py          # Recorder query helpers (state averages, window detection)
 ├── core/
 │   ├── controller.py    # Control logic orchestration
 │   ├── zone.py          # Zone state and decision logic
 │   ├── pid.py           # PID controller implementation
-│   └── history.py       # Recorder query helpers
+│   ├── history.py       # Observation period datetime helpers
+│   ├── ema.py           # EMA filter for temperature smoothing
+│   ├── heating_curve.py # Heating curve for outdoor temp compensation
+│   └── hysteresis.py    # Hysteresis rounding for display flicker prevention
 ├── climate.py           # Climate entity platform
 ├── sensor.py            # Sensor entities (duty cycle, PID values)
 ├── binary_sensor.py     # Binary sensors (blocked, heat request)
@@ -125,7 +132,16 @@ This ensures bugs don't regress and documents the expected behavior.
 Common fixtures are in `tests/conftest.py`:
 - `mock_config_entry` - Config entry with one zone
 - `mock_config_entry_no_zones` - Config entry without zones
+- `mock_config_entry_multiple_zones` - Config entry with two zones
+- `mock_config_entry_with_heat_request` - Config entry with heat request entity
+- `mock_config_entry_all_entities` - Config entry with all controller-level entities
+- `mock_config_entry_with_supply_temp` - Config entry with supply temp entity
+- `mock_temp_sensor` - Sets up mock temperature sensor and valve states
 - `mock_recorder` - Mocked Home Assistant recorder
+
+Helper functions (not fixtures, call directly in tests):
+- `setup_zone_pid()` - Set up zone temperature and update PID
+- `setup_zone_historical()` - Set up zone historical data for flow/window blocking
 
 ### Test Organization
 
@@ -169,7 +185,7 @@ Tests are organized into four directories based on their scope and dependencies:
 
 ### Constants
 - Extract magic numbers to `const.py`
-- Use typed defaults (TimingDefaults, PIDDefaults, SetpointDefaults)
+- Use typed defaults (TimingDefaults, PIDDefaults, SetpointDefaults, PresetDefaults)
 - Document units in comments (seconds, percentages, ratios)
 
 ## Git Commit Practices
@@ -292,6 +308,18 @@ uv run bump-my-version bump major  # 0.1.3 → 1.0.0
 - Window/door detection blocks heating (prevents energy waste)
 - Minimum run time prevents valve wear
 - DHW (hot water) priority for system coordination
+
+### EMA Filtering
+- Temperature readings are smoothed via Exponential Moving Average filter
+- Configurable time constant (tau); tau=0 disables filtering
+
+### Heating Curve
+- Outdoor temperature compensation via two-point linear interpolation
+- Adjusts supply target temperature based on outdoor conditions
+
+### Hysteresis Rounding
+- Temperature display uses hysteresis to prevent flicker
+- Raw value must cross boundary by 0.03°C before display changes
 
 ### Home Assistant Integration
 - Uses ConfigEntry with subentries for zones
