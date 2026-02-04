@@ -93,9 +93,9 @@ async def test_config_update_parameter_change_in_place(
     zone_runtime.pid.set_state(
         PIDState(
             error=-1.5,
-            p_term=15.0,
-            i_term=10.0,
-            d_term=5.0,
+            proportional=15.0,
+            integral=10.0,
+            derivative=5.0,
             duty_cycle=30.0,
         )
     )

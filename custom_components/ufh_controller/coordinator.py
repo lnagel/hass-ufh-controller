@@ -391,9 +391,9 @@ class UFHControllerDataUpdateCoordinator(
         if runtime.pid.state is None and "duty_cycle" in zone_state:
             pid_state = PIDState(
                 error=zone_state.get("pid_error", 0.0),
-                p_term=zone_state.get("pid_proportional", 0.0),
-                i_term=zone_state.get("pid_integral", 0.0),
-                d_term=zone_state.get("pid_derivative", 0.0),
+                proportional=zone_state.get("pid_proportional", 0.0),
+                integral=zone_state.get("pid_integral", 0.0),
+                derivative=zone_state.get("pid_derivative", 0.0),
                 duty_cycle=zone_state.get("duty_cycle", 0.0),
             )
             runtime.pid.set_state(pid_state)
@@ -1133,9 +1133,9 @@ class UFHControllerDataUpdateCoordinator(
                 "setpoint": state.setpoint,
                 "duty_cycle": pid_state.duty_cycle if pid_state else None,
                 "pid_error": pid_state.error if pid_state else None,
-                "pid_proportional": pid_state.p_term if pid_state else None,
-                "pid_integral": pid_state.i_term if pid_state else None,
-                "pid_derivative": pid_state.d_term if pid_state else None,
+                "pid_proportional": pid_state.proportional if pid_state else None,
+                "pid_integral": pid_state.integral if pid_state else None,
+                "pid_derivative": pid_state.derivative if pid_state else None,
                 "valve_state": state.valve_state.value,
                 "enabled": state.enabled,
                 "blocked": blocked,

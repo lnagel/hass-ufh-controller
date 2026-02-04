@@ -86,14 +86,14 @@ class TestControllerZoneInitialization:
         assert isinstance(runtime.pid.state.error, float), (
             "error should be a float after update"
         )
-        assert isinstance(runtime.pid.state.p_term, float), (
-            "p_term should be a float after update"
+        assert isinstance(runtime.pid.state.proportional, float), (
+            "proportional should be a float after update"
         )
-        assert isinstance(runtime.pid.state.i_term, float), (
-            "i_term should be a float after update"
+        assert isinstance(runtime.pid.state.integral, float), (
+            "integral should be a float after update"
         )
-        assert isinstance(runtime.pid.state.d_term, float), (
-            "d_term should be a float after update"
+        assert isinstance(runtime.pid.state.derivative, float), (
+            "derivative should be a float after update"
         )
         assert isinstance(runtime.pid.state.duty_cycle, float), (
             "duty_cycle should be a float after update"

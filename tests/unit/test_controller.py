@@ -232,7 +232,7 @@ class TestPIDIntegrationPause:
         runtime = controller.get_zone_runtime("living_room")
         assert runtime is not None
         assert runtime.pid.state is not None
-        initial_integral = runtime.pid.state.i_term
+        initial_integral = runtime.pid.state.integral
 
         # Switch to all_off mode
         controller.mode = OperationMode.ALL_OFF
@@ -242,7 +242,7 @@ class TestPIDIntegrationPause:
 
         # Integral should remain unchanged (paused)
         assert runtime.pid.state is not None
-        assert runtime.pid.state.i_term == initial_integral
+        assert runtime.pid.state.integral == initial_integral
 
     def test_pid_paused_in_flush_mode(self, basic_config: ControllerConfig) -> None:
         """Test PID integration is paused when mode is flush."""
@@ -253,7 +253,7 @@ class TestPIDIntegrationPause:
         runtime = controller.get_zone_runtime("living_room")
         assert runtime is not None
         assert runtime.pid.state is not None
-        initial_integral = runtime.pid.state.i_term
+        initial_integral = runtime.pid.state.integral
 
         # Switch to flush mode
         controller.mode = OperationMode.FLUSH
@@ -261,7 +261,7 @@ class TestPIDIntegrationPause:
         # PID update should NOT accumulate integral
         setup_zone_pid(controller, "living_room", 19.0, 60.0)
         assert runtime.pid.state is not None
-        assert runtime.pid.state.i_term == initial_integral
+        assert runtime.pid.state.integral == initial_integral
 
     def test_pid_paused_in_all_on_mode(self, basic_config: ControllerConfig) -> None:
         """Test PID integration is paused when mode is all_on."""
@@ -271,12 +271,12 @@ class TestPIDIntegrationPause:
         runtime = controller.get_zone_runtime("living_room")
         assert runtime is not None
         assert runtime.pid.state is not None
-        initial_integral = runtime.pid.state.i_term
+        initial_integral = runtime.pid.state.integral
 
         controller.mode = OperationMode.ALL_ON
         setup_zone_pid(controller, "living_room", 19.0, 60.0)
         assert runtime.pid.state is not None
-        assert runtime.pid.state.i_term == initial_integral
+        assert runtime.pid.state.integral == initial_integral
 
     def test_pid_paused_in_off_mode(self, basic_config: ControllerConfig) -> None:
         """Test PID integration is paused when mode is off."""
@@ -286,12 +286,12 @@ class TestPIDIntegrationPause:
         runtime = controller.get_zone_runtime("living_room")
         assert runtime is not None
         assert runtime.pid.state is not None
-        initial_integral = runtime.pid.state.i_term
+        initial_integral = runtime.pid.state.integral
 
         controller.mode = OperationMode.OFF
         setup_zone_pid(controller, "living_room", 19.0, 60.0)
         assert runtime.pid.state is not None
-        assert runtime.pid.state.i_term == initial_integral
+        assert runtime.pid.state.integral == initial_integral
 
     def test_pid_paused_in_cycle_mode(self, basic_config: ControllerConfig) -> None:
         """Test PID integration is paused when mode is cycle."""
@@ -301,12 +301,12 @@ class TestPIDIntegrationPause:
         runtime = controller.get_zone_runtime("living_room")
         assert runtime is not None
         assert runtime.pid.state is not None
-        initial_integral = runtime.pid.state.i_term
+        initial_integral = runtime.pid.state.integral
 
         controller.mode = OperationMode.CYCLE
         setup_zone_pid(controller, "living_room", 19.0, 60.0)
         assert runtime.pid.state is not None
-        assert runtime.pid.state.i_term == initial_integral
+        assert runtime.pid.state.integral == initial_integral
 
     def test_pid_paused_when_zone_disabled(
         self, basic_config: ControllerConfig
@@ -319,7 +319,7 @@ class TestPIDIntegrationPause:
         runtime = controller.get_zone_runtime("living_room")
         assert runtime is not None
         assert runtime.pid.state is not None
-        initial_integral = runtime.pid.state.i_term
+        initial_integral = runtime.pid.state.integral
 
         # Disable the zone
         controller.set_zone_enabled("living_room", enabled=False)
@@ -327,7 +327,7 @@ class TestPIDIntegrationPause:
         # PID update should NOT accumulate integral
         setup_zone_pid(controller, "living_room", 19.0, 60.0)
         assert runtime.pid.state is not None
-        assert runtime.pid.state.i_term == initial_integral
+        assert runtime.pid.state.integral == initial_integral
 
     def test_pid_paused_when_window_recently_open(
         self, basic_config: ControllerConfig
@@ -340,7 +340,7 @@ class TestPIDIntegrationPause:
         runtime = controller.get_zone_runtime("living_room")
         assert runtime is not None
         assert runtime.pid.state is not None
-        initial_integral = runtime.pid.state.i_term
+        initial_integral = runtime.pid.state.integral
 
         # Simulate window was recently open (within blocking period)
         runtime.state.window_recently_open = True
@@ -348,7 +348,7 @@ class TestPIDIntegrationPause:
         # PID update should NOT accumulate integral
         setup_zone_pid(controller, "living_room", 19.0, 60.0)
         assert runtime.pid.state is not None
-        assert runtime.pid.state.i_term == initial_integral
+        assert runtime.pid.state.integral == initial_integral
 
     def test_pid_not_paused_when_window_not_recently_open(
         self, basic_config: ControllerConfig
@@ -361,7 +361,7 @@ class TestPIDIntegrationPause:
         runtime = controller.get_zone_runtime("living_room")
         assert runtime is not None
         assert runtime.pid.state is not None
-        initial_integral = runtime.pid.state.i_term
+        initial_integral = runtime.pid.state.integral
 
         # No recent window activity
         runtime.state.window_recently_open = False
@@ -369,7 +369,7 @@ class TestPIDIntegrationPause:
         # PID update SHOULD accumulate integral
         setup_zone_pid(controller, "living_room", 19.0, 60.0)
         assert runtime.pid.state is not None
-        assert runtime.pid.state.i_term > initial_integral
+        assert runtime.pid.state.integral > initial_integral
 
     def test_pid_runs_normally_in_heat_mode(
         self, basic_config: ControllerConfig
@@ -383,12 +383,12 @@ class TestPIDIntegrationPause:
         runtime = controller.get_zone_runtime("living_room")
         assert runtime is not None
         assert runtime.pid.state is not None
-        initial_integral = runtime.pid.state.i_term
+        initial_integral = runtime.pid.state.integral
 
         # Second update should accumulate integral
         setup_zone_pid(controller, "living_room", 20.0, 60.0)
         assert runtime.pid.state is not None
-        assert runtime.pid.state.i_term > initial_integral
+        assert runtime.pid.state.integral > initial_integral
 
     def test_pid_paused_maintains_duty_cycle(
         self, basic_config: ControllerConfig
@@ -448,20 +448,20 @@ class TestPIDIntegrationPause:
         runtime = controller.get_zone_runtime("living_room")
         assert runtime is not None
         assert runtime.pid.state is not None
-        integral_after_first = runtime.pid.state.i_term
+        integral_after_first = runtime.pid.state.integral
 
         # Pause by switching mode
         controller.mode = OperationMode.ALL_OFF
         setup_zone_pid(controller, "living_room", 19.0, 60.0)
         assert runtime.pid.state is not None
-        integral_while_paused = runtime.pid.state.i_term
+        integral_while_paused = runtime.pid.state.integral
         assert integral_while_paused == integral_after_first
 
         # Resume by switching back to heat
         controller.mode = OperationMode.HEAT
         setup_zone_pid(controller, "living_room", 19.0, 60.0)
         assert runtime.pid.state is not None
-        integral_after_resume = runtime.pid.state.i_term
+        integral_after_resume = runtime.pid.state.integral
 
         # Integral should have increased after resuming
         assert integral_after_resume > integral_while_paused
@@ -477,7 +477,7 @@ class TestPIDIntegrationPause:
         runtime = controller.get_zone_runtime("living_room")
         assert runtime is not None
         assert runtime.pid.state is not None
-        initial_integral = runtime.pid.state.i_term
+        initial_integral = runtime.pid.state.integral
         initial_duty_cycle = runtime.pid.state.duty_cycle
 
         # Update with None temperature
@@ -485,7 +485,7 @@ class TestPIDIntegrationPause:
 
         # Integral should be unchanged, duty cycle maintained
         assert runtime.pid.state is not None
-        assert runtime.pid.state.i_term == initial_integral
+        assert runtime.pid.state.integral == initial_integral
         assert runtime.pid.state.duty_cycle == initial_duty_cycle
 
 

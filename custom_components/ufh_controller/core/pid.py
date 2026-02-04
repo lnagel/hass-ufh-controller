@@ -14,14 +14,14 @@ class PIDState:
     Complete state of the PID controller.
 
     This frozen dataclass contains both the output values from the last
-    update and the internal accumulator state (i_term serves as the
+    update and the internal accumulator state (integral serves as the
     integral accumulator, error serves as last_error for derivative).
     """
 
     error: float
-    p_term: float
-    i_term: float
-    d_term: float
+    proportional: float
+    integral: float
+    derivative: float
     duty_cycle: float
 
 
@@ -75,27 +75,26 @@ class PIDController:
         error = setpoint - current
 
         # Proportional term
-        p_term = self.kp * error
+        proportional = self.kp * error
 
         # Integral term with anti-windup
-        # Use previous i_term as the integral accumulator
-        prev_integral = self._state.i_term if self._state else 0.0
+        # Use previous integral as the integral accumulator
+        prev_integral = self._state.integral if self._state else 0.0
         integral = prev_integral + self.ki * error * dt
         integral = max(self.integral_min, min(self.integral_max, integral))
-        i_term = integral
 
         # Derivative term - use previous error from state
         last_error = self._state.error if self._state else 0.0
-        d_term = self.kd * (error - last_error) / dt
+        derivative = self.kd * (error - last_error) / dt
 
         # Output clamped to 0-100%
-        duty_cycle = max(0.0, min(100.0, p_term + i_term + d_term))
+        duty_cycle = max(0.0, min(100.0, proportional + integral + derivative))
 
         self._state = PIDState(
             error=error,
-            p_term=p_term,
-            i_term=i_term,
-            d_term=d_term,
+            proportional=proportional,
+            integral=integral,
+            derivative=derivative,
             duty_cycle=duty_cycle,
         )
         return self._state

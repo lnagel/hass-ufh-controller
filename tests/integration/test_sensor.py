@@ -211,9 +211,9 @@ async def test_pid_error_sensor_icon(
     zone1.pid._state = (
         PIDState(
             error=error_value if error_value is not None else 0.0,
-            p_term=old_state.p_term if old_state else 0.0,
-            i_term=old_state.i_term if old_state else 0.0,
-            d_term=old_state.d_term if old_state else 0.0,
+            proportional=old_state.proportional if old_state else 0.0,
+            integral=old_state.integral if old_state else 0.0,
+            derivative=old_state.derivative if old_state else 0.0,
             duty_cycle=old_state.duty_cycle if old_state else 0.0,
         )
         if error_value is not None
@@ -263,9 +263,9 @@ async def test_duty_cycle_sensor_icon(
     zone1.pid._state = (
         PIDState(
             error=old_state.error if old_state else 0.0,
-            p_term=old_state.p_term if old_state else 0.0,
-            i_term=old_state.i_term if old_state else 0.0,
-            d_term=old_state.d_term if old_state else 0.0,
+            proportional=old_state.proportional if old_state else 0.0,
+            integral=old_state.integral if old_state else 0.0,
+            derivative=old_state.derivative if old_state else 0.0,
             duty_cycle=duty_cycle_value if duty_cycle_value is not None else 0.0,
         )
         if duty_cycle_value is not None

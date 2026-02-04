@@ -152,13 +152,13 @@ PID parameters control the temperature regulation algorithm for each zone. These
 
 The proportional gain determines the immediate response to temperature error. Higher values create stronger responses to temperature deviations.
 
-**How it works:** The proportional term is calculated as `p_term = kp × error`, where `error = setpoint - current_temperature`. If the room is 2°C below setpoint and `kp=50`, then `p_term = 50 × 2 = 100%` duty cycle (clamped to 100%).
+**How it works:** The proportional term is calculated as `proportional = kp × error`, where `error = setpoint - current_temperature`. If the room is 2°C below setpoint and `kp=50`, then `proportional = 50 × 2 = 100%` duty cycle (clamped to 100%).
 
 **Examples:**
-- Room at 20°C, setpoint 21°C, `kp=50`: `p_term = 50 × 1 = 50%` duty cycle.
-- Room at 19°C, setpoint 21°C, `kp=50`: `p_term = 50 × 2 = 100%` duty cycle.
-- Room at 20.5°C, setpoint 21°C, `kp=50`: `p_term = 50 × 0.5 = 25%` duty cycle.
-- Same conditions with `kp=100`: `p_term = 100 × 0.5 = 50%` duty cycle (more aggressive).
+- Room at 20°C, setpoint 21°C, `kp=50`: `proportional = 50 × 1 = 50%` duty cycle.
+- Room at 19°C, setpoint 21°C, `kp=50`: `proportional = 50 × 2 = 100%` duty cycle.
+- Room at 20.5°C, setpoint 21°C, `kp=50`: `proportional = 50 × 0.5 = 25%` duty cycle.
+- Same conditions with `kp=100`: `proportional = 100 × 0.5 = 50%` duty cycle (more aggressive).
 
 **Why it matters:** Too low results in slow temperature recovery. Too high causes oscillation around the setpoint. For hydronic heating with slow thermal response, 50.0 is a good starting point.
 
@@ -225,13 +225,13 @@ The time constant for the Exponential Moving Average (EMA) filter applied to tem
 
 The derivative gain responds to the rate of change of temperature error, providing damping against oscillations.
 
-**How it works:** The derivative term is calculated as `d_term = kd × (error - last_error) / dt`. If temperature is changing rapidly, the derivative term adjusts the output to slow the approach to setpoint.
+**How it works:** The derivative term is calculated as `derivative = kd × (error - last_error) / dt`. If temperature is changing rapidly, the derivative term adjusts the output to slow the approach to setpoint.
 
 **Examples:**
 - Error changed from 1.0°C to 0.5°C in 60 seconds, `kd=10`:
-  - `d_term = 10 × (0.5 - 1.0) / 60 = -0.083%` (negative because error is decreasing)
+  - `derivative = 10 × (0.5 - 1.0) / 60 = -0.083%` (negative because error is decreasing)
 - Error changed from 0.5°C to 2.0°C in 60 seconds, `kd=10`:
-  - `d_term = 10 × (2.0 - 0.5) / 60 = 0.25%` (positive because error is increasing)
+  - `derivative = 10 × (2.0 - 0.5) / 60 = 0.25%` (positive because error is increasing)
 
 **Why it matters:** Derivative control can reduce overshoot and oscillation in fast-responding systems. However, hydronic heating systems are very slow and derivative control often adds noise rather than improvement. The default `kd=0.0` disables derivative control, which is appropriate for most UFH systems.
 
