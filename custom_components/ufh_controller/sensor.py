@@ -14,7 +14,7 @@ from homeassistant.components.sensor import (
 from homeassistant.const import PERCENTAGE, UnitOfTemperature
 
 from .const import (
-    ICON_DUTY_CYCLE_THRESHOLDS,
+    ICON_GAUGE_THRESHOLDS,
     ICON_PID_ERROR_THRESHOLD,
     SUBENTRY_TYPE_ZONE,
     ZoneStatus,
@@ -46,15 +46,15 @@ def _pid_error_icon(value: float | None) -> str:
     return "mdi:thermometer-check"
 
 
-def _duty_cycle_icon(value: float | None) -> str:
-    """Return icon based on duty cycle value."""
+def _gauge_icon(value: float | None) -> str:
+    """Return gauge icon based on value."""
     if value is None:
         return "mdi:gauge-empty"
-    if value >= ICON_DUTY_CYCLE_THRESHOLDS[2]:
+    if value >= ICON_GAUGE_THRESHOLDS[2]:
         return "mdi:gauge-full"
-    if value >= ICON_DUTY_CYCLE_THRESHOLDS[1]:
+    if value >= ICON_GAUGE_THRESHOLDS[1]:
         return "mdi:gauge"
-    if value >= ICON_DUTY_CYCLE_THRESHOLDS[0]:
+    if value >= ICON_GAUGE_THRESHOLDS[0]:
         return "mdi:gauge-low"
     return "mdi:gauge-empty"
 
@@ -121,7 +121,7 @@ DUTY_CYCLE_SENSOR = UFHZoneSensorEntityDescription(
     state_class=SensorStateClass.MEASUREMENT,
     suggested_display_precision=1,
     value_fn=lambda data: data.get("duty_cycle"),
-    icon_fn=_duty_cycle_icon,
+    icon_fn=_gauge_icon,
 )
 
 SUPPLY_COEFFICIENT_SENSOR = UFHZoneSensorEntityDescription(
@@ -131,6 +131,7 @@ SUPPLY_COEFFICIENT_SENSOR = UFHZoneSensorEntityDescription(
     state_class=SensorStateClass.MEASUREMENT,
     suggested_display_precision=0,
     value_fn=lambda data: data.get("supply_coefficient"),
+    icon_fn=_gauge_icon,
 )
 
 # Controller-level sensor descriptions
