@@ -3,6 +3,7 @@
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -162,20 +163,20 @@ async def test_coordinator_save_state_format(
     assert "last_update_success_time" in saved_data
 
     # Verify full PID state is saved
-    assert saved_data["zones"]["zone1"]["pid_error"] == 1.5
-    assert saved_data["zones"]["zone1"]["pid_proportional"] == 25.0
-    assert saved_data["zones"]["zone1"]["pid_integral"] == 75.0
-    assert saved_data["zones"]["zone1"]["pid_derivative"] == 0.8
-    assert saved_data["zones"]["zone1"]["duty_cycle"] == 65.0
+    assert saved_data["zones"]["zone1"]["pid_error"] == pytest.approx(1.5)
+    assert saved_data["zones"]["zone1"]["pid_proportional"] == pytest.approx(25.0)
+    assert saved_data["zones"]["zone1"]["pid_integral"] == pytest.approx(75.0)
+    assert saved_data["zones"]["zone1"]["pid_derivative"] == pytest.approx(0.8)
+    assert saved_data["zones"]["zone1"]["duty_cycle"] == pytest.approx(65.0)
 
     # Verify EMA temperature is saved (V2 uses 'current' key)
-    assert saved_data["zones"]["zone1"]["current"] == 21.5
+    assert saved_data["zones"]["zone1"]["current"] == pytest.approx(21.5)
     # Verify display temperature is saved
-    assert saved_data["zones"]["zone1"]["display_temp"] == 21.5
+    assert saved_data["zones"]["zone1"]["display_temp"] == pytest.approx(21.5)
     # Verify preset_mode is saved
     assert saved_data["zones"]["zone1"]["preset_mode"] == "eco"
     # Verify used_duration is saved
-    assert saved_data["zones"]["zone1"]["used_duration"] == 1234.5
+    assert saved_data["zones"]["zone1"]["used_duration"] == pytest.approx(1234.5)
 
 
 async def test_coordinator_handles_invalid_timestamp_format(
