@@ -21,6 +21,7 @@ The Home Assistant thermostat ecosystem has excellent options for TRVs ([Better 
 | **EMS-ESP boiler integration** | Manual automations required | Native summer mode, DHW detection |
 | **Heat accounting** | Not supported | Supply temperature weighted quota allocation |
 | **DHW priority handling** | Not supported | Blocks new heating during DHW, captures latent heat |
+| **Weather compensation** | Manual automations or none | Built-in heating curve from outdoor sensor |
 | **UFH thermal response** | Adapted from radiator/TRV logic | Native PID tuned for slow thermal mass |
 
 ## Key Differentiators
@@ -52,6 +53,16 @@ Multi-zone systems need fair quota allocation. Simply tracking valve-open time p
 - **Automatic fallback** - Works with simple time-based tracking if no sensor configured
 
 See [Heat Accounting](docs/heat_accounting.md) for detailed documentation.
+
+### Weather Compensation
+
+The controller supports outdoor temperature compensation via a configurable heating curve:
+
+- **Heating curve** - Two-point interpolation adjusts supply target based on outdoor conditions
+- **Automatic adaptation** - Warmer weather lowers the supply target, reducing energy use
+- **Sensor fallback** - Reverts to fixed supply target if outdoor sensor becomes unavailable
+
+See [Heating Curve](docs/heating_curve.md) for detailed documentation.
 
 ### EMS-ESP Integration
 
@@ -87,6 +98,7 @@ Sensor failures in one zone don't bring down your heating:
   - Valve switch per zone
   - (Optional) Boiler heat request switch or summer mode control
   - (Optional) DHW active sensor for latent heat capture
+  - (Optional) Outdoor temperature sensor for weather compensation
   - (Optional) Window/door sensors (pauses PID integration, prevents integral windup)
   - (Optional) Supply temperature sensor for heat accounting
 
@@ -129,6 +141,7 @@ Sensor failures in one zone don't bring down your heating:
 - **[Control Algorithm](docs/control_algorithm.md)** - PID controller and scheduling details
 - **[Fault Isolation](docs/fault_isolation.md)** - How zone failures are handled
 - **[Heat Accounting](docs/heat_accounting.md)** - Fair quota allocation with supply temperature weighting
+- **[Heating Curve](docs/heating_curve.md)** - Outdoor temperature compensation via heating curve
 - **[Configuration](docs/configuration.md)** - All parameters explained
 - **[Tasmota Relay Configuration](docs/tasmota.md)** - Setting up Tasmota-controlled relay boards
 
