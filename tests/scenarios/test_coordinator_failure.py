@@ -462,7 +462,7 @@ class TestZoneIsolation:
         zone2.state.zone_status = ZoneStatus.FAIL_SAFE
 
         # Update controller status
-        coordinator._update_controller_status()
+        coordinator._update_controller_status(datetime.now(UTC))
 
         # Controller should be degraded, NOT fail-safe
         assert coordinator.status == ControllerStatus.DEGRADED
@@ -488,7 +488,7 @@ class TestZoneIsolation:
         zone2.state.zone_status = ZoneStatus.FAIL_SAFE
 
         # Update controller status
-        coordinator._update_controller_status()
+        coordinator._update_controller_status(datetime.now(UTC))
 
         # NOW controller should be in fail-safe
         assert coordinator.status == ControllerStatus.FAIL_SAFE
