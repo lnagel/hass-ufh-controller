@@ -170,8 +170,11 @@ class UFHControllerDataUpdateCoordinator(
         # Track listener unsubscribe callback for re-setup on config reload
         self._listener_unsub: Callable[[], None] | None = None
 
-        # Track entities that haven't reported a valid state yet during init
+        # Track entities that haven't reported a valid state
         self._pending_entities: set[str] = set()
+
+        # Track coordinator start
+        self._started_at: datetime = datetime.now(UTC)
 
     def _build_controller(self, entry: UFHControllerConfigEntry) -> HeatingController:
         """Build HeatingController from config entry."""
@@ -345,20 +348,14 @@ class UFHControllerDataUpdateCoordinator(
         if not entity_ids:
             return
 
+        # Track pending entities
+        self._pending_entities = set(entity_ids)
+
         # Subscribe to state changes
         self._listener_unsub = async_track_state_change_event(
             self.hass, entity_ids, self._on_external_entity_change
         )
         LOGGER.debug("Subscribed to state changes for entities: %s", entity_ids)
-
-        # During initialization, track which entities haven't reported valid state
-        if self._status == ControllerStatus.INITIALIZING:
-            self._pending_entities = set(entity_ids)
-            LOGGER.debug(
-                "Waiting for %d entities to report valid state: %s",
-                len(self._pending_entities),
-                self._pending_entities,
-            )
 
     @callback
     def shutdown(self) -> None:
@@ -385,17 +382,11 @@ class UFHControllerDataUpdateCoordinator(
             return
 
         # Track entity readiness for initialization
-        if (
-            entity_id in self._pending_entities
-            and new_state.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN)
+        if entity_id in self._pending_entities and new_state.state not in (
+            STATE_UNAVAILABLE,
+            STATE_UNKNOWN,
         ):
             self._pending_entities.discard(entity_id)
-            LOGGER.debug(
-                "Entity %s now available (%s), %d entities still pending",
-                entity_id,
-                new_state.state,
-                len(self._pending_entities),
-            )
 
         # Check if this state change matches what we expected (self-initiated change)
         expected = self._expected_states.get(entity_id)
@@ -554,6 +545,14 @@ class UFHControllerDataUpdateCoordinator(
         # Handle observation period transition
         force_update = self._handle_observation_period_transition(now)
 
+        # Check current state of pending entities
+        self._pending_entities = {
+            eid
+            for eid in self._pending_entities
+            if (state := self.hass.states.get(eid)) is None
+            or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN)
+        }
+
         # Check DHW active state
         await self._update_dhw_state()
 
@@ -566,30 +565,8 @@ class UFHControllerDataUpdateCoordinator(
 
         previous_status = self._status
 
-        # Update controller status from zone statuses
-        self._update_controller_status_from_zones()
-
-        # Defer transition out of INITIALIZING while entities haven't reported yet
-        if self._pending_entities:
-            # Check current state of remaining entities in case the listener
-            # didn't fire (e.g. entity already had a valid state at setup)
-            self._pending_entities = {
-                eid
-                for eid in self._pending_entities
-                if (state := self.hass.states.get(eid)) is None
-                or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN)
-            }
-        if self._pending_entities:
-            if self._last_force_update is not None:
-                elapsed = (now - self._last_force_update).total_seconds()
-                if elapsed > INITIALIZING_TIMEOUT:
-                    LOGGER.warning(
-                        "Timed out waiting for entities to report valid state: %s",
-                        self._pending_entities,
-                    )
-                    self._pending_entities.clear()
-            if self._pending_entities and self._status != ControllerStatus.FAIL_SAFE:
-                self._status = ControllerStatus.INITIALIZING
+        # Update controller status from pending entities and zone statuses
+        self._update_controller_status(now)
 
         # Detect initialization finished
         if (
@@ -940,8 +917,20 @@ class UFHControllerDataUpdateCoordinator(
         elif result.transition == ZoneStatusTransition.RECOVERED:
             LOGGER.info("Zone %s recovered to normal operation", zone_id)
 
-    def _update_controller_status_from_zones(self) -> None:
+    def _update_controller_status(self, now: datetime) -> None:
         """Update controller status based on zone statuses."""
+
+        # Defer transition out of INITIALIZING while entities haven't reported yet
+        if self._status == ControllerStatus.INITIALIZING and self._pending_entities:
+            elapsed = (now - self._started_at).total_seconds()
+            if elapsed < INITIALIZING_TIMEOUT:
+                return  # remain INITIALIZING
+
+            LOGGER.warning(
+                "Timed out waiting for entities to report valid state: %s",
+                self._pending_entities,
+            )
+
         zone_statuses = [
             self._controller.get_zone_runtime(zone_id).state.zone_status
             for zone_id in self._controller.zone_ids
