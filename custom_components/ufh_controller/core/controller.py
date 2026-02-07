@@ -224,15 +224,19 @@ class HeatingController:
         Set outdoor temperature and recalculate supply target.
 
         Called once per update cycle, before zone evaluation.
+        When outdoor_temp is None (sensor not yet loaded or unavailable),
+        the previous supply_target_temp is preserved to avoid reverting
+        to the default fallback during initialization.
 
         Args:
             outdoor_temp: Current outdoor temperature, or None if unavailable.
 
         """
         self._state.outdoor_temp = outdoor_temp
-        self._state.supply_target_temp = calculate_supply_target(
-            self.config.heating_curve, outdoor_temp
-        )
+        if outdoor_temp is not None:
+            self._state.supply_target_temp = calculate_supply_target(
+                self.config.heating_curve, outdoor_temp
+            )
 
     # -------------------------------------------------------------------------
     # Mode-specific evaluation functions

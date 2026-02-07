@@ -133,7 +133,8 @@ class TestCoordinatorReadsOutdoorSensor:
         await hass.async_block_till_done()
 
         assert controller.state.outdoor_temp is None
-        assert controller.state.supply_target_temp == DEFAULT_SUPPLY_TARGET_TEMP
+        # supply_target_temp preserves previous value (None at init)
+        assert controller.state.supply_target_temp is None
 
     async def test_no_outdoor_entity_configured_uses_fallback(
         self,
@@ -150,7 +151,8 @@ class TestCoordinatorReadsOutdoorSensor:
         await hass.async_block_till_done()
 
         assert controller.state.outdoor_temp is None
-        assert controller.state.supply_target_temp == DEFAULT_SUPPLY_TARGET_TEMP
+        # No outdoor entity → outdoor_temp always None → supply_target stays None
+        assert controller.state.supply_target_temp is None
 
 
 class TestSupplyTargetSensorEntity:
@@ -234,7 +236,7 @@ class TestOutdoorSensorStateChanges:
         hass: HomeAssistant,
         mock_config_entry_with_heating_curve: MockConfigEntry,
     ) -> None:
-        """When outdoor sensor becomes unavailable, falls back to fixed target."""
+        """When outdoor sensor becomes unavailable, preserves last supply target."""
         await _setup_entry(hass, mock_config_entry_with_heating_curve, "5.0")
 
         coordinator = mock_config_entry_with_heating_curve.runtime_data.coordinator
@@ -244,7 +246,8 @@ class TestOutdoorSensorStateChanges:
         await hass.async_block_till_done()
 
         assert controller.state.outdoor_temp == 5.0
-        assert controller.state.supply_target_temp != DEFAULT_SUPPLY_TARGET_TEMP
+        previous_target = controller.state.supply_target_temp
+        assert previous_target != DEFAULT_SUPPLY_TARGET_TEMP
 
         # Make sensor unavailable
         hass.states.async_set("sensor.outdoor_temp", "unavailable")
@@ -252,7 +255,8 @@ class TestOutdoorSensorStateChanges:
         await hass.async_block_till_done()
 
         assert controller.state.outdoor_temp is None
-        assert controller.state.supply_target_temp == DEFAULT_SUPPLY_TARGET_TEMP
+        # Last known good supply target is preserved
+        assert controller.state.supply_target_temp == previous_target
 
 
 class TestSupplyCoefficientIntegration:
