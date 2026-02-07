@@ -24,6 +24,7 @@ from custom_components.ufh_controller.const import (
 from .heating_curve import HeatingCurveConfig, calculate_supply_target
 from .history import get_observation_start
 from .pid import PIDController
+from .scheduler import apply_flow_constraint
 from .zone import (
     CircuitType,
     ZoneAction,
@@ -67,6 +68,8 @@ class ControllerConfig:
     summer_mode_entity: str | None = None
     supply_temp_entity: str | None = None
     outdoor_temp_entity: str | None = None
+    optimal_flow_rate_min: float | None = None
+    optimal_flow_rate_max: float | None = None
     heating_curve: HeatingCurveConfig = field(default_factory=HeatingCurveConfig)
     timing: TimingConfig = field(default_factory=TimingConfig)
     zones: list[ZoneConfig] = field(default_factory=list)
@@ -441,7 +444,7 @@ class HeatingController:
             now=now,
         )
 
-        # Phase 3: Evaluate flush zones with explicit flush_request parameter
+        # Phase 3: Evaluate flush zones
         for zone_id, runtime in self._zones.items():
             if runtime.config.circuit_type == CircuitType.FLUSH:
                 valve_actions[zone_id] = evaluate_zone(
@@ -450,6 +453,14 @@ class HeatingController:
                     self.config.timing,
                     flush_request=flush_request,
                 )
+
+        # Phase 4: Apply flow constraint to ALL zones together
+        if self.config.optimal_flow_rate_max is not None:
+            valve_actions = apply_flow_constraint(
+                desired_actions=valve_actions,
+                zones=self._zones,
+                max_flow_rate=self.config.optimal_flow_rate_max,
+            )
 
         # Pump request: any zone with confirmed flow
         pump_request = any(rt.state.flow for rt in self._zones.values())
@@ -464,6 +475,17 @@ class HeatingController:
             rd > self.config.timing.closing_warning_duration
             for rd in remaining_durations.values()
         )
+
+        # Flow minimum gating: suppress heat request when aggregate flow is
+        # below the configured minimum (latent heat mode)
+        if heat_request and self.config.optimal_flow_rate_min is not None:
+            total_active_flow = sum(
+                rt.config.nominal_flow_rate
+                for rt in self._zones.values()
+                if rt.state.flow and rt.config.nominal_flow_rate is not None
+            )
+            if total_active_flow < self.config.optimal_flow_rate_min:
+                heat_request = False
 
         return ControllerActions(
             valve_actions=valve_actions,

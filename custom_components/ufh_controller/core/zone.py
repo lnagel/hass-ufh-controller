@@ -145,6 +145,7 @@ class ZoneConfig:
     integral_min: float = DEFAULT_PID["integral_min"]
     integral_max: float = DEFAULT_PID["integral_max"]
     temp_ema_time_constant: int = DEFAULT_TEMP_EMA_TIME_CONSTANT
+    nominal_flow_rate: float | None = None
 
 
 class ZoneRuntime:
