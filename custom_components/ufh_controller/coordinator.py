@@ -31,6 +31,7 @@ from .const import (
     DEFAULT_TEMP_EMA_TIME_CONSTANT,
     DEFAULT_TIMING,
     DOMAIN,
+    INITIALIZING_TIMEOUT,
     INITIALIZING_UPDATE_INTERVAL,
     LOGGER,
     SUBENTRY_TYPE_CONTROLLER,
@@ -162,6 +163,11 @@ class UFHControllerDataUpdateCoordinator(
 
         # Track listener unsubscribe callback for re-setup on config reload
         self._listener_unsub: Callable[[], None] | None = None
+
+        # Outdoor temperature initialization tracking
+        self._outdoor_temp_received: bool = False
+        self._outdoor_temp_init_timed_out: bool = False
+        self._init_start: datetime | None = None
 
     def _build_controller(self, entry: UFHControllerConfigEntry) -> HeatingController:
         """Build HeatingController from config entry."""
@@ -503,6 +509,11 @@ class UFHControllerDataUpdateCoordinator(
             await self.async_load_stored_state()
 
         now = datetime.now(UTC)
+
+        # Record init start time on first update
+        if self._init_start is None:
+            self._init_start = now
+
         timing = self._controller.config.timing
 
         if self.last_update_success_time is not None:
@@ -536,6 +547,9 @@ class UFHControllerDataUpdateCoordinator(
 
         # Update controller status from zone statuses
         self._update_controller_status_from_zones()
+
+        # Factor in outdoor temperature availability
+        self._update_status_for_outdoor_temp(now)
 
         # Detect initialization finished
         if (
@@ -687,6 +701,14 @@ class UFHControllerDataUpdateCoordinator(
         """
         outdoor_temp = self._get_outdoor_temp()
         curve_config = self._controller.config.heating_curve
+
+        # Track first successful outdoor temp reading
+        if outdoor_temp is not None:
+            if not self._outdoor_temp_received:
+                LOGGER.info(
+                    "Outdoor temperature sensor available: %.1f°C", outdoor_temp
+                )
+            self._outdoor_temp_received = True
 
         # Log warning for invalid curve configuration
         if outdoor_temp is not None and not curve_config.is_valid():
@@ -933,6 +955,62 @@ class UFHControllerDataUpdateCoordinator(
             # Mix of degraded and fail-safe, but no normal or initializing
             self._status = ControllerStatus.DEGRADED
 
+    def _is_outdoor_temp_configured(self) -> bool:
+        """Check if an outdoor temperature sensor is configured."""
+        return self._controller.config.outdoor_temp_entity is not None
+
+    def _is_outdoor_temp_unavailable(self) -> bool:
+        """Check if outdoor temp sensor is configured but value is unavailable."""
+        return (
+            self._is_outdoor_temp_configured()
+            and self._controller.state.outdoor_temp is None
+        )
+
+    def _update_status_for_outdoor_temp(self, now: datetime) -> None:
+        """
+        Update controller status based on outdoor temperature availability.
+
+        If an outdoor temperature sensor is configured, the controller waits
+        for it during initialization (up to INITIALIZING_TIMEOUT). After the
+        timeout, the controller proceeds with the fallback supply target but
+        reports DEGRADED status.
+
+        This must be called after _update_controller_status_from_zones().
+        """
+        if not self._is_outdoor_temp_configured():
+            return
+
+        if not self._is_outdoor_temp_unavailable():
+            return
+
+        # Outdoor temp sensor is configured but value is unavailable
+        if self._init_start is not None and not self._outdoor_temp_received:
+            elapsed = (now - self._init_start).total_seconds()
+            if elapsed <= INITIALIZING_TIMEOUT:
+                # Still within init timeout - wait for outdoor temp
+                if self._status in (
+                    ControllerStatus.INITIALIZING,
+                    ControllerStatus.NORMAL,
+                ):
+                    self._status = ControllerStatus.INITIALIZING
+                return
+
+            # Past init timeout and never received - log warning once
+            if not self._outdoor_temp_init_timed_out:
+                self._outdoor_temp_init_timed_out = True
+                LOGGER.warning(
+                    "Outdoor temperature sensor %s unavailable after %ds "
+                    "initialization timeout, proceeding with fallback "
+                    "supply target temperature",
+                    self._controller.config.outdoor_temp_entity,
+                    INITIALIZING_TIMEOUT,
+                )
+
+        # Outdoor temp unavailable (either never received after timeout,
+        # or was received before but now lost) - report DEGRADED
+        if self._status in (ControllerStatus.NORMAL, ControllerStatus.INITIALIZING):
+            self._status = ControllerStatus.DEGRADED
+
     def _any_zone_in_fail_safe(self) -> bool:
         """Check if any zone is in fail-safe mode."""
         return any(
@@ -1110,6 +1188,7 @@ class UFHControllerDataUpdateCoordinator(
                 "status": self._status.value,
                 "zones_degraded": zones_degraded,
                 "zones_fail_safe": zones_fail_safe,
+                "outdoor_temp_unavailable": self._is_outdoor_temp_unavailable(),
                 "flush_enabled": self._controller.state.flush_enabled,
                 "dhw_active": self._controller.state.dhw_active,
                 "flush_until": self._controller.state.flush_until,
@@ -1212,6 +1291,11 @@ class UFHControllerDataUpdateCoordinator(
 
         # Rebuild controller with updated config
         self._controller = self._build_controller(self.config_entry)
+
+        # Reset outdoor temp init tracking for the new config
+        self._outdoor_temp_received = False
+        self._outdoor_temp_init_timed_out = False
+        self._init_start = None
 
         # Restore controller-level state using existing method (V2 format)
         controller_data = saved_state.get("controller", {})

@@ -44,7 +44,7 @@ See [Configuration](configuration.md#heat-accounting) for detailed parameter doc
 
 **Without outdoor sensor configured:** The system uses the fixed `supply_target_temp` value (default 40°C).
 
-**With outdoor sensor configured:** The system calculates a dynamic supply target using the heating curve formula. If the outdoor sensor becomes unavailable at runtime, the system falls back to `supply_target_temp`.
+**With outdoor sensor configured:** The system calculates a dynamic supply target using the heating curve formula. During startup, the controller waits up to 2 minutes for the outdoor sensor to become available. If the sensor remains unavailable after the timeout, the system proceeds with the fallback `supply_target_temp` and reports degraded status. If the outdoor sensor becomes unavailable during normal operation, the system similarly falls back to `supply_target_temp` and reports degraded status. See [Fault Isolation](fault_isolation.md#outdoor-temperature-initialization) for details.
 
 **Invalid configuration:** If `outdoor_temp_warm` is not greater than `outdoor_temp_cold`, a warning is logged and the system uses `supply_target_temp` as fallback.
 

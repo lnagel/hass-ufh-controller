@@ -29,14 +29,31 @@ Each zone tracks its own operational status:
 | 6 of 7 zones fail | 1 zone continues operating |
 | All zones fail | Controller enters fail-safe |
 
+## Outdoor Temperature Initialization
+
+When an outdoor temperature sensor is configured, the controller waits for it during initialization:
+
+| Phase | Outdoor Temp Available | Controller Behavior |
+|-------|----------------------|---------------------|
+| Init (< 2 min) | No | Stays in `initializing`, waits for sensor |
+| Init (< 2 min) | Yes | Proceeds normally |
+| Post-init (> 2 min) | No | Proceeds with fallback supply target, reports `degraded` |
+| Normal operation | Lost | Falls back to fixed supply target, reports `degraded` |
+| Normal operation | Available | Normal operation |
+
+This mirrors the zone initialization pattern: wait for required sensor data during startup, fall back gracefully if unavailable after timeout.
+
+The `outdoor_temp_unavailable` attribute on the status binary sensor indicates when the outdoor sensor is configured but its value is not available.
+
 ## Controller Status
 
-Derived from zone statuses:
+Derived from zone statuses and outdoor temperature availability:
 
 | Condition | Controller Status |
 |-----------|-------------------|
-| All zones normal | `normal` |
+| All zones normal, outdoor temp OK | `normal` |
 | Some zones failing, at least one normal | `degraded` |
+| Outdoor temp configured but unavailable (post-init) | `degraded` |
 | All zones in fail-safe | `fail_safe` |
 
 The `binary_sensor.{controller_id}_status` entity shows `on` (problem) when degraded or fail-safe.
