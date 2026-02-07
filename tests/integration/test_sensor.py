@@ -90,29 +90,29 @@ async def test_pid_derivative_sensor_created(
     assert state is not None
 
 
-async def test_flowing_zones_sensor_created(
+async def test_zones_flowing_sensor_created(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
 ) -> None:
-    """Test flowing zones sensor is created on setup."""
+    """Test zones flowing sensor is created on setup."""
     mock_config_entry.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
 
-    state = hass.states.get("sensor.test_controller_flowing_zones")
+    state = hass.states.get("sensor.test_controller_zones_flowing")
     assert state is not None
 
 
-async def test_heating_zones_sensor_created(
+async def test_zones_heating_sensor_created(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
 ) -> None:
-    """Test heating zones sensor is created on setup."""
+    """Test zones heating sensor is created on setup."""
     mock_config_entry.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
 
-    state = hass.states.get("sensor.test_controller_heating_zones")
+    state = hass.states.get("sensor.test_controller_zones_heating")
     assert state is not None
 
 
@@ -125,7 +125,7 @@ async def test_sensor_count_with_zone(
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
 
-    # 5 zone sensors + 2 controller sensors (flowing_zones, heating_zones) = 7 total
+    # 5 zone sensors + 2 controller sensors (zones_flowing, zones_heating) = 7 total
     states = hass.states.async_entity_ids(SENSOR_DOMAIN)
     assert len(states) == 7
 
@@ -139,7 +139,7 @@ async def test_no_zone_sensors_without_zones(
     await hass.config_entries.async_setup(mock_config_entry_no_zones.entry_id)
     await hass.async_block_till_done()
 
-    # Only controller sensors (flowing_zones, heating_zones) should exist
+    # Only controller sensors (zones_flowing, zones_heating) should exist
     states = hass.states.async_entity_ids(SENSOR_DOMAIN)
     assert len(states) == 2
 
