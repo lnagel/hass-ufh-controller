@@ -115,6 +115,13 @@ class ZoneState:
     last_successful_update: datetime | None = None
     consecutive_failures: int = 0
 
+    @property
+    def remaining_duration(self) -> float:
+        """Remaining quota duration in seconds, zero if disabled."""
+        if self.enabled:
+            return max(0.0, self.requested_duration - self.used_duration)
+        return 0.0
+
 
 @dataclass
 class ZoneConfig:
@@ -528,38 +535,3 @@ def evaluate_zone(  # noqa: PLR0911
 
     # Zone has met its quota
     return ZoneAction.STAY_OFF if valve_off else ZoneAction.TURN_OFF
-
-
-def should_request_heat(
-    zone: ZoneState,
-    timing: TimingConfig,
-) -> bool:
-    """
-    Determine if a zone should contribute to heat request.
-
-    Heat is only requested when the valve is confirmed open and has been
-    open long enough to be fully open. When valve state is unknown or
-    unavailable, heat is NOT requested (conservative approach).
-
-    Args:
-        zone: Current zone state.
-        timing: Timing parameters.
-
-    Returns:
-        True if zone should request heat from boiler.
-
-    """
-    # Only request heat when valve state is confirmed ON
-    if zone.valve_state != ValveState.ON:
-        return False
-
-    if not zone.enabled:
-        return False
-
-    # Wait for valve to fully open
-    if not zone.flow:
-        return False
-
-    # Don't request if zone is about to close
-    remaining_quota = zone.requested_duration - zone.used_duration
-    return remaining_quota >= timing.closing_warning_duration

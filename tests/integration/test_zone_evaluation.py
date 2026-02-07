@@ -9,7 +9,6 @@ from custom_components.ufh_controller.core.zone import (
     ZoneAction,
     ZoneState,
     evaluate_zone,
-    should_request_heat,
 )
 
 
@@ -500,67 +499,3 @@ class TestEvaluateZoneDHWBlocking:
         result = evaluate_zone(zone, controller, timing)
         # Valve should turn off - quota exhaustion takes precedence
         assert result == ZoneAction.TURN_OFF
-
-
-class TestShouldRequestHeat:
-    """Test cases for should_request_heat."""
-
-    @pytest.fixture
-    def timing(self) -> TimingConfig:
-        """Create timing config."""
-        return TimingConfig(closing_warning_duration=240)
-
-    def test_valve_off_no_request(self, timing: TimingConfig) -> None:
-        """Valve off doesn't request heat."""
-        zone = ZoneState(zone_id="test", valve_state=ValveState.OFF)
-        result = should_request_heat(zone, timing)
-        assert result is False
-
-    def test_disabled_zone_no_request(self, timing: TimingConfig) -> None:
-        """Disabled zone doesn't request heat."""
-        zone = ZoneState(
-            zone_id="test",
-            valve_state=ValveState.ON,
-            enabled=False,
-            open_state_avg=1.0,
-            requested_duration=1000.0,
-        )
-        result = should_request_heat(zone, timing)
-        assert result is False
-
-    def test_valve_not_fully_open_no_request(self, timing: TimingConfig) -> None:
-        """Valve not fully open doesn't request heat."""
-        zone = ZoneState(
-            zone_id="test",
-            valve_state=ValveState.ON,
-            open_state_avg=0.50,  # Below 85% threshold
-            requested_duration=1000.0,
-            used_duration=0.0,
-        )
-        result = should_request_heat(zone, timing)
-        assert result is False
-
-    def test_valve_about_to_close_no_request(self, timing: TimingConfig) -> None:
-        """Valve about to close doesn't request heat."""
-        zone = ZoneState(
-            zone_id="test",
-            valve_state=ValveState.ON,
-            open_state_avg=1.0,
-            requested_duration=1000.0,
-            used_duration=900.0,  # Only 100 remaining, less than 240 warning
-        )
-        result = should_request_heat(zone, timing)
-        assert result is False
-
-    def test_valve_fully_open_requests_heat(self, timing: TimingConfig) -> None:
-        """Valve fully open with quota requests heat."""
-        zone = ZoneState(
-            zone_id="test",
-            valve_state=ValveState.ON,
-            open_state_avg=0.90,  # Above 85% threshold
-            flow=True,  # Derived from open_state_avg >= 0.85
-            requested_duration=1000.0,
-            used_duration=0.0,
-        )
-        result = should_request_heat(zone, timing)
-        assert result is True

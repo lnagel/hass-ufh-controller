@@ -27,7 +27,6 @@ from .zone import (
     ZoneRuntime,
     ZoneState,
     evaluate_zone,
-    should_request_heat,
 )
 
 
@@ -382,9 +381,14 @@ class HeatingController:
                 )
 
         # Aggregate heat request from per-zone decisions
+        remaining_durations = {
+            zone_id: rt.state.remaining_duration
+            for zone_id, rt in self._zones.items()
+            if rt.state.flow
+        }
         heat_request = any(
-            should_request_heat(rt.state, self.config.timing)
-            for rt in self._zones.values()
+            rd > self.config.timing.closing_warning_duration
+            for rd in remaining_durations.values()
         )
 
         return ControllerActions(

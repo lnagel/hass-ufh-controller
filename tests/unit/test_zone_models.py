@@ -173,6 +173,46 @@ class TestZoneState:
         assert zone.circuit_type == CircuitType.FLUSH
 
 
+class TestRemainingDuration:
+    """Test ZoneState.remaining_duration property."""
+
+    def test_disabled(self) -> None:
+        """Disabled zone returns zero."""
+        zone = ZoneState(
+            enabled=False, zone_id="test", requested_duration=1000.0, used_duration=0.0
+        )
+        assert zone.remaining_duration == 0.0
+
+    def test_zero_quota(self) -> None:
+        """Zero requested and used returns zero."""
+        zone = ZoneState(zone_id="test")
+        assert zone.remaining_duration == 0.0
+
+    def test_full_quota_remaining(self) -> None:
+        """Returns full requested when nothing used."""
+        zone = ZoneState(zone_id="test", requested_duration=1000.0, used_duration=0.0)
+        assert zone.remaining_duration == 1000.0
+
+    def test_partial_quota_remaining(self) -> None:
+        """Returns correct remaining when partially used."""
+        zone = ZoneState(zone_id="test", requested_duration=1000.0, used_duration=900.0)
+        assert zone.remaining_duration == 100.0
+
+    def test_quota_exhausted(self) -> None:
+        """Returns zero when quota fully used."""
+        zone = ZoneState(
+            zone_id="test", requested_duration=1000.0, used_duration=1000.0
+        )
+        assert zone.remaining_duration == 0.0
+
+    def test_overused_returns_zero(self) -> None:
+        """Returns zero (not negative) when used exceeds requested."""
+        zone = ZoneState(
+            zone_id="test", requested_duration=1000.0, used_duration=1100.0
+        )
+        assert zone.remaining_duration == 0.0
+
+
 class TestControllerState:
     """Test ControllerState dataclass."""
 

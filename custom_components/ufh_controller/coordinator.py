@@ -53,7 +53,6 @@ from .core.zone import (
     ZoneAction,
     ZoneConfig,
     ZoneStatusTransition,
-    should_request_heat,
 )
 from .recorder import get_state_average, was_any_window_open_recently
 
@@ -1107,14 +1106,8 @@ class UFHControllerDataUpdateCoordinator(
         zones_degraded = sum(1 for s in zone_statuses if s == ZoneStatus.DEGRADED)
         zones_fail_safe = sum(1 for s in zone_statuses if s == ZoneStatus.FAIL_SAFE)
 
-        # Count zones requesting heat via per-zone evaluation
-        timing = self._controller.config.timing
-        requesting_zones = sum(
-            should_request_heat(
-                self._controller.get_zone_runtime(zone_id).state, timing
-            )
-            for zone_id in self._controller.zone_ids
-        )
+        # Count zones requesting heat
+        requesting_zones = sum(rt.state.heat for rt in self._controller.zone_runtimes)
 
         result: dict[str, Any] = {
             "controller": {
