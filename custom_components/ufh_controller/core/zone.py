@@ -97,7 +97,7 @@ class ZoneState:
     # Historical averages from Recorder queries
     open_state_avg: float = 0.0
     flow: bool = False
-    heat: bool = False  # Derived: flow=True AND supply coefficient > 10%
+    heat: bool = False
     window: bool = False
 
     # Derived scheduling values
