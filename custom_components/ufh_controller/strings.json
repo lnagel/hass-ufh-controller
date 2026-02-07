@@ -250,6 +250,9 @@
       "flow": {
         "name": "Flow"
       },
+      "heat": {
+        "name": "Heat"
+      },
       "status": {
         "name": "Status",
         "state_attributes": {

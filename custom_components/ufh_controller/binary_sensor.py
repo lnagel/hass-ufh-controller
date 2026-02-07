@@ -58,6 +58,12 @@ ZONE_BINARY_SENSORS: tuple[UFHZoneBinarySensorEntityDescription, ...] = (
         device_class=BinarySensorDeviceClass.RUNNING,
         value_fn=lambda data: data.get("flow"),
     ),
+    UFHZoneBinarySensorEntityDescription(
+        key="heat",
+        translation_key="heat",
+        device_class=BinarySensorDeviceClass.HEAT,
+        value_fn=lambda data: data.get("heat"),
+    ),
 )
 
 

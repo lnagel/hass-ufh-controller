@@ -51,8 +51,8 @@ Each zone gets its own device named after the zone (user-defined). The valve swi
 | sensor | `sensor.{controller_id}_{zone_id}_pid_integral` | "{zone_name} PID Integral" | Integral term (Ki * accumulated error) |
 | sensor | `sensor.{controller_id}_{zone_id}_pid_derivative` | "{zone_name} PID Derivative" | Derivative term (Kd * rate of change) |
 | binary_sensor | `binary_sensor.{controller_id}_{zone_id}_blocked` | "{zone_name} Blocked" | Zone PID control paused (window was recently open) |
-| binary_sensor | `binary_sensor.{controller_id}_{zone_id}_heat_request` | "{zone_name} Heat Request" | Zone is contributing to heat request |
 | binary_sensor | `binary_sensor.{controller_id}_{zone_id}_flow` | "{zone_name} Flow" | Water actively flowing through zone |
+| binary_sensor | `binary_sensor.{controller_id}_{zone_id}_heat` | "{zone_name} Heat" | Zone is actively receiving useful heat |
 | sensor | `sensor.{controller_id}_{zone_id}_supply_coefficient` | "{zone_name} Supply Coefficient" | Quota consumption rate relative to design conditions |
 
 ### Climate Entity Details

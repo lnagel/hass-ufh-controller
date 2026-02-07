@@ -250,6 +250,9 @@
       "flow": {
         "name": "Flow"
       },
+      "heat": {
+        "name": "Heat"
+      },
       "flush_request": {
         "name": "Flush Request"
       },

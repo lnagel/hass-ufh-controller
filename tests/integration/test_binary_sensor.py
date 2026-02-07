@@ -88,6 +88,22 @@ async def test_zone_blocked_binary_sensor_created(
     assert state.state == "off"
 
 
+async def test_zone_heat_binary_sensor_created(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_temp_sensor: None,
+) -> None:
+    """Test zone heat binary sensor is created on setup."""
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get("binary_sensor.test_zone_1_heat")
+    assert state is not None
+    # Zone should not be heating by default
+    assert state.state == "off"
+
+
 async def test_controller_heat_request_binary_sensor_created(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
