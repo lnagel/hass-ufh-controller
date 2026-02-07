@@ -353,18 +353,12 @@ class UFHControllerDataUpdateCoordinator(
 
         # During initialization, track which entities haven't reported valid state
         if self._status == ControllerStatus.INITIALIZING:
-            self._pending_entities = {
-                eid
-                for eid in entity_ids
-                if (state := self.hass.states.get(eid)) is None
-                or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN)
-            }
-            if self._pending_entities:
-                LOGGER.debug(
-                    "Waiting for %d entities to report valid state: %s",
-                    len(self._pending_entities),
-                    self._pending_entities,
-                )
+            self._pending_entities = set(entity_ids)
+            LOGGER.debug(
+                "Waiting for %d entities to report valid state: %s",
+                len(self._pending_entities),
+                self._pending_entities,
+            )
 
     @callback
     def shutdown(self) -> None:
@@ -576,6 +570,15 @@ class UFHControllerDataUpdateCoordinator(
         self._update_controller_status_from_zones()
 
         # Defer transition out of INITIALIZING while entities haven't reported yet
+        if self._pending_entities:
+            # Check current state of remaining entities in case the listener
+            # didn't fire (e.g. entity already had a valid state at setup)
+            self._pending_entities = {
+                eid
+                for eid in self._pending_entities
+                if (state := self.hass.states.get(eid)) is None
+                or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN)
+            }
         if self._pending_entities:
             if self._last_force_update is not None:
                 elapsed = (now - self._last_force_update).total_seconds()
