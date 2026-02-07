@@ -79,7 +79,6 @@ def _status_attrs(data: dict[str, Any]) -> dict[str, Any]:
         "status": data.get("status"),
         "zones_degraded": data.get("zones_degraded"),
         "zones_fail_safe": data.get("zones_fail_safe"),
-        "outdoor_temp_unavailable": data.get("outdoor_temp_unavailable"),
     }
 
 

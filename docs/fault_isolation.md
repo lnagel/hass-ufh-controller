@@ -31,19 +31,7 @@ Each zone tracks its own operational status:
 
 ## Outdoor Temperature Initialization
 
-When an outdoor temperature sensor is configured, the controller waits for it during initialization:
-
-| Phase | Outdoor Temp Available | Controller Behavior |
-|-------|----------------------|---------------------|
-| Init (< 2 min) | No | Stays in `initializing`, waits for sensor |
-| Init (< 2 min) | Yes | Proceeds normally |
-| Post-init (> 2 min) | No | Proceeds with fallback supply target, reports `degraded` |
-| Normal operation | Lost | Falls back to fixed supply target, reports `degraded` |
-| Normal operation | Available | Normal operation |
-
-This mirrors the zone initialization pattern: wait for required sensor data during startup, fall back gracefully if unavailable after timeout.
-
-The `outdoor_temp_unavailable` attribute on the status binary sensor indicates when the outdoor sensor is configured but its value is not available.
+When an outdoor temperature sensor is configured, the controller waits up to 2 minutes for it during initialization. If still unavailable after the timeout, the controller proceeds with the fallback supply target and reports `degraded`. If the sensor becomes unavailable during normal operation, the controller also reports `degraded`.
 
 ## Controller Status
 
