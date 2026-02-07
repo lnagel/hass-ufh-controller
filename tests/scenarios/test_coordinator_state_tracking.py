@@ -5,13 +5,14 @@ Verifies that the coordinator properly tracks expected states for entities it
 controls and triggers refreshes when external changes occur.
 """
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from homeassistant.core import HomeAssistant
+from freezegun.api import FrozenDateTimeFactory
+from homeassistant.core import HomeAssistant, ServiceCall
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.ufh_controller.const import SummerMode
+from custom_components.ufh_controller.const import OperationMode, SummerMode
 from custom_components.ufh_controller.coordinator import (
     UFHControllerDataUpdateCoordinator,
 )
@@ -185,3 +186,42 @@ async def test_dhw_off_transition_sets_flush_until_when_enabled(
 
     # flush_until should now be set (post-DHW flush period started)
     assert coordinator._controller.state.flush_until is not None
+
+
+async def test_off_mode_skips_heat_request_and_summer_mode(
+    hass: HomeAssistant,
+    mock_config_entry_with_heat_request: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """Test that OFF mode skips heat request and summer mode execution."""
+    freezer.move_to("2026-01-14 02:00:00+00:00")
+
+    mock_config_entry_with_heat_request.add_to_hass(hass)
+    hass.states.async_set("sensor.zone1_temp", "20.0")
+    hass.states.async_set("switch.zone1_valve", "off")
+    hass.states.async_set("switch.heat_request", "on")
+
+    switch_calls: list[tuple[str, str]] = []
+
+    async def track_switch_call(call: ServiceCall) -> None:
+        switch_calls.append((call.service, call.data.get("entity_id", "")))
+
+    hass.services.async_register("switch", "turn_on", track_switch_call)
+    hass.services.async_register("switch", "turn_off", track_switch_call)
+
+    coordinator = UFHControllerDataUpdateCoordinator(
+        hass, mock_config_entry_with_heat_request
+    )
+    coordinator._controller.mode = OperationMode.OFF
+
+    mock_recorder = MagicMock()
+    mock_recorder.async_add_executor_job = AsyncMock(return_value={})
+
+    with patch(
+        "homeassistant.components.recorder.get_instance",
+        return_value=mock_recorder,
+    ):
+        await coordinator.async_refresh()
+
+    # OFF mode returns heat_request=None, so no switch calls should be made
+    assert switch_calls == []
