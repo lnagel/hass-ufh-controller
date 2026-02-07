@@ -176,41 +176,32 @@ class TestZoneState:
 class TestRemainingDuration:
     """Test ZoneState.remaining_duration property."""
 
-    def test_disabled(self) -> None:
-        """Disabled zone returns zero."""
+    @pytest.mark.parametrize(
+        ("enabled", "requested", "used", "expected"),
+        [
+            (False, 1000.0, 0.0, 0.0),  # disabled
+            (True, 0.0, 0.0, 0.0),  # zero quota
+            (True, 1000.0, 0.0, 1000.0),  # full quota remaining
+            (True, 1000.0, 900.0, 100.0),  # partial quota remaining
+            (True, 1000.0, 1000.0, 0.0),  # quota exhausted
+            (True, 1000.0, 1100.0, 0.0),  # overused returns zero
+        ],
+    )
+    def test_remaining_duration(
+        self,
+        enabled: bool,
+        requested: float,
+        used: float,
+        expected: float,
+    ) -> None:
+        """Test remaining_duration returns correct value for various scenarios."""
         zone = ZoneState(
-            enabled=False, zone_id="test", requested_duration=1000.0, used_duration=0.0
+            zone_id="test",
+            enabled=enabled,
+            requested_duration=requested,
+            used_duration=used,
         )
-        assert zone.remaining_duration == 0.0
-
-    def test_zero_quota(self) -> None:
-        """Zero requested and used returns zero."""
-        zone = ZoneState(zone_id="test")
-        assert zone.remaining_duration == 0.0
-
-    def test_full_quota_remaining(self) -> None:
-        """Returns full requested when nothing used."""
-        zone = ZoneState(zone_id="test", requested_duration=1000.0, used_duration=0.0)
-        assert zone.remaining_duration == 1000.0
-
-    def test_partial_quota_remaining(self) -> None:
-        """Returns correct remaining when partially used."""
-        zone = ZoneState(zone_id="test", requested_duration=1000.0, used_duration=900.0)
-        assert zone.remaining_duration == 100.0
-
-    def test_quota_exhausted(self) -> None:
-        """Returns zero when quota fully used."""
-        zone = ZoneState(
-            zone_id="test", requested_duration=1000.0, used_duration=1000.0
-        )
-        assert zone.remaining_duration == 0.0
-
-    def test_overused_returns_zero(self) -> None:
-        """Returns zero (not negative) when used exceeds requested."""
-        zone = ZoneState(
-            zone_id="test", requested_duration=1000.0, used_duration=1100.0
-        )
-        assert zone.remaining_duration == 0.0
+        assert zone.remaining_duration == expected
 
 
 class TestControllerState:
@@ -393,6 +384,52 @@ class TestZoneRuntimeSupplyCoefficient:
             supply_temp=80.0, supply_target_temp=40.0
         )
         assert zone_runtime.state.supply_coefficient == 200.0
+
+
+class TestUpdateHeatState:
+    """Test update_heat_state method."""
+
+    @pytest.fixture
+    def zone_runtime(self) -> ZoneRuntime:
+        """Create a zone runtime for testing."""
+        config = ZoneConfig(
+            zone_id="test",
+            name="Test Zone",
+            temp_sensor="sensor.test",
+            valve_switch="switch.test",
+        )
+        pid = PIDController(kp=50.0, ki=0.0, kd=0.0)
+        state = ZoneState(zone_id="test")
+        return ZoneRuntime(config=config, pid=pid, state=state)
+
+    @pytest.mark.parametrize(
+        ("flow", "supply_coefficient", "expected_heat"),
+        [
+            # No flow → no heat regardless of supply coefficient
+            (False, None, False),
+            (False, 50.0, False),
+            # Flow + no supply sensor configured → heat follows flow
+            (True, None, True),
+            # Flow + supply coefficient above threshold (10%) → heat
+            (True, 50.0, True),
+            # Flow + supply coefficient at threshold boundary → no heat (strict >)
+            (True, 10.0, False),
+            # Flow + supply coefficient below threshold → no heat
+            (True, 5.0, False),
+        ],
+    )
+    def test_heat_state(
+        self,
+        zone_runtime: ZoneRuntime,
+        flow: bool,
+        supply_coefficient: float | None,
+        expected_heat: bool,
+    ) -> None:
+        """Test heat state derivation from flow and supply coefficient."""
+        zone_runtime.state.flow = flow
+        zone_runtime.state.supply_coefficient = supply_coefficient
+        zone_runtime.update_heat_state()
+        assert zone_runtime.state.heat is expected_heat
 
 
 class TestZoneRuntimeUsedDuration:

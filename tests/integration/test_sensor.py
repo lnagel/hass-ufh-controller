@@ -90,42 +90,21 @@ async def test_pid_derivative_sensor_created(
     assert state is not None
 
 
-async def test_zones_flowing_sensor_created(
+@pytest.mark.parametrize(
+    "sensor_name",
+    ["zones_flowing", "zones_heating", "zones_window"],
+)
+async def test_controller_sensor_created(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
+    sensor_name: str,
 ) -> None:
-    """Test zones flowing sensor is created on setup."""
+    """Test controller-level sensors are created on setup."""
     mock_config_entry.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
 
-    state = hass.states.get("sensor.test_controller_zones_flowing")
-    assert state is not None
-
-
-async def test_zones_heating_sensor_created(
-    hass: HomeAssistant,
-    mock_config_entry: MockConfigEntry,
-) -> None:
-    """Test zones heating sensor is created on setup."""
-    mock_config_entry.add_to_hass(hass)
-    await hass.config_entries.async_setup(mock_config_entry.entry_id)
-    await hass.async_block_till_done()
-
-    state = hass.states.get("sensor.test_controller_zones_heating")
-    assert state is not None
-
-
-async def test_zones_window_sensor_created(
-    hass: HomeAssistant,
-    mock_config_entry: MockConfigEntry,
-) -> None:
-    """Test zones paused sensor is created on setup."""
-    mock_config_entry.add_to_hass(hass)
-    await hass.config_entries.async_setup(mock_config_entry.entry_id)
-    await hass.async_block_till_done()
-
-    state = hass.states.get("sensor.test_controller_zones_window")
+    state = hass.states.get(f"sensor.test_controller_{sensor_name}")
     assert state is not None
 
 
