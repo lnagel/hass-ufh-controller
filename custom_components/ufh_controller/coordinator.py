@@ -6,6 +6,14 @@ import contextlib
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
+from .config_flow import (
+    CONF_HEAT_REQUEST_ENTITY,
+    CONF_DHW_ACTIVE_ENTITY,
+    CONF_SUMMER_MODE_ENTITY,
+    CONF_SUPPLY_TEMP_ENTITY,
+    CONF_OUTDOOR_TEMP_ENTITY,
+)
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
@@ -264,11 +272,11 @@ class UFHControllerDataUpdateCoordinator(
         config = ControllerConfig(
             controller_id=data["controller_id"],
             name=data["name"],
-            heat_request_entity=data.get("heat_request_entity"),
-            dhw_active_entity=data.get("dhw_active_entity"),
-            summer_mode_entity=data.get("summer_mode_entity"),
-            supply_temp_entity=data.get("supply_temp_entity"),
-            outdoor_temp_entity=data.get("outdoor_temp_entity"),
+            heat_request_entity=data.get(CONF_HEAT_REQUEST_ENTITY),
+            dhw_active_entity=data.get(CONF_DHW_ACTIVE_ENTITY),
+            summer_mode_entity=data.get(CONF_SUMMER_MODE_ENTITY),
+            supply_temp_entity=data.get(CONF_SUPPLY_TEMP_ENTITY),
+            outdoor_temp_entity=data.get(CONF_OUTDOOR_TEMP_ENTITY),
             heating_curve=heating_curve,
             timing=timing,
             zones=zones,
@@ -331,12 +339,16 @@ class UFHControllerDataUpdateCoordinator(
         entry = self.config_entry
 
         # Controller-level entities
-        if heat_request := entry.data.get("heat_request_entity"):
+        if heat_request := entry.data.get(CONF_HEAT_REQUEST_ENTITY):
             entity_ids.append(heat_request)
-        if summer_mode := entry.data.get("summer_mode_entity"):
-            entity_ids.append(summer_mode)
-        if dhw_active := entry.data.get("dhw_active_entity"):
+        if dhw_active := entry.data.get(CONF_DHW_ACTIVE_ENTITY):
             entity_ids.append(dhw_active)
+        if summer_mode := entry.data.get(CONF_SUMMER_MODE_ENTITY):
+            entity_ids.append(summer_mode)
+        if supply_temp := entry.data.get(CONF_SUPPLY_TEMP_ENTITY):
+            entity_ids.append(supply_temp)
+        if outdoor_temp := entry.data.get(CONF_OUTDOOR_TEMP_ENTITY):
+            entity_ids.append(outdoor_temp)
 
         # Zone valve switches from subentries
         entity_ids.extend(
