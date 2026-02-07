@@ -10,7 +10,13 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 from homeassistant.components.select import SERVICE_SELECT_OPTION
-from homeassistant.const import SERVICE_TURN_OFF, SERVICE_TURN_ON, Platform
+from homeassistant.const import (
+    SERVICE_TURN_OFF,
+    SERVICE_TURN_ON,
+    STATE_UNAVAILABLE,
+    STATE_UNKNOWN,
+    Platform,
+)
 from homeassistant.core import Event, callback
 from homeassistant.helpers.event import (
     EventStateChangedData,
@@ -31,6 +37,7 @@ from .const import (
     DEFAULT_TEMP_EMA_TIME_CONSTANT,
     DEFAULT_TIMING,
     DOMAIN,
+    INITIALIZING_TIMEOUT,
     INITIALIZING_UPDATE_INTERVAL,
     LOGGER,
     SUBENTRY_TYPE_CONTROLLER,
@@ -162,6 +169,10 @@ class UFHControllerDataUpdateCoordinator(
 
         # Track listener unsubscribe callback for re-setup on config reload
         self._listener_unsub: Callable[[], None] | None = None
+
+        # Track entities that haven't reported a valid state yet during init
+        self._pending_entities: set[str] = set()
+        self._pending_since: datetime | None = None
 
     def _build_controller(self, entry: UFHControllerConfigEntry) -> HeatingController:
         """Build HeatingController from config entry."""
@@ -341,6 +352,22 @@ class UFHControllerDataUpdateCoordinator(
         )
         LOGGER.debug("Subscribed to state changes for entities: %s", entity_ids)
 
+        # During initialization, track which entities haven't reported valid state
+        if self._status == ControllerStatus.INITIALIZING:
+            self._pending_entities = {
+                eid
+                for eid in entity_ids
+                if (state := self.hass.states.get(eid)) is None
+                or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN)
+            }
+            if self._pending_entities:
+                self._pending_since = datetime.now(UTC)
+                LOGGER.debug(
+                    "Waiting for %d entities to report valid state: %s",
+                    len(self._pending_entities),
+                    self._pending_entities,
+                )
+
     @callback
     def shutdown(self) -> None:
         """
@@ -364,6 +391,19 @@ class UFHControllerDataUpdateCoordinator(
         if new_state is None:
             # entity removed; ignore the event
             return
+
+        # Track entity readiness for initialization
+        if (
+            entity_id in self._pending_entities
+            and new_state.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN)
+        ):
+            self._pending_entities.discard(entity_id)
+            LOGGER.debug(
+                "Entity %s now available (%s), %d entities still pending",
+                entity_id,
+                new_state.state,
+                len(self._pending_entities),
+            )
 
         # Check if this state change matches what we expected (self-initiated change)
         expected = self._expected_states.get(entity_id)
@@ -536,6 +576,20 @@ class UFHControllerDataUpdateCoordinator(
 
         # Update controller status from zone statuses
         self._update_controller_status_from_zones()
+
+        # Defer transition out of INITIALIZING while entities haven't reported yet
+        if self._pending_entities:
+            if self._pending_since is not None:
+                elapsed = (now - self._pending_since).total_seconds()
+                if elapsed > INITIALIZING_TIMEOUT:
+                    LOGGER.warning(
+                        "Timed out waiting for entities to report valid state: %s",
+                        self._pending_entities,
+                    )
+                    self._pending_entities.clear()
+                    self._pending_since = None
+            if self._pending_entities and self._status != ControllerStatus.FAIL_SAFE:
+                self._status = ControllerStatus.INITIALIZING
 
         # Detect initialization finished
         if (
