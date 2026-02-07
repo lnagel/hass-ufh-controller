@@ -21,6 +21,7 @@ from homeassistant.helpers.update_coordinator import TimestampDataUpdateCoordina
 from sqlalchemy.exc import SQLAlchemyError
 
 from .const import (
+    DEFAULT_HEAT_SUPPLY_COEFFICIENT_THRESHOLD,
     DEFAULT_OUTDOOR_TEMP_COLD,
     DEFAULT_OUTDOOR_TEMP_WARM,
     DEFAULT_PID,
@@ -52,6 +53,7 @@ from .core.zone import (
     ZoneAction,
     ZoneConfig,
     ZoneStatusTransition,
+    should_request_heat,
 )
 from .recorder import get_state_average, was_any_window_open_recently
 
@@ -561,8 +563,8 @@ class UFHControllerDataUpdateCoordinator(
         # Update flush_request state for binary_sensor exposure
         self._controller.state.flush_request = actions.flush_request
 
-        # Update per-zone heat requests from controller output
-        self._controller.state.heat_requests = actions.heat_requests
+        # Update controller-level heat request from controller output
+        self._controller.state.heat_request = actions.heat_request
 
         # Execute valve actions with zone-level isolation
         await self._execute_valve_actions_with_isolation(
@@ -570,15 +572,15 @@ class UFHControllerDataUpdateCoordinator(
         )
 
         # Execute heat request and summer mode
-        if actions.heat_requests:
-            # Compute and set heat request from per-zone requests
-            heat_request = any(actions.heat_requests.values())
+        if actions.heat_request is not None:
             await self._execute_heat_request(
-                heat_request=heat_request, force_update=force_update
+                heat_request=actions.heat_request, force_update=force_update
             )
 
             # Derive and update summer mode from heat_request
-            summer_mode = SummerMode.WINTER if heat_request else SummerMode.SUMMER
+            summer_mode = (
+                SummerMode.WINTER if actions.heat_request else SummerMode.SUMMER
+            )
             await self._set_summer_mode(summer_mode, force_update=force_update)
 
         return self._build_state_dict()
@@ -815,6 +817,13 @@ class UFHControllerDataUpdateCoordinator(
                 supply_temp=supply_temp,
                 supply_target_temp=supply_target,
             )
+
+        # Derive heat state: flow established AND supply coefficient
+        # above threshold. None supply coefficient falls back to flow
+        sc = runtime.state.supply_coefficient
+        runtime.state.heat = runtime.state.flow and (
+            sc is None or sc > DEFAULT_HEAT_SUPPLY_COEFFICIENT_THRESHOLD
+        )
 
         # Update used_duration based on flow and heat performance
         runtime.update_used_duration(dt)
@@ -1098,8 +1107,14 @@ class UFHControllerDataUpdateCoordinator(
         zones_degraded = sum(1 for s in zone_statuses if s == ZoneStatus.DEGRADED)
         zones_fail_safe = sum(1 for s in zone_statuses if s == ZoneStatus.FAIL_SAFE)
 
-        # Count zones requesting heat from controller state
-        requesting_zones = sum(self._controller.state.heat_requests.values())
+        # Count zones requesting heat via per-zone evaluation
+        timing = self._controller.config.timing
+        requesting_zones = sum(
+            should_request_heat(
+                self._controller.get_zone_runtime(zone_id).state, timing
+            )
+            for zone_id in self._controller.zone_ids
+        )
 
         result: dict[str, Any] = {
             "controller": {
@@ -1114,6 +1129,7 @@ class UFHControllerDataUpdateCoordinator(
                 "dhw_active": self._controller.state.dhw_active,
                 "flush_until": self._controller.state.flush_until,
                 "flush_request": self._controller.state.flush_request,
+                "heat_request": self._controller.state.heat_request,
                 "outdoor_temp": self._controller.state.outdoor_temp,
                 "supply_target_temp": self._controller.state.supply_target_temp,
             },
@@ -1139,9 +1155,7 @@ class UFHControllerDataUpdateCoordinator(
                 "valve_state": state.valve_state.value,
                 "enabled": state.enabled,
                 "blocked": blocked,
-                "heat_request": self._controller.state.heat_requests.get(
-                    zone_id, False
-                ),
+                "heat": state.heat,
                 "flow": state.flow,
                 "preset_mode": state.preset_mode,
                 "zone_status": state.zone_status.value,

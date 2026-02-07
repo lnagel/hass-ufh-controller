@@ -207,6 +207,7 @@ DEFAULT_CYCLE_MODE_HOURS = 8
 # Zone operation thresholds
 DEFAULT_VALVE_OPEN_THRESHOLD = 0.85  # 85% threshold for considering valve fully open
 DEFAULT_WINDOW_OPEN_THRESHOLD = 0.1  # 10% threshold for window open detection
+DEFAULT_HEAT_SUPPLY_COEFFICIENT_THRESHOLD = 10.0  # 10% min supply coefficient for heat
 
 # Flow monitoring defaults
 DEFAULT_SUPPLY_TARGET_TEMP = 40.0
