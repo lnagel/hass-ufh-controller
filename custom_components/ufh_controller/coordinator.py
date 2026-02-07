@@ -1099,16 +1099,25 @@ class UFHControllerDataUpdateCoordinator(
     def _build_state_dict(self) -> dict[str, Any]:
         """Build state dictionary for entities to consume."""
         # Count zones in each state
-        zone_statuses = [
-            self._controller.get_zone_runtime(zone_id).state.zone_status
-            for zone_id in self._controller.zone_ids
-        ]
-        zones_degraded = sum(1 for s in zone_statuses if s == ZoneStatus.DEGRADED)
-        zones_fail_safe = sum(1 for s in zone_statuses if s == ZoneStatus.FAIL_SAFE)
+        zone_runtimes = self._controller.zone_runtimes
+
+        # Count zones by state
+        zones_initializing = sum(
+            1 for rt in zone_runtimes if rt.state.zone_status == ZoneStatus.INITIALIZING
+        )
+        zones_normal = sum(
+            1 for rt in zone_runtimes if rt.state.zone_status == ZoneStatus.NORMAL
+        )
+        zones_degraded = sum(
+            1 for rt in zone_runtimes if rt.state.zone_status == ZoneStatus.DEGRADED
+        )
+        zones_fail_safe = sum(
+            1 for rt in zone_runtimes if rt.state.zone_status == ZoneStatus.FAIL_SAFE
+        )
 
         # Count zones with active flow and heating
-        zones_flowing = sum(rt.state.flow for rt in self._controller.zone_runtimes)
-        zones_heating = sum(rt.state.heat for rt in self._controller.zone_runtimes)
+        zones_flowing = sum(rt.state.flow for rt in zone_runtimes)
+        zones_heating = sum(rt.state.heat for rt in zone_runtimes)
 
         result: dict[str, Any] = {
             "controller": {
@@ -1118,6 +1127,8 @@ class UFHControllerDataUpdateCoordinator(
                 "observation_start": self._controller.state.observation_start,
                 "period_elapsed": self._controller.state.period_elapsed,
                 "status": self._status.value,
+                "zones_initializing": zones_initializing,
+                "zones_normal": zones_normal,
                 "zones_degraded": zones_degraded,
                 "zones_fail_safe": zones_fail_safe,
                 "flush_enabled": self._controller.state.flush_enabled,

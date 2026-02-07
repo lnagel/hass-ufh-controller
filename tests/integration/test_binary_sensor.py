@@ -47,11 +47,10 @@ async def test_controller_status_extra_attributes(
     attrs = state.attributes
 
     # Check extra attributes are present with correct values
-    assert "status" in attrs
     assert attrs["status"] == "normal"
-    assert "zones_degraded" in attrs
+    assert attrs["zones_initializing"] == 0
+    assert attrs["zones_normal"] == 1
     assert attrs["zones_degraded"] == 0
-    assert "zones_fail_safe" in attrs
     assert attrs["zones_fail_safe"] == 0
 
 
