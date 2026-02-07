@@ -259,6 +259,9 @@
       "heat_request": {
         "name": "Heat Request"
       },
+      "flush_request": {
+        "name": "Flush Request"
+      },
       "status": {
         "name": "Status",
         "state_attributes": {
@@ -278,9 +281,6 @@
             "name": "Last Successful Update"
           }
         }
-      },
-      "flush_request": {
-        "name": "Flush Request"
       }
     },
     "select": {
