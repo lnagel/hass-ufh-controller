@@ -90,19 +90,6 @@ async def test_pid_derivative_sensor_created(
     assert state is not None
 
 
-async def test_zones_blocked_sensor_created(
-    hass: HomeAssistant,
-    mock_config_entry: MockConfigEntry,
-) -> None:
-    """Test zones blocked sensor is created on setup."""
-    mock_config_entry.add_to_hass(hass)
-    await hass.config_entries.async_setup(mock_config_entry.entry_id)
-    await hass.async_block_till_done()
-
-    state = hass.states.get("sensor.test_controller_zones_blocked")
-    assert state is not None
-
-
 async def test_zones_flowing_sensor_created(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
@@ -129,6 +116,19 @@ async def test_zones_heating_sensor_created(
     assert state is not None
 
 
+async def test_zones_window_sensor_created(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Test zones paused sensor is created on setup."""
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get("sensor.test_controller_zones_window")
+    assert state is not None
+
+
 async def test_sensor_count_with_zone(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
@@ -138,7 +138,7 @@ async def test_sensor_count_with_zone(
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
 
-    # 5 zone sensors + 3 controller sensors (zones_blocked/flowing/heating) = 8 total
+    # 5 zone sensors + 3 controller sensors (zones_flowing/heating/window) = 8 total
     states = hass.states.async_entity_ids(SENSOR_DOMAIN)
     assert len(states) == 8
 
@@ -152,7 +152,7 @@ async def test_no_zone_sensors_without_zones(
     await hass.config_entries.async_setup(mock_config_entry_no_zones.entry_id)
     await hass.async_block_till_done()
 
-    # Only controller sensors (zones_blocked/flowing/heating) should exist
+    # Only controller sensors (zones_flowing/heating/window) should exist
     states = hass.states.async_entity_ids(SENSOR_DOMAIN)
     assert len(states) == 3
 

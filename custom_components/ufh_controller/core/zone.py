@@ -97,7 +97,7 @@ class ZoneState:
     open_state_avg: float = 0.0
     flow: bool = False
     heat: bool = False  # Derived: flow=True AND supply coefficient > 10%
-    window_recently_open: bool = False
+    window: bool = False
 
     # Derived scheduling values
     supply_coefficient: float | None = None
@@ -243,7 +243,7 @@ class ZoneRuntime:
             return True
 
         # Window was open recently - pause PID to let temperature stabilize
-        return self.state.window_recently_open
+        return self.state.window
 
     def update_requested_duration(self, observation_period: int) -> None:
         """
@@ -263,19 +263,19 @@ class ZoneRuntime:
         self,
         *,
         open_state_avg: float,
-        window_recently_open: bool,
+        window: bool,
     ) -> None:
         """
         Update zone historical averages from Recorder queries.
 
         Args:
             open_state_avg: Average valve state for open detection.
-            window_recently_open: Was any window open within blocking period.
+            window: Whether a window was open within the blocking period.
 
         """
         self.state.open_state_avg = open_state_avg
         self.state.flow = open_state_avg >= DEFAULT_VALVE_OPEN_THRESHOLD
-        self.state.window_recently_open = window_recently_open
+        self.state.window = window
 
     def update_supply_coefficient(
         self, *, supply_temp: float | None, supply_target_temp: float

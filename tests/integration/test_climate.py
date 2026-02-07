@@ -296,7 +296,7 @@ async def test_climate_extra_attributes(
     assert "pid_proportional" in attrs
     assert "pid_integral" in attrs
     assert "pid_derivative" in attrs
-    assert "blocked" in attrs
+    assert "window" in attrs
     assert "heat" in attrs
     assert "zone_status" in attrs
     assert attrs["zone_status"] == "normal"

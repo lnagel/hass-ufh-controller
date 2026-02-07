@@ -13,13 +13,13 @@
       "pid_derivative": {
         "default": "mdi:alpha-d-circle-outline"
       },
-      "zones_blocked": {
-        "default": "mdi:checkbox-blank-outline"
-      },
       "zones_flowing": {
         "default": "mdi:checkbox-blank-outline"
       },
       "zones_heating": {
+        "default": "mdi:checkbox-blank-outline"
+      },
+      "zones_window": {
         "default": "mdi:checkbox-blank-outline"
       },
       "supply_coefficient": {

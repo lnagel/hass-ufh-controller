@@ -58,7 +58,7 @@ class TestEvaluateZonesHeatMode:
             controller,
             "living_room",
             open_state_avg=0.0,
-            window_recently_open=False,
+            window=False,
         )
 
         # Update requested_duration from duty cycle

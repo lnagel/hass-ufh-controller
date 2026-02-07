@@ -65,7 +65,7 @@ def setup_zone_historical(
     zone_id: str,
     *,
     open_state_avg: float,
-    window_recently_open: bool,
+    window: bool,
 ) -> None:
     """
     Set up zone historical data for flow detection and window blocking.
@@ -77,7 +77,7 @@ def setup_zone_historical(
         controller: HeatingController instance.
         zone_id: Zone identifier.
         open_state_avg: Average valve state for open detection (0.0-1.0).
-        window_recently_open: Whether any window was open recently.
+        window: Whether a window was open within the blocking period.
 
     Raises:
         KeyError: If zone_id is not found.
@@ -86,7 +86,7 @@ def setup_zone_historical(
     runtime = controller.get_zone_runtime(zone_id)
     runtime.update_historical(
         open_state_avg=open_state_avg,
-        window_recently_open=window_recently_open,
+        window=window,
     )
 
 

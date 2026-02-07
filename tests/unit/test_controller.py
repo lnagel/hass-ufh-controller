@@ -329,9 +329,7 @@ class TestPIDIntegrationPause:
         assert runtime.pid.state is not None
         assert runtime.pid.state.integral == initial_integral
 
-    def test_pid_paused_when_window_recently_open(
-        self, basic_config: ControllerConfig
-    ) -> None:
+    def test_pid_paused_when_paused(self, basic_config: ControllerConfig) -> None:
         """Test PID integration is paused when window was recently open."""
         controller = HeatingController(basic_config)
 
@@ -343,7 +341,7 @@ class TestPIDIntegrationPause:
         initial_integral = runtime.pid.state.integral
 
         # Simulate window was recently open (within blocking period)
-        runtime.state.window_recently_open = True
+        runtime.state.window = True
 
         # PID update should NOT accumulate integral
         setup_zone_pid(controller, "living_room", 19.0, 60.0)
@@ -364,7 +362,7 @@ class TestPIDIntegrationPause:
         initial_integral = runtime.pid.state.integral
 
         # No recent window activity
-        runtime.state.window_recently_open = False
+        runtime.state.window = False
 
         # PID update SHOULD accumulate integral
         setup_zone_pid(controller, "living_room", 19.0, 60.0)
@@ -503,13 +501,13 @@ class TestUpdateZoneHistorical:
             controller,
             "living_room",
             open_state_avg=0.9,  # Above 0.85 threshold
-            window_recently_open=False,
+            window=False,
         )
 
         state = controller.get_zone_state("living_room")
         assert state is not None
         assert state.open_state_avg == 0.9
-        assert state.window_recently_open is False
+        assert state.window is False
         # Flow is derived from open_state_avg >= 0.85
         assert state.flow is True
 
@@ -523,7 +521,7 @@ class TestUpdateZoneHistorical:
             controller,
             "living_room",
             open_state_avg=0.5,  # Below 0.85 threshold
-            window_recently_open=False,
+            window=False,
         )
 
         state = controller.get_zone_state("living_room")
@@ -538,7 +536,7 @@ class TestUpdateZoneHistorical:
                 controller,
                 "unknown",
                 open_state_avg=0.9,
-                window_recently_open=False,
+                window=False,
             )
 
     def test_quota_based_evaluation_with_used_duration(
@@ -558,7 +556,7 @@ class TestUpdateZoneHistorical:
             controller,
             "living_room",
             open_state_avg=0.0,
-            window_recently_open=False,
+            window=False,
         )
 
         runtime = controller.get_zone_runtime("living_room")
@@ -622,7 +620,7 @@ class TestHeatRequestFromEvaluate:
             controller,
             "living_room",
             open_state_avg=0.9,  # Above 0.85 threshold (sets flow=True)
-            window_recently_open=False,
+            window=False,
         )
         # Manually set valve on and quota
         runtime = controller.get_zone_runtime("living_room")
@@ -732,13 +730,13 @@ class TestComputeActionsWithFlushZones:
             controller,
             "living_room",
             open_state_avg=0.0,
-            window_recently_open=False,
+            window=False,
         )
         setup_zone_historical(
             controller,
             "bathroom",
             open_state_avg=0.0,
-            window_recently_open=False,
+            window=False,
         )
 
         actions = controller.evaluate(now=datetime.now(UTC))
@@ -765,13 +763,13 @@ class TestComputeActionsWithFlushZones:
             controller,
             "living_room",
             open_state_avg=0.0,
-            window_recently_open=False,
+            window=False,
         )
         setup_zone_historical(
             controller,
             "bathroom",
             open_state_avg=0.0,
-            window_recently_open=False,
+            window=False,
         )
 
         actions = controller.evaluate(now=datetime.now(UTC))

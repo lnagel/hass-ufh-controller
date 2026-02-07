@@ -47,12 +47,6 @@ class UFHControllerBinarySensorEntityDescription(BinarySensorEntityDescription):
 
 ZONE_BINARY_SENSORS: tuple[UFHZoneBinarySensorEntityDescription, ...] = (
     UFHZoneBinarySensorEntityDescription(
-        key="blocked",
-        translation_key="blocked",
-        device_class=BinarySensorDeviceClass.PROBLEM,
-        value_fn=lambda data: data.get("blocked"),
-    ),
-    UFHZoneBinarySensorEntityDescription(
         key="flow",
         translation_key="flow",
         device_class=BinarySensorDeviceClass.RUNNING,
@@ -63,6 +57,12 @@ ZONE_BINARY_SENSORS: tuple[UFHZoneBinarySensorEntityDescription, ...] = (
         translation_key="heat",
         device_class=BinarySensorDeviceClass.HEAT,
         value_fn=lambda data: data.get("heat"),
+    ),
+    UFHZoneBinarySensorEntityDescription(
+        key="window",
+        translation_key="window",
+        device_class=BinarySensorDeviceClass.WINDOW,
+        value_fn=lambda data: data.get("window"),
     ),
 )
 
@@ -77,6 +77,8 @@ def _status_attrs(data: dict[str, Any]) -> dict[str, Any]:
     """Return additional status attributes."""
     return {
         "status": data.get("status"),
+        "zones_initializing": data.get("zones_initializing"),
+        "zones_normal": data.get("zones_normal"),
         "zones_degraded": data.get("zones_degraded"),
         "zones_fail_safe": data.get("zones_fail_safe"),
     }

@@ -71,19 +71,19 @@ async def test_controller_status_off_when_normal(
     assert state.state == "off"
 
 
-async def test_zone_blocked_binary_sensor_created(
+async def test_zone_window_binary_sensor_created(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
     mock_temp_sensor: None,
 ) -> None:
-    """Test zone blocked binary sensor is created on setup."""
+    """Test zone window binary sensor is created on setup."""
     mock_config_entry.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
 
-    state = hass.states.get("binary_sensor.test_zone_1_blocked")
+    state = hass.states.get("binary_sensor.test_zone_1_window")
     assert state is not None
-    # Zone should not be blocked by default
+    # Window should not be open by default
     assert state.state == "off"
 
 
@@ -130,7 +130,7 @@ async def test_no_binary_sensors_without_zones(
     # Controller status sensor should still exist
     assert "binary_sensor.test_controller_status" in states
     # No zone sensors
-    assert not any("blocked" in s for s in states)
+    assert not any("window" in s for s in states)
 
 
 async def test_controller_status_off_when_initializing(
@@ -164,9 +164,9 @@ async def test_zone_binary_sensor_available_during_initializing(
     await hass.async_block_till_done()
 
     # Zone binary sensors should be available during initialization
-    blocked_state = hass.states.get("binary_sensor.test_zone_1_blocked")
-    assert blocked_state is not None
-    assert blocked_state.state in ("on", "off")
+    window_state = hass.states.get("binary_sensor.test_zone_1_window")
+    assert window_state is not None
+    assert window_state.state in ("on", "off")
 
 
 async def test_zone_binary_sensor_available_during_normal(
@@ -180,9 +180,9 @@ async def test_zone_binary_sensor_available_during_normal(
     await hass.async_block_till_done()
 
     # Zone binary sensors should be available (have actual state)
-    blocked_state = hass.states.get("binary_sensor.test_zone_1_blocked")
-    assert blocked_state is not None
-    assert blocked_state.state in ("on", "off")
+    window_state = hass.states.get("binary_sensor.test_zone_1_window")
+    assert window_state is not None
+    assert window_state.state in ("on", "off")
 
 
 async def test_zone_binary_sensor_available_during_degraded(
@@ -210,9 +210,9 @@ async def test_zone_binary_sensor_available_during_degraded(
     await hass.async_block_till_done()
 
     # Binary sensors should still be available during DEGRADED
-    blocked_state = hass.states.get("binary_sensor.test_zone_1_blocked")
-    assert blocked_state is not None
-    assert blocked_state.state in ("on", "off")
+    window_state = hass.states.get("binary_sensor.test_zone_1_window")
+    assert window_state is not None
+    assert window_state.state in ("on", "off")
 
 
 async def test_zone_binary_sensor_unavailable_during_fail_safe(
@@ -240,9 +240,9 @@ async def test_zone_binary_sensor_unavailable_during_fail_safe(
     await hass.async_block_till_done()
 
     # Binary sensors should be unavailable during FAIL_SAFE
-    blocked_state = hass.states.get("binary_sensor.test_zone_1_blocked")
-    assert blocked_state is not None
-    assert blocked_state.state == STATE_UNAVAILABLE
+    window_state = hass.states.get("binary_sensor.test_zone_1_window")
+    assert window_state is not None
+    assert window_state.state == STATE_UNAVAILABLE
 
 
 async def test_flush_request_binary_sensor_created_with_dhw(

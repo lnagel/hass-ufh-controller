@@ -415,8 +415,8 @@ async def test_window_sensor_unknown_not_treated_as_recently_open(
     coordinator = mock_config_entry_with_window_sensor.runtime_data.coordinator
     runtime = coordinator.controller.get_zone_runtime("zone1")
     assert runtime is not None
-    # Without Recorder data (mocked), window_recently_open defaults to False
-    assert runtime.state.window_recently_open is False
+    # Without Recorder data (mocked), paused defaults to False
+    assert runtime.state.window is False
 
 
 async def test_window_sensor_unavailable_not_treated_as_recently_open(
@@ -434,8 +434,8 @@ async def test_window_sensor_unavailable_not_treated_as_recently_open(
     coordinator = mock_config_entry_with_window_sensor.runtime_data.coordinator
     runtime = coordinator.controller.get_zone_runtime("zone1")
     assert runtime is not None
-    # Without Recorder data (mocked), window_recently_open defaults to False
-    assert runtime.state.window_recently_open is False
+    # Without Recorder data (mocked), paused defaults to False
+    assert runtime.state.window is False
 
 
 async def test_window_sensor_missing_not_treated_as_recently_open(
@@ -453,8 +453,8 @@ async def test_window_sensor_missing_not_treated_as_recently_open(
     coordinator = mock_config_entry_with_window_sensor.runtime_data.coordinator
     runtime = coordinator.controller.get_zone_runtime("zone1")
     assert runtime is not None
-    # Without Recorder data (mocked), window_recently_open defaults to False
-    assert runtime.state.window_recently_open is False
+    # Without Recorder data (mocked), paused defaults to False
+    assert runtime.state.window is False
 
 
 async def test_window_sensor_on_with_no_recorder_data(
@@ -474,7 +474,7 @@ async def test_window_sensor_on_with_no_recorder_data(
     assert runtime is not None
     # With no Recorder history, get_state_average checks current state
     # Since window is "on", it returns True
-    assert runtime.state.window_recently_open is True
+    assert runtime.state.window is True
 
 
 async def test_window_sensor_off_with_no_recorder_data(
@@ -492,8 +492,8 @@ async def test_window_sensor_off_with_no_recorder_data(
     coordinator = mock_config_entry_with_window_sensor.runtime_data.coordinator
     runtime = coordinator.controller.get_zone_runtime("zone1")
     assert runtime is not None
-    # Without Recorder data (mocked), window_recently_open defaults to False
-    assert runtime.state.window_recently_open is False
+    # Without Recorder data (mocked), paused defaults to False
+    assert runtime.state.window is False
 
 
 async def test_window_sensor_recorder_failure_fallback_window_open(
@@ -520,7 +520,7 @@ async def test_window_sensor_recorder_failure_fallback_window_open(
         runtime = coordinator.controller.get_zone_runtime("zone1")
         assert runtime is not None
         # Fallback should use current state (open = True)
-        assert runtime.state.window_recently_open is True
+        assert runtime.state.window is True
 
 
 async def test_window_sensor_recorder_failure_fallback_window_closed(
@@ -547,7 +547,7 @@ async def test_window_sensor_recorder_failure_fallback_window_closed(
         runtime = coordinator.controller.get_zone_runtime("zone1")
         assert runtime is not None
         # Fallback should use current state (closed = False)
-        assert runtime.state.window_recently_open is False
+        assert runtime.state.window is False
 
 
 async def test_window_sensor_recorder_failure_fallback_multiple_sensors(
@@ -610,7 +610,7 @@ async def test_window_sensor_recorder_failure_fallback_multiple_sensors(
         runtime = coordinator.controller.get_zone_runtime("zone1")
         assert runtime is not None
         # Fallback should detect that ANY window is open
-        assert runtime.state.window_recently_open is True
+        assert runtime.state.window is True
 
 
 # ============================================================================

@@ -9,9 +9,9 @@ All controller entities belong to a device named after the controller (user-defi
 |----------|--------------------------------------------|----------------------------|-------------|
 | select | `select.{controller_id}_mode`              | "{name} Mode"              | Control mode selector |
 | switch | `switch.{controller_id}_flush_enabled`     | "{name} Flush Enabled"     | DHW latent heat capture toggle (only when `dhw_active_entity` configured) |
-| sensor | `sensor.{controller_id}_zones_blocked`  | "{name} Zones Blocked"  | Count of zones blocked by recent window activity |
 | sensor | `sensor.{controller_id}_zones_flowing`  | "{name} Zones Flowing"  | Count of zones with active water flow |
 | sensor | `sensor.{controller_id}_zones_heating`  | "{name} Zones Heating"  | Count of zones currently receiving heat |
+| sensor | `sensor.{controller_id}_zones_window`  | "{name} Zones Window"  | Count of zones with recent window activity |
 | sensor | `sensor.{controller_id}_supply_target_temp`     | "{name} Supply Target Temperature"     | Calculated supply target from heating curve (only when `outdoor_temp_entity` configured) |
 | binary_sensor | `binary_sensor.{controller_id}_status` | "{name} Status" | Controller operational status (problem when degraded/fail-safe) |
 | binary_sensor | `binary_sensor.{controller_id}_flush_request` | "{name} Flush Request" | Flush is actively running (only when `dhw_active_entity` configured) |
@@ -52,9 +52,9 @@ Each zone gets its own device named after the zone (user-defined). The valve swi
 | sensor | `sensor.{controller_id}_{zone_id}_pid_proportional` | "{zone_name} PID Proportional" | Proportional term (Kp * error) |
 | sensor | `sensor.{controller_id}_{zone_id}_pid_integral` | "{zone_name} PID Integral" | Integral term (Ki * accumulated error) |
 | sensor | `sensor.{controller_id}_{zone_id}_pid_derivative` | "{zone_name} PID Derivative" | Derivative term (Kd * rate of change) |
-| binary_sensor | `binary_sensor.{controller_id}_{zone_id}_blocked` | "{zone_name} Blocked" | Zone PID control paused (window was recently open) |
 | binary_sensor | `binary_sensor.{controller_id}_{zone_id}_flow` | "{zone_name} Flow" | Water actively flowing through zone |
 | binary_sensor | `binary_sensor.{controller_id}_{zone_id}_heat` | "{zone_name} Heat" | Zone is actively receiving useful heat |
+| binary_sensor | `binary_sensor.{controller_id}_{zone_id}_window` | "{zone_name} Window" | Window was recently open (PID control paused) |
 | sensor | `sensor.{controller_id}_{zone_id}_supply_coefficient` | "{zone_name} Supply Coefficient" | Quota consumption rate relative to design conditions |
 
 ### Climate Entity Details

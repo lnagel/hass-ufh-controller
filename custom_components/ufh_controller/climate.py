@@ -179,7 +179,7 @@ class UFHZoneClimate(UFHControllerZoneEntity, ClimateEntity):
             "pid_proportional": zone_data.get("pid_proportional"),
             "pid_integral": zone_data.get("pid_integral"),
             "pid_derivative": zone_data.get("pid_derivative"),
-            "blocked": zone_data.get("blocked"),
+            "window": zone_data.get("window"),
             "heat": zone_data.get("heat"),
             "zone_status": zone_data.get("zone_status"),
         }
