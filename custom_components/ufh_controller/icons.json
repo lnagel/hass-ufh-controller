@@ -14,7 +14,7 @@
         "default": "mdi:alpha-d-circle-outline"
       },
       "heating_zones": {
-        "default": "mdi:counter"
+        "default": "mdi:checkbox-blank-outline"
       },
       "supply_coefficient": {
         "default": "mdi:gauge"
