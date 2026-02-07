@@ -34,7 +34,7 @@ Coordinator._async_update_data()
     │       ├─► Query Recorder for historical averages
     │       ├─► zone.update_historical(open_avg, window)
     │       ├─► zone.update_supply_coefficient(supply_temp, supply_target_temp)
-    │       ├─► Derive heat state (flow AND supply coefficient > threshold)
+    │       ├─► zone.update_heat_state()
     │       ├─► zone.update_used_duration(dt)
     │       ├─► Sync valve state from HA entity
     │       └─► zone.update_failure_state(now, temp_unavail, valve_unavail)

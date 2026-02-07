@@ -21,7 +21,6 @@ from homeassistant.helpers.update_coordinator import TimestampDataUpdateCoordina
 from sqlalchemy.exc import SQLAlchemyError
 
 from .const import (
-    DEFAULT_HEAT_SUPPLY_COEFFICIENT_THRESHOLD,
     DEFAULT_OUTDOOR_TEMP_COLD,
     DEFAULT_OUTDOOR_TEMP_WARM,
     DEFAULT_PID,
@@ -815,12 +814,8 @@ class UFHControllerDataUpdateCoordinator(
                 supply_target_temp=supply_target,
             )
 
-        # Derive heat state: flow established AND supply coefficient
-        # above threshold. None supply coefficient falls back to flow
-        sc = runtime.state.supply_coefficient
-        runtime.state.heat = runtime.state.flow and (
-            sc is None or sc > DEFAULT_HEAT_SUPPLY_COEFFICIENT_THRESHOLD
-        )
+        # Derive heat state from flow + supply coefficient
+        runtime.update_heat_state()
 
         # Update used_duration based on flow and heat performance
         runtime.update_used_duration(dt)

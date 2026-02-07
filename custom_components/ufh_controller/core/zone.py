@@ -12,6 +12,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, NamedTuple
 
 from custom_components.ufh_controller.const import (
+    DEFAULT_HEAT_SUPPLY_COEFFICIENT_THRESHOLD,
     DEFAULT_PID,
     DEFAULT_SETPOINT,
     DEFAULT_SUPPLY_COEFFICIENT_CAP,
@@ -313,6 +314,19 @@ class ZoneRuntime:
         # Calculate as percentage, cap at configured maximum
         self.state.supply_coefficient = min(
             numerator / denominator * 100, DEFAULT_SUPPLY_COEFFICIENT_CAP
+        )
+
+    def update_heat_state(self) -> None:
+        """
+        Derive heat state from flow and supply coefficient.
+
+        Heat requires flow to be established AND supply coefficient above
+        the minimum threshold. When no supply temperature sensor is
+        configured (supply_coefficient is None), heat equals flow.
+        """
+        sc = self.state.supply_coefficient
+        self.state.heat = self.state.flow and (
+            sc is None or sc > DEFAULT_HEAT_SUPPLY_COEFFICIENT_THRESHOLD
         )
 
     def update_used_duration(self, dt: float) -> None:
