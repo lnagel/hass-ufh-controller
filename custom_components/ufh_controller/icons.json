@@ -13,6 +13,9 @@
       "pid_derivative": {
         "default": "mdi:alpha-d-circle-outline"
       },
+      "zones_blocked": {
+        "default": "mdi:checkbox-blank-outline"
+      },
       "zones_flowing": {
         "default": "mdi:checkbox-blank-outline"
       },

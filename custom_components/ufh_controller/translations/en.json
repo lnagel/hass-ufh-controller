@@ -230,6 +230,9 @@
       "pid_derivative": {
         "name": "PID Derivative"
       },
+      "zones_blocked": {
+        "name": "Zones Blocked"
+      },
       "zones_flowing": {
         "name": "Zones Flowing"
       },

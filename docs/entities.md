@@ -9,6 +9,7 @@ All controller entities belong to a device named after the controller (user-defi
 |----------|--------------------------------------------|----------------------------|-------------|
 | select | `select.{controller_id}_mode`              | "{name} Mode"              | Control mode selector |
 | switch | `switch.{controller_id}_flush_enabled`     | "{name} Flush Enabled"     | DHW latent heat capture toggle (only when `dhw_active_entity` configured) |
+| sensor | `sensor.{controller_id}_zones_blocked`  | "{name} Zones Blocked"  | Count of zones blocked by recent window activity |
 | sensor | `sensor.{controller_id}_zones_flowing`  | "{name} Zones Flowing"  | Count of zones with active water flow |
 | sensor | `sensor.{controller_id}_zones_heating`  | "{name} Zones Heating"  | Count of zones currently receiving heat |
 | sensor | `sensor.{controller_id}_supply_target_temp`     | "{name} Supply Target Temperature"     | Calculated supply target from heating curve (only when `outdoor_temp_entity` configured) |

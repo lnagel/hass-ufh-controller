@@ -149,6 +149,15 @@ SUPPLY_COEFFICIENT_SENSOR = UFHZoneSensorEntityDescription(
 )
 
 # Controller-level sensor descriptions
+ZONES_BLOCKED_SENSOR = UFHControllerSensorEntityDescription(
+    key="zones_blocked",
+    translation_key="zones_blocked",
+    native_unit_of_measurement="zones",
+    state_class=SensorStateClass.MEASUREMENT,
+    value_fn=lambda data: data.get("zones_blocked"),
+    icon_fn=_numeric_icon,
+)
+
 ZONES_FLOWING_SENSOR = UFHControllerSensorEntityDescription(
     key="zones_flowing",
     translation_key="zones_flowing",
@@ -193,7 +202,11 @@ async def async_setup_entry(
 
     # Add controller-level sensors
     if controller_subentry_id is not None:
-        controller_descriptions = [ZONES_FLOWING_SENSOR, ZONES_HEATING_SENSOR]
+        controller_descriptions = [
+            ZONES_BLOCKED_SENSOR,
+            ZONES_FLOWING_SENSOR,
+            ZONES_HEATING_SENSOR,
+        ]
 
         # Add supply target sensor if outdoor temp entity is configured
         if outdoor_entity:

@@ -1115,13 +1115,15 @@ class UFHControllerDataUpdateCoordinator(
             1 for rt in zone_runtimes if rt.state.zone_status == ZoneStatus.FAIL_SAFE
         )
 
-        # Count zones with active flow and heating
+        # Count zones by blocking, flow, and heat state
+        zones_blocked = sum(rt.state.window_recently_open for rt in zone_runtimes)
         zones_flowing = sum(rt.state.flow for rt in zone_runtimes)
         zones_heating = sum(rt.state.heat for rt in zone_runtimes)
 
         result: dict[str, Any] = {
             "controller": {
                 "mode": self._controller.mode,
+                "zones_blocked": zones_blocked,
                 "zones_flowing": zones_flowing,
                 "zones_heating": zones_heating,
                 "observation_start": self._controller.state.observation_start,
