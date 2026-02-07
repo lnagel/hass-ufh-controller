@@ -13,7 +13,7 @@
       "pid_derivative": {
         "default": "mdi:alpha-d-circle-outline"
       },
-      "requesting_zones": {
+      "heating_zones": {
         "default": "mdi:counter"
       },
       "supply_coefficient": {
