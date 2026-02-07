@@ -7,11 +7,11 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from .config_flow import (
-    CONF_HEAT_REQUEST_ENTITY,
     CONF_DHW_ACTIVE_ENTITY,
+    CONF_HEAT_REQUEST_ENTITY,
+    CONF_OUTDOOR_TEMP_ENTITY,
     CONF_SUMMER_MODE_ENTITY,
     CONF_SUPPLY_TEMP_ENTITY,
-    CONF_OUTDOOR_TEMP_ENTITY,
 )
 
 if TYPE_CHECKING:
@@ -931,7 +931,6 @@ class UFHControllerDataUpdateCoordinator(
 
     def _update_controller_status(self, now: datetime) -> None:
         """Update controller status based on zone statuses."""
-
         # Defer transition out of INITIALIZING while entities haven't reported yet
         if self._status == ControllerStatus.INITIALIZING and self._pending_entities:
             elapsed = (now - self._started_at).total_seconds()
