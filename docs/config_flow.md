@@ -79,27 +79,27 @@ These settings are stored in the **controller subentry** data.
 ### Architecture Summary
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        ConfigEntry                              │
+┌────────────────────────────────────────────────────────────────┐
+│                        ConfigEntry                             │
 │  data: {name, controller_id, heat_request_entity, ...}         │
-├─────────────────────────────────────────────────────────────────┤
-│                        Subentries                               │
+├────────────────────────────────────────────────────────────────┤
+│                        Subentries                              │
 │  ┌──────────────────────────────────────────────────────────┐  │
-│  │  Controller Subentry (auto-created)                       │  │
-│  │  - type: "controller"                                     │  │
-│  │  - data: {timing: {...}}                                  │  │
-│  │  - Entities: mode select, flush enabled switch,           │  │
-│  │              requesting zones sensor                      │  │
+│  │  Controller Subentry (auto-created)                      │  │
+│  │  - type: "controller"                                    │  │
+│  │  - data: {timing: {...}}                                 │  │
+│  │  - Entities: mode select, flush enabled switch,          │  │
+│  │              zone counting sensors, status, heat_request │  │
 │  └──────────────────────────────────────────────────────────┘  │
 │  ┌──────────────────────────────────────────────────────────┐  │
 │  │  Zone Subentry (user-created via "+ Add Heating Zone")   │  │
-│  │  - type: "zone"                                           │  │
+│  │  - type: "zone"                                          │  │
 │  │  - data: {id, name, temp_sensor, valve_switch, pid, ...} │  │
-│  │  - Entities: climate, duty_cycle sensor, pid sensors,     │  │
-│  │              blocked binary_sensor, heat_request sensor  │  │
+│  │  - Entities: climate, duty_cycle sensor, pid sensors,    │  │
+│  │              flow/heat/window binary sensors             │  │
 │  └──────────────────────────────────────────────────────────┘  │
 │  ... (more zone subentries)                                    │
-└─────────────────────────────────────────────────────────────────┘
+└────────────────────────────────────────────────────────────────┘
 ```
 
 ---

@@ -184,8 +184,8 @@ The climate entity's `hvac_action` shows current state:
 
 | Action | Meaning |
 |--------|---------|
-| **Heating** | Zone is actively requesting heat |
-| **Idle** | Zone is enabled but not currently heating |
+| **Heating** | Zone is actively receiving heat |
+| **Idle** | Zone is enabled but not currently receiving heat |
 | **Off** | Zone is disabled |
 
 ## Troubleshooting

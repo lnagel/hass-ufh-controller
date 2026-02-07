@@ -10,11 +10,11 @@ This document describes the layered architecture of the UFH Controller and the r
 
 **Controller** (Pure decision engine)
 - Holds global config/state (mode, timing, DHW, flush)
-- `evaluate()` returns all actions (valves, heat_request) with no side effects
+- `evaluate()` returns all actions (valves, heat_request, flush_request) with no side effects
 
 **Zone** (Single-zone control)
 - Owns config, PID controller, and mutable state
-- Pure functions `evaluate_zone()` and `should_request_heat()` for decisions
+- Pure function `evaluate_zone()` for valve decisions
 
 ## Data Flow
 
@@ -32,21 +32,22 @@ Coordinator._async_update_data()
     │       ├─► zone.update_temperature(raw_temp, dt)
     │       ├─► zone.update_pid(dt, mode)
     │       ├─► Query Recorder for historical averages
-    │       ├─► zone.update_historical(open_avg, window_recently_open)
+    │       ├─► zone.update_historical(open_avg, window)
     │       ├─► zone.update_supply_coefficient(supply_temp, supply_target_temp)
+    │       ├─► Derive heat state (flow AND supply coefficient > threshold)
     │       ├─► zone.update_used_duration(dt)
     │       ├─► Sync valve state from HA entity
     │       └─► zone.update_failure_state(now, temp_unavail, valve_unavail)
     │
-    ├─► controller.evaluate(now) → ControllerAction
+    ├─► controller.evaluate(now) → ControllerActions
     │       ├─► Evaluate regular zones first
     │       ├─► Compute flush_request
     │       ├─► Evaluate flush zones
-    │       ├─► Compute per-zone heat_requests (dict[str, bool])
-    │       └─► Return actions (valves, heat_requests, flush_request)
+    │       ├─► Aggregate heat_request from flowing zones
+    │       └─► Return actions (valves, heat_request, flush_request)
     │
     ├─► Execute returned actions:
-    │       ├─► Store heat_requests in controller state
+    │       ├─► Store heat_request in controller state
     │       ├─► Valve actions via switch services
     │       ├─► Heat request via switch service (if present)
     │       └─► Summer mode via select service (if present)

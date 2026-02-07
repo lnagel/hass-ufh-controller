@@ -14,6 +14,7 @@ All controller entities belong to a device named after the controller (user-defi
 | sensor | `sensor.{controller_id}_zones_window`  | "{name} Zones Window"  | Count of zones with recent window activity |
 | sensor | `sensor.{controller_id}_supply_target_temp`     | "{name} Supply Target Temperature"     | Calculated supply target from heating curve (only when `outdoor_temp_entity` configured) |
 | binary_sensor | `binary_sensor.{controller_id}_status` | "{name} Status" | Controller operational status (problem when degraded/fail-safe) |
+| binary_sensor | `binary_sensor.{controller_id}_heat_request` | "{name} Heat Request" | Controller is requesting heat from the boiler |
 | binary_sensor | `binary_sensor.{controller_id}_flush_request` | "{name} Flush Request" | Flush is actively running (only when `dhw_active_entity` configured) |
 
 **Note:** The flush enabled switch and flush request sensor are only created when `dhw_active_entity` is configured, as the DHW latent heat capture feature requires DHW state input to function.
@@ -79,8 +80,8 @@ The `hvac_action` attribute communicates the current operational state of each z
 | Action | Condition |
 |--------|-----------|
 | `HVACAction.OFF` | Heating is disabled (zone HVAC mode is OFF) |
-| `HVACAction.IDLE` | Zone is not requesting heat |
-| `HVACAction.HEATING` | Zone is requesting heat |
+| `HVACAction.IDLE` | Zone is enabled but not actively receiving heat |
+| `HVACAction.HEATING` | Zone is actively receiving heat (flow established and supply conditions met) |
 
 **Attributes:**
 
@@ -109,6 +110,6 @@ Entity availability is determined by a combination of coordinator status and zon
 - **Climate unavailable when temp sensor fails:** Prevents "unknown" states from being recorded to history
 - **Zone sensors/binary sensors unavailable during FAIL_SAFE:** Zone not participating in control, values would be misleading
 
-**Note:** Controller-level entities (mode select, requesting zones sensor, status binary sensor) remain available regardless of individual zone status.
+**Note:** Controller-level entities (mode select, zone counting sensors, status binary sensor) remain available regardless of individual zone status.
 
 ---

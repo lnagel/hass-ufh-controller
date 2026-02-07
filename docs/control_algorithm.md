@@ -82,12 +82,10 @@ The zone evaluation follows a priority-based decision tree:
 
 ### Heat Request Logic
 
-A zone contributes to the heat request when all conditions are met:
-- Valve is currently on
-- Flow is active (confirming the valve is fully open)
-- Remaining quota is at least the closing warning duration (zone won't close imminently)
-
-The controller aggregates heat requests from all zones: if any zone requests heat, the boiler heat request is enabled.
+The controller computes a single heat request signal from all zones with active flow:
+- Only zones with `flow=True` (valve confirmed fully open) are considered
+- A zone contributes to the heat request when its `remaining_duration` exceeds the `closing_warning_duration` (zone won't close imminently)
+- If any qualifying zone needs heat, the boiler heat request is enabled
 
 ### Boiler Summer Mode Management
 
