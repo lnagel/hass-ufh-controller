@@ -1106,12 +1106,14 @@ class UFHControllerDataUpdateCoordinator(
         zones_degraded = sum(1 for s in zone_statuses if s == ZoneStatus.DEGRADED)
         zones_fail_safe = sum(1 for s in zone_statuses if s == ZoneStatus.FAIL_SAFE)
 
-        # Count zones actively heating
+        # Count zones with active flow and heating
+        flowing_zones = sum(rt.state.flow for rt in self._controller.zone_runtimes)
         heating_zones = sum(rt.state.heat for rt in self._controller.zone_runtimes)
 
         result: dict[str, Any] = {
             "controller": {
                 "mode": self._controller.mode,
+                "flowing_zones": flowing_zones,
                 "heating_zones": heating_zones,
                 "observation_start": self._controller.state.observation_start,
                 "period_elapsed": self._controller.state.period_elapsed,

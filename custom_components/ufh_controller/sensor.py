@@ -149,6 +149,15 @@ SUPPLY_COEFFICIENT_SENSOR = UFHZoneSensorEntityDescription(
 )
 
 # Controller-level sensor descriptions
+FLOWING_ZONES_SENSOR = UFHControllerSensorEntityDescription(
+    key="flowing_zones",
+    translation_key="flowing_zones",
+    native_unit_of_measurement="zones",
+    state_class=SensorStateClass.MEASUREMENT,
+    value_fn=lambda data: data.get("flowing_zones"),
+    icon_fn=_numeric_icon,
+)
+
 HEATING_ZONES_SENSOR = UFHControllerSensorEntityDescription(
     key="heating_zones",
     translation_key="heating_zones",
@@ -184,7 +193,7 @@ async def async_setup_entry(
 
     # Add controller-level sensors
     if controller_subentry_id is not None:
-        controller_descriptions = [HEATING_ZONES_SENSOR]
+        controller_descriptions = [FLOWING_ZONES_SENSOR, HEATING_ZONES_SENSOR]
 
         # Add supply target sensor if outdoor temp entity is configured
         if outdoor_entity:

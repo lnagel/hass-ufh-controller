@@ -13,6 +13,9 @@
       "pid_derivative": {
         "default": "mdi:alpha-d-circle-outline"
       },
+      "flowing_zones": {
+        "default": "mdi:checkbox-blank-outline"
+      },
       "heating_zones": {
         "default": "mdi:checkbox-blank-outline"
       },

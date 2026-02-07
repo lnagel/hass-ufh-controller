@@ -230,6 +230,9 @@
       "pid_derivative": {
         "name": "PID Derivative"
       },
+      "flowing_zones": {
+        "name": "Flowing Zones"
+      },
       "heating_zones": {
         "name": "Heating Zones"
       },
