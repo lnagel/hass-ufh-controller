@@ -172,7 +172,6 @@ class UFHControllerDataUpdateCoordinator(
 
         # Track entities that haven't reported a valid state yet during init
         self._pending_entities: set[str] = set()
-        self._pending_since: datetime | None = None
 
     def _build_controller(self, entry: UFHControllerConfigEntry) -> HeatingController:
         """Build HeatingController from config entry."""
@@ -361,7 +360,6 @@ class UFHControllerDataUpdateCoordinator(
                 or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN)
             }
             if self._pending_entities:
-                self._pending_since = datetime.now(UTC)
                 LOGGER.debug(
                     "Waiting for %d entities to report valid state: %s",
                     len(self._pending_entities),
@@ -579,15 +577,14 @@ class UFHControllerDataUpdateCoordinator(
 
         # Defer transition out of INITIALIZING while entities haven't reported yet
         if self._pending_entities:
-            if self._pending_since is not None:
-                elapsed = (now - self._pending_since).total_seconds()
+            if self._last_force_update is not None:
+                elapsed = (now - self._last_force_update).total_seconds()
                 if elapsed > INITIALIZING_TIMEOUT:
                     LOGGER.warning(
                         "Timed out waiting for entities to report valid state: %s",
                         self._pending_entities,
                     )
                     self._pending_entities.clear()
-                    self._pending_since = None
             if self._pending_entities and self._status != ControllerStatus.FAIL_SAFE:
                 self._status = ControllerStatus.INITIALIZING
 
