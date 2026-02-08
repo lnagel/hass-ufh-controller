@@ -225,12 +225,8 @@ class HeatingController:
             else:
                 self._state.status = ControllerStatus.NORMAL
         elif initializing_count > 0:
-            # Some zones still initializing, but no zones are normal yet
-            # Don't report fail-safe while zones are still initializing
-            if fail_safe_count > 0 or degraded_count > 0:
-                self._state.status = ControllerStatus.DEGRADED
-            else:
-                self._state.status = ControllerStatus.INITIALIZING
+            # Some zones still initializing, rest are degraded/fail-safe
+            self._state.status = ControllerStatus.DEGRADED
         elif fail_safe_count == len(zone_statuses):
             # ALL zones are in fail-safe (no normal, no initializing, no degraded)
             self._state.status = ControllerStatus.FAIL_SAFE

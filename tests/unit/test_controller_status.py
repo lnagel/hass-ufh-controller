@@ -103,6 +103,14 @@ class TestZoneAggregation:
         controller.update_status(now=NOW, has_pending_entities=False)
         assert controller.status == ControllerStatus.DEGRADED
 
+    def test_mix_initializing_and_degraded(self) -> None:
+        """Test mix of INITIALIZING + DEGRADED → controller DEGRADED."""
+        controller = _make_controller()
+        controller.zone_runtimes[0].state.zone_status = ZoneStatus.INITIALIZING
+        controller.zone_runtimes[1].state.zone_status = ZoneStatus.DEGRADED
+        controller.update_status(now=NOW, has_pending_entities=False)
+        assert controller.status == ControllerStatus.DEGRADED
+
     def test_mix_degraded_and_fail_safe(self) -> None:
         """Test mix of DEGRADED + FAIL_SAFE → controller DEGRADED."""
         controller = _make_controller()
