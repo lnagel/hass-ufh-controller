@@ -1109,6 +1109,7 @@ class UFHControllerDataUpdateCoordinator(
                 "zone_status": state.zone_status.value,
                 "supply_coefficient": state.supply_coefficient,
                 "used_duration": state.used_duration,
+                "remaining_duration": state.remaining_duration,
             }
 
         return result

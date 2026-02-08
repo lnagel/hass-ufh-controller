@@ -242,6 +242,9 @@
       "supply_coefficient": {
         "name": "Supply Coefficient"
       },
+      "remaining_duration": {
+        "name": "Remaining Duration"
+      },
       "supply_target_temp": {
         "name": "Supply Target Temperature"
       }

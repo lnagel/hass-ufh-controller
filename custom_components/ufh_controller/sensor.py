@@ -11,7 +11,7 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.const import PERCENTAGE, UnitOfTemperature
+from homeassistant.const import PERCENTAGE, UnitOfTemperature, UnitOfTime
 
 from .const import (
     ICON_GAUGE_THRESHOLDS,
@@ -148,6 +148,16 @@ SUPPLY_COEFFICIENT_SENSOR = UFHZoneSensorEntityDescription(
     icon_fn=_gauge_icon,
 )
 
+REMAINING_DURATION_SENSOR = UFHZoneSensorEntityDescription(
+    key="remaining_duration",
+    translation_key="remaining_duration",
+    native_unit_of_measurement=UnitOfTime.SECONDS,
+    device_class=SensorDeviceClass.DURATION,
+    state_class=SensorStateClass.MEASUREMENT,
+    suggested_display_precision=0,
+    value_fn=lambda data: data.get("remaining_duration"),
+)
+
 # Controller-level sensor descriptions
 ZONES_FLOWING_SENSOR = UFHControllerSensorEntityDescription(
     key="zones_flowing",
@@ -229,7 +239,12 @@ async def async_setup_entry(
         subentry_id = subentry.subentry_id
 
         # Build list of descriptions for this zone
-        zone_descriptions = [*ZONE_SENSORS, PID_ERROR_SENSOR, DUTY_CYCLE_SENSOR]
+        zone_descriptions = [
+            *ZONE_SENSORS,
+            PID_ERROR_SENSOR,
+            DUTY_CYCLE_SENSOR,
+            REMAINING_DURATION_SENSOR,
+        ]
 
         # Add supply_coefficient sensor only if supply_temp_entity is configured
         if supply_entity:

@@ -90,6 +90,20 @@ async def test_pid_derivative_sensor_created(
     assert state is not None
 
 
+async def test_remaining_duration_sensor_created(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    sensor_entity_prefix: str,
+) -> None:
+    """Test remaining duration sensor is created on setup."""
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get(f"{sensor_entity_prefix}_remaining_duration")
+    assert state is not None
+
+
 @pytest.mark.parametrize(
     "sensor_name",
     ["zones_flowing", "zones_heating", "zones_window"],
@@ -117,9 +131,9 @@ async def test_sensor_count_with_zone(
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
 
-    # 5 zone sensors + 3 controller sensors (zones_flowing/heating/window) = 8 total
+    # 6 zone sensors + 3 controller sensors (zones_flowing/heating/window) = 9 total
     states = hass.states.async_entity_ids(SENSOR_DOMAIN)
-    assert len(states) == 8
+    assert len(states) == 9
 
 
 async def test_no_zone_sensors_without_zones(
@@ -168,6 +182,7 @@ async def test_zone_sensor_unavailable_during_fail_safe(
         "pid_proportional",
         "pid_integral",
         "pid_derivative",
+        "remaining_duration",
     ]:
         state = hass.states.get(f"{sensor_entity_prefix}_{sensor_suffix}")
         assert state is not None, f"Sensor {sensor_suffix} not found"
@@ -229,3 +244,28 @@ async def test_supply_temp_invalid_state_returns_none(
     # _get_supply_temp should return None when state is non-numeric
     result = coordinator._get_supply_temp()
     assert result is None
+
+
+async def test_remaining_duration_sensor_reflects_zone_state(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_temp_sensor: None,
+    sensor_entity_prefix: str,
+) -> None:
+    """Test remaining duration sensor reflects zone remaining_duration."""
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = mock_config_entry.runtime_data.coordinator
+
+    # Set a known remaining duration on the zone state
+    zone1 = coordinator._controller.get_zone_runtime("zone1")
+    zone1.state.requested_duration = 600.0
+    zone1.state.used_duration = 150.0
+    coordinator.async_set_updated_data(coordinator._build_state_dict())
+    await hass.async_block_till_done()
+
+    state = hass.states.get(f"{sensor_entity_prefix}_remaining_duration")
+    assert state is not None
+    assert float(state.state) == pytest.approx(450.0)
