@@ -31,8 +31,8 @@ class TestPendingEntitiesSetup:
         coordinator = mock_config_entry.runtime_data.coordinator
 
         # mock_config_entry has dhw_active_entity + zone1 valve_switch
-        assert "binary_sensor.dhw_active" in coordinator._pending_entities
-        assert "switch.zone1_valve" in coordinator._pending_entities
+        assert "binary_sensor.dhw_active" in coordinator._entities_pending
+        assert "switch.zone1_valve" in coordinator._entities_pending
 
     async def test_pending_entities_includes_all_controller_entities(
         self,
@@ -45,7 +45,7 @@ class TestPendingEntitiesSetup:
         await hass.async_block_till_done()
 
         pending = (
-            mock_config_entry_all_entities.runtime_data.coordinator._pending_entities
+            mock_config_entry_all_entities.runtime_data.coordinator._entities_pending
         )
         assert pending >= {
             "switch.heat_request",
@@ -69,12 +69,12 @@ class TestPendingEntitiesPruning:
         await hass.async_block_till_done()
 
         coordinator = mock_config_entry.runtime_data.coordinator
-        assert "switch.zone1_valve" in coordinator._pending_entities
+        assert "switch.zone1_valve" in coordinator._entities_pending
 
         hass.states.async_set("switch.zone1_valve", "off")
         await hass.async_block_till_done()
 
-        assert "switch.zone1_valve" not in coordinator._pending_entities
+        assert "switch.zone1_valve" not in coordinator._entities_pending
 
     @pytest.mark.parametrize("state", ["unavailable", "unknown"])
     async def test_invalid_state_keeps_entity_pending(
@@ -89,12 +89,12 @@ class TestPendingEntitiesPruning:
         await hass.async_block_till_done()
 
         coordinator = mock_config_entry.runtime_data.coordinator
-        assert "switch.zone1_valve" in coordinator._pending_entities
+        assert "switch.zone1_valve" in coordinator._entities_pending
 
         hass.states.async_set("switch.zone1_valve", state)
         await hass.async_block_till_done()
 
-        assert "switch.zone1_valve" in coordinator._pending_entities
+        assert "switch.zone1_valve" in coordinator._entities_pending
 
     async def test_valid_states_pruned_during_update(
         self,
@@ -116,7 +116,7 @@ class TestPendingEntitiesPruning:
         await coordinator.async_refresh()
         await hass.async_block_till_done()
 
-        assert not coordinator._pending_entities
+        assert not coordinator._entities_pending
 
 
 class TestInitializationDeferral:
@@ -136,7 +136,7 @@ class TestInitializationDeferral:
 
         coordinator = mock_config_entry.runtime_data.coordinator
 
-        assert coordinator._pending_entities
+        assert coordinator._entities_pending
         assert coordinator.status == ControllerStatus.INITIALIZING
         assert coordinator.update_interval == timedelta(
             seconds=INITIALIZING_UPDATE_INTERVAL
@@ -162,7 +162,7 @@ class TestInitializationDeferral:
         await coordinator.async_refresh()
         await hass.async_block_till_done()
 
-        assert not coordinator._pending_entities
+        assert not coordinator._entities_pending
         assert coordinator.status == ControllerStatus.NORMAL
         assert coordinator.update_interval == timedelta(
             seconds=coordinator._controller.config.timing.controller_loop_interval
@@ -191,7 +191,7 @@ class TestInitializationDeferral:
         await coordinator.async_refresh()
         await hass.async_block_till_done()
 
-        assert not coordinator._pending_entities
+        assert not coordinator._entities_pending
         assert coordinator.status == ControllerStatus.NORMAL
 
 

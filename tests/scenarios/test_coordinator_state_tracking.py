@@ -87,7 +87,7 @@ async def test_self_initiated_change_no_extra_refresh(
     await hass.async_block_till_done()
 
     # Simulate coordinator setting expected state before service call
-    coordinator._expected_states[entity_id] = expected_state
+    coordinator._entities_expected_states[entity_id] = expected_state
 
     with patch.object(
         coordinator, "async_request_refresh", new_callable=AsyncMock
@@ -96,7 +96,7 @@ async def test_self_initiated_change_no_extra_refresh(
         await hass.async_block_till_done()
 
         mock_refresh.assert_not_called()
-        assert coordinator._expected_states.get(entity_id) is None
+        assert coordinator._entities_expected_states.get(entity_id) is None
 
 
 async def test_entity_removed_no_refresh(
@@ -146,7 +146,10 @@ async def test_fail_safe_sets_expected_state_for_summer_mode(
     )
     await coordinator._execute_fail_safe_actions()
 
-    assert coordinator._expected_states.get("select.summer_mode") == SummerMode.AUTO
+    assert (
+        coordinator._entities_expected_states.get("select.summer_mode")
+        == SummerMode.AUTO
+    )
 
 
 async def test_dhw_off_transition_sets_flush_until_when_enabled(

@@ -172,14 +172,14 @@ class UFHControllerDataUpdateCoordinator(
         # Track last force-update to ensure commands are sent at least once per cycle
         self._last_force_update: datetime | None = None
 
+        # Track entities that haven't reported a valid state
+        self._entities_pending: set[str] = set()
+
         # Track expected states for entities we control
-        self._expected_states: dict[str, str | None] = {}
+        self._entities_expected_states: dict[str, str | None] = {}
 
         # Track listener unsubscribe callback for re-setup on config reload
-        self._listener_unsub: Callable[[], None] | None = None
-
-        # Track entities that haven't reported a valid state
-        self._pending_entities: set[str] = set()
+        self._entities_listener_unsub: Callable[[], None] | None = None
 
         # Track coordinator start
         self._started_at: datetime = datetime.now(UTC)
@@ -330,9 +330,9 @@ class UFHControllerDataUpdateCoordinator(
     def _async_setup_listeners(self) -> None:
         """Set up state change listeners for controller and zone entities."""
         # Unsubscribe from old listeners if they exist (for config reload)
-        if self._listener_unsub is not None:
-            self._listener_unsub()
-            self._listener_unsub = None
+        if self._entities_listener_unsub is not None:
+            self._entities_listener_unsub()
+            self._entities_listener_unsub = None
 
         # Collect all configured entity IDs from config entry (skip None/empty)
         entity_ids: list[str] = []
@@ -361,10 +361,10 @@ class UFHControllerDataUpdateCoordinator(
             return
 
         # Track pending entities
-        self._pending_entities = set(entity_ids)
+        self._entities_pending = set(entity_ids)
 
         # Subscribe to state changes
-        self._listener_unsub = async_track_state_change_event(
+        self._entities_listener_unsub = async_track_state_change_event(
             self.hass, entity_ids, self._on_external_entity_change
         )
         LOGGER.debug("Subscribed to state changes for entities: %s", entity_ids)
@@ -378,9 +378,9 @@ class UFHControllerDataUpdateCoordinator(
         It handles cleanup of listeners that may have been set up multiple times
         during in-place config reloads.
         """
-        if self._listener_unsub is not None:
-            self._listener_unsub()
-            self._listener_unsub = None
+        if self._entities_listener_unsub is not None:
+            self._entities_listener_unsub()
+            self._entities_listener_unsub = None
             LOGGER.debug("Unsubscribed state change listeners on shutdown")
 
     @callback
@@ -394,17 +394,17 @@ class UFHControllerDataUpdateCoordinator(
             return
 
         # Track entity readiness for initialization
-        if entity_id in self._pending_entities and new_state.state not in (
+        if entity_id in self._entities_pending and new_state.state not in (
             STATE_UNAVAILABLE,
             STATE_UNKNOWN,
         ):
-            self._pending_entities.discard(entity_id)
+            self._entities_pending.discard(entity_id)
 
         # Check if this state change matches what we expected (self-initiated change)
-        expected = self._expected_states.get(entity_id)
+        expected = self._entities_expected_states.get(entity_id)
         if expected is not None and new_state.state == expected:
             # clear expectation; ignore the event
-            self._expected_states[entity_id] = None
+            self._entities_expected_states[entity_id] = None
             return
 
         # External change - request refresh
@@ -517,7 +517,7 @@ class UFHControllerDataUpdateCoordinator(
         summer_entity = self._controller.config.summer_mode_entity
         if summer_entity:
             # Track expected state for external change detection
-            self._expected_states[summer_entity] = SummerMode.AUTO
+            self._entities_expected_states[summer_entity] = SummerMode.AUTO
 
             await self.hass.services.async_call(
                 Platform.SELECT,
@@ -558,9 +558,9 @@ class UFHControllerDataUpdateCoordinator(
         force_update = self._handle_observation_period_transition(now)
 
         # Check current state of pending entities
-        self._pending_entities = {
+        self._entities_pending = {
             eid
-            for eid in self._pending_entities
+            for eid in self._entities_pending
             if (state := self.hass.states.get(eid)) is None
             or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN)
         }
@@ -932,14 +932,14 @@ class UFHControllerDataUpdateCoordinator(
     def _update_controller_status(self, now: datetime) -> None:
         """Update controller status based on zone statuses."""
         # Defer transition out of INITIALIZING while entities haven't reported yet
-        if self._status == ControllerStatus.INITIALIZING and self._pending_entities:
+        if self._status == ControllerStatus.INITIALIZING and self._entities_pending:
             elapsed = (now - self._started_at).total_seconds()
             if elapsed < INITIALIZING_TIMEOUT:
                 return  # remain INITIALIZING
 
             LOGGER.warning(
                 "Timed out waiting for entities to report valid state: %s",
-                self._pending_entities,
+                self._entities_pending,
             )
 
         zone_statuses = [
@@ -1097,7 +1097,7 @@ class UFHControllerDataUpdateCoordinator(
             return
 
         # Track expected state for external change detection
-        self._expected_states[entity_id] = summer_mode
+        self._entities_expected_states[entity_id] = summer_mode
 
         # Call select service to change mode
         await self.hass.services.async_call(
@@ -1130,7 +1130,7 @@ class UFHControllerDataUpdateCoordinator(
             return
 
         # Track expected state for external change detection
-        self._expected_states[entity_id] = "on" if turn_on else "off"
+        self._entities_expected_states[entity_id] = "on" if turn_on else "off"
 
         await self.hass.services.async_call(
             Platform.SWITCH,
