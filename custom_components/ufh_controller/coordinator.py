@@ -172,11 +172,14 @@ class UFHControllerDataUpdateCoordinator(
         # Track last force-update to ensure commands are sent at least once per cycle
         self._last_force_update: datetime | None = None
 
+        # Track expected states for entities we control
+        self._entities_expected_states: dict[str, str | None] = {}
+
         # Track entities that haven't reported a valid state
         self._entities_pending: set[str] = set()
 
-        # Track expected states for entities we control
-        self._entities_expected_states: dict[str, str | None] = {}
+        # Track entities that should trigger coordinator refresh
+        self._entities_refresh_trigger: set[str] = set()
 
         # Track listener unsubscribe callback for re-setup on config reload
         self._entities_listener_unsub: Callable[[], None] | None = None
@@ -329,39 +332,53 @@ class UFHControllerDataUpdateCoordinator(
 
     def _async_setup_listeners(self) -> None:
         """Set up state change listeners for controller and zone entities."""
+        entry = self.config_entry
+
         # Unsubscribe from old listeners if they exist (for config reload)
         if self._entities_listener_unsub is not None:
             self._entities_listener_unsub()
             self._entities_listener_unsub = None
 
-        # Collect all configured entity IDs from config entry (skip None/empty)
-        entity_ids: list[str] = []
-        entry = self.config_entry
+        self._entities_pending = set()
+        self._entities_refresh_trigger = set()
 
-        # Controller-level entities
+        # Collect Controller-level entities
         if heat_request := entry.data.get(CONF_HEAT_REQUEST_ENTITY):
-            entity_ids.append(heat_request)
+            self._entities_pending.add(heat_request)
+            self._entities_refresh_trigger.add(heat_request)
         if dhw_active := entry.data.get(CONF_DHW_ACTIVE_ENTITY):
-            entity_ids.append(dhw_active)
+            self._entities_pending.add(dhw_active)
+            self._entities_refresh_trigger.add(dhw_active)
         if summer_mode := entry.data.get(CONF_SUMMER_MODE_ENTITY):
-            entity_ids.append(summer_mode)
+            self._entities_pending.add(summer_mode)
+            self._entities_refresh_trigger.add(summer_mode)
         if supply_temp := entry.data.get(CONF_SUPPLY_TEMP_ENTITY):
-            entity_ids.append(supply_temp)
+            self._entities_pending.add(supply_temp)
         if outdoor_temp := entry.data.get(CONF_OUTDOOR_TEMP_ENTITY):
-            entity_ids.append(outdoor_temp)
+            self._entities_pending.add(outdoor_temp)
 
-        # Zone valve switches from subentries
-        entity_ids.extend(
+        # Collect Zone temperature sensors
+        zone_temp_sensors = {
+            subentry.data["temp_sensor"]
+            for subentry in entry.subentries.values()
+            if subentry.subentry_type == SUBENTRY_TYPE_ZONE
+        }
+        self._entities_pending.update(zone_temp_sensors)
+
+        # Collect Zone valve switches
+        zone_valve_switches = {
             subentry.data["valve_switch"]
             for subentry in entry.subentries.values()
             if subentry.subentry_type == SUBENTRY_TYPE_ZONE
-        )
+        }
+        self._entities_pending.update(zone_valve_switches)
+        self._entities_refresh_trigger.update(zone_valve_switches)
+
+        # Collect entities for state change tracking
+        entity_ids = self._entities_pending.union(self._entities_refresh_trigger)
 
         if not entity_ids:
             return
-
-        # Track pending entities
-        self._entities_pending = set(entity_ids)
 
         # Subscribe to state changes
         self._entities_listener_unsub = async_track_state_change_event(
@@ -393,13 +410,6 @@ class UFHControllerDataUpdateCoordinator(
             # entity removed; ignore the event
             return
 
-        # Track entity readiness for initialization
-        if entity_id in self._entities_pending and new_state.state not in (
-            STATE_UNAVAILABLE,
-            STATE_UNKNOWN,
-        ):
-            self._entities_pending.discard(entity_id)
-
         # Check if this state change matches what we expected (self-initiated change)
         expected = self._entities_expected_states.get(entity_id)
         if expected is not None and new_state.state == expected:
@@ -407,16 +417,25 @@ class UFHControllerDataUpdateCoordinator(
             self._entities_expected_states[entity_id] = None
             return
 
+        if new_state.state in {STATE_UNAVAILABLE, STATE_UNKNOWN}:
+            # value unavailable/unknown; ignore the event
+            return
+
+        # Track entity readiness for initialization
+        if entity_id in self._entities_pending:
+            self._entities_pending.discard(entity_id)
+
         # External change - request refresh
-        old_state = event.data.get("old_state")
-        old_state_str = old_state.state if old_state else None
-        LOGGER.debug(
-            "External state change detected for %s: %s -> %s, requesting refresh",
-            entity_id,
-            old_state_str,
-            new_state.state,
-        )
-        self.hass.async_create_task(self.async_request_refresh())
+        if entity_id in self._entities_refresh_trigger:
+            old_state = event.data.get("old_state")
+            old_state_str = old_state.state if old_state else None
+            LOGGER.debug(
+                "External state change detected for %s: %s -> %s, requesting refresh",
+                entity_id,
+                old_state_str,
+                new_state.state,
+            )
+            self.hass.async_create_task(self.async_request_refresh())
 
     def _restore_zone_state(self, zone_id: str, zone_state: dict[str, Any]) -> None:
         """Restore state for a single zone from V2 storage format."""
