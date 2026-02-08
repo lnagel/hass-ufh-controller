@@ -8,7 +8,7 @@ zone control, operation modes, and heat request aggregation.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from custom_components.ufh_controller.const import (
     DEFAULT_CYCLE_MODE_HOURS,
@@ -513,6 +513,31 @@ class HeatingController:
 
         # Heat and cycle modes depend on heat request
         return SummerMode.WINTER if heat_request else SummerMode.SUMMER
+
+    def update_dhw_state(self, dhw_active: bool, *, now: datetime) -> None:
+        """
+        Update DHW state and manage post-DHW flush timer.
+
+        Detects transitions:
+        - ON→OFF: starts post-flush timer if flush enabled and duration > 0
+        - OFF→ON: clears flush_until timer
+
+        Args:
+            dhw_active: Current DHW active state.
+            now: Current time for flush timer calculation.
+
+        """
+        # Detect DHW OFF transition (was on, now off)
+        if self._state.dhw_active and not dhw_active:
+            flush_duration = self.config.timing.flush_duration
+            if flush_duration > 0 and self._state.flush_enabled:
+                self._state.flush_until = now + timedelta(seconds=flush_duration)
+
+        # Clear flush_until when DHW starts
+        if dhw_active and not self._state.dhw_active:
+            self._state.flush_until = None
+
+        self._state.dhw_active = dhw_active
 
     @property
     def any_zone_in_fail_safe(self) -> bool:

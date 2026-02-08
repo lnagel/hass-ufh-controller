@@ -164,9 +164,6 @@ class UFHControllerDataUpdateCoordinator(
         )
         self._state_restored: bool = False
 
-        # Track previous DHW state for transition detection
-        self._prev_dhw_active: bool = False
-
         # Track last force-update to ensure commands are sent at least once per cycle
         self._last_force_update: datetime | None = None
 
@@ -643,34 +640,14 @@ class UFHControllerDataUpdateCoordinator(
         return self._build_state_dict()
 
     async def _update_dhw_state(self) -> None:
-        """Update DHW active state from entity and manage post-DHW flush timer."""
+        """Update DHW active state from entity and delegate to controller."""
         dhw_entity = self._controller.config.dhw_active_entity
         if dhw_entity is None:
             return
 
         state = self.hass.states.get(dhw_entity)
         current_dhw_active = state is not None and state.state == "on"
-
-        # Detect DHW OFF transition (was on, now off)
-        if self._prev_dhw_active and not current_dhw_active:
-            # DHW just turned off - start post-flush timer if enabled
-            flush_duration = self._controller.config.timing.flush_duration
-            if flush_duration > 0 and self._controller.state.flush_enabled:
-                self._controller.state.flush_until = datetime.now(UTC) + timedelta(
-                    seconds=flush_duration
-                )
-                LOGGER.debug(
-                    "DHW ended, flush will continue until %s",
-                    self._controller.state.flush_until,
-                )
-
-        # Clear flush_until when DHW starts
-        if current_dhw_active and not self._prev_dhw_active:
-            self._controller.state.flush_until = None
-
-        # Update current state
-        self._prev_dhw_active = current_dhw_active
-        self._controller.state.dhw_active = current_dhw_active
+        self._controller.update_dhw_state(current_dhw_active, now=datetime.now(UTC))
 
     def _handle_observation_period_transition(self, now: datetime) -> bool:
         """

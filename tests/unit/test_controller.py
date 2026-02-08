@@ -1,12 +1,13 @@
 """Test heating controller core logic."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
 from custom_components.ufh_controller.const import (
     OperationMode,
     SummerMode,
+    TimingConfig,
     ValveState,
     ZoneStatus,
 )
@@ -801,3 +802,74 @@ class TestAnyZoneInFailSafe:
         controller.get_zone_state("living_room").zone_status = ZoneStatus.FAIL_SAFE
         controller.get_zone_state("bedroom").zone_status = ZoneStatus.FAIL_SAFE
         assert controller.any_zone_in_fail_safe is True
+
+
+class TestUpdateDhwState:
+    """Test update_dhw_state method."""
+
+    def test_off_to_on_clears_flush_until(
+        self, basic_config: ControllerConfig
+    ) -> None:
+        """Test OFF→ON transition clears flush_until."""
+        controller = HeatingController(basic_config, started_at=NOW)
+        controller.state.flush_until = NOW + timedelta(seconds=480)
+
+        controller.update_dhw_state(dhw_active=True, now=NOW)
+
+        assert controller.state.flush_until is None
+        assert controller.state.dhw_active is True
+
+    def test_on_to_off_sets_flush_until_when_enabled(
+        self, basic_config: ControllerConfig
+    ) -> None:
+        """Test ON→OFF sets flush_until when flush enabled and duration > 0."""
+        controller = HeatingController(basic_config, started_at=NOW)
+        controller.state.dhw_active = True
+        controller.state.flush_enabled = True
+
+        controller.update_dhw_state(dhw_active=False, now=NOW)
+
+        flush_duration = controller.config.timing.flush_duration
+        assert controller.state.flush_until == NOW + timedelta(
+            seconds=flush_duration
+        )
+        assert controller.state.dhw_active is False
+
+    def test_on_to_off_no_flush_when_disabled(
+        self, basic_config: ControllerConfig
+    ) -> None:
+        """Test ON→OFF does NOT set flush_until when flush disabled."""
+        controller = HeatingController(basic_config, started_at=NOW)
+        controller.state.dhw_active = True
+        controller.state.flush_enabled = False
+
+        controller.update_dhw_state(dhw_active=False, now=NOW)
+
+        assert controller.state.flush_until is None
+
+    def test_on_to_off_no_flush_when_duration_zero(self) -> None:
+        """Test ON→OFF does NOT set flush_until when duration is 0."""
+        config = ControllerConfig(
+            controller_id="heating",
+            name="Heating",
+            zones=[],
+            timing=TimingConfig(flush_duration=0),
+        )
+        controller = HeatingController(config, started_at=NOW)
+        controller.state.dhw_active = True
+        controller.state.flush_enabled = True
+
+        controller.update_dhw_state(dhw_active=False, now=NOW)
+
+        assert controller.state.flush_until is None
+
+    def test_same_state_no_change(self, basic_config: ControllerConfig) -> None:
+        """Test no transition (same state) doesn't change flush_until."""
+        controller = HeatingController(basic_config, started_at=NOW)
+        existing_flush_until = NOW + timedelta(seconds=100)
+        controller.state.flush_until = existing_flush_until
+
+        # OFF→OFF: no transition
+        controller.update_dhw_state(dhw_active=False, now=NOW)
+
+        assert controller.state.flush_until == existing_flush_until
