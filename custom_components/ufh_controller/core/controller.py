@@ -515,6 +515,14 @@ class HeatingController:
         return SummerMode.WINTER if heat_request else SummerMode.SUMMER
 
     @property
+    def any_zone_in_fail_safe(self) -> bool:
+        """Check if any zone is in fail-safe mode."""
+        return any(
+            rt.state.zone_status == ZoneStatus.FAIL_SAFE
+            for rt in self._zones.values()
+        )
+
+    @property
     def zone_ids(self) -> list[str]:
         """Get list of all zone IDs."""
         return list(self._zones.keys())

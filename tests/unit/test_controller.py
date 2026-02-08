@@ -8,6 +8,7 @@ from custom_components.ufh_controller.const import (
     OperationMode,
     SummerMode,
     ValveState,
+    ZoneStatus,
 )
 from custom_components.ufh_controller.core.controller import (
     ControllerConfig,
@@ -778,3 +779,25 @@ class TestComputeActionsWithFlushZones:
 
         # Flush zone should be in valve_actions (was evaluated via phase 3)
         assert "bathroom" in actions.valve_actions
+
+
+class TestAnyZoneInFailSafe:
+    """Test any_zone_in_fail_safe property."""
+
+    def test_no_zones_in_fail_safe(self, basic_config: ControllerConfig) -> None:
+        """Test returns False when no zones are in fail-safe."""
+        controller = HeatingController(basic_config, started_at=NOW)
+        assert controller.any_zone_in_fail_safe is False
+
+    def test_one_zone_in_fail_safe(self, basic_config: ControllerConfig) -> None:
+        """Test returns True when one zone is in fail-safe."""
+        controller = HeatingController(basic_config, started_at=NOW)
+        controller.get_zone_state("living_room").zone_status = ZoneStatus.FAIL_SAFE
+        assert controller.any_zone_in_fail_safe is True
+
+    def test_all_zones_in_fail_safe(self, basic_config: ControllerConfig) -> None:
+        """Test returns True when all zones are in fail-safe."""
+        controller = HeatingController(basic_config, started_at=NOW)
+        controller.get_zone_state("living_room").zone_status = ZoneStatus.FAIL_SAFE
+        controller.get_zone_state("bedroom").zone_status = ZoneStatus.FAIL_SAFE
+        assert controller.any_zone_in_fail_safe is True

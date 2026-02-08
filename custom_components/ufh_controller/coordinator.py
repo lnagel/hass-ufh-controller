@@ -945,14 +945,6 @@ class UFHControllerDataUpdateCoordinator(
         elif result.transition == ZoneStatusTransition.RECOVERED:
             LOGGER.info("Zone %s recovered to normal operation", zone_id)
 
-    def _any_zone_in_fail_safe(self) -> bool:
-        """Check if any zone is in fail-safe mode."""
-        return any(
-            self._controller.get_zone_runtime(zone_id).state.zone_status
-            == ZoneStatus.FAIL_SAFE
-            for zone_id in self._controller.zone_ids
-        )
-
     async def _execute_valve_actions(
         self,
         actions: dict[str, ZoneAction],
@@ -1032,7 +1024,7 @@ class UFHControllerDataUpdateCoordinator(
             return
 
         # Safety check: if any zone is in fail-safe, force summer mode to 'auto'
-        if self._any_zone_in_fail_safe():
+        if self._controller.any_zone_in_fail_safe:
             summer_mode = SummerMode.AUTO
             LOGGER.debug(
                 "Zone(s) in fail-safe, forcing summer mode to 'auto' for fallbacks"
