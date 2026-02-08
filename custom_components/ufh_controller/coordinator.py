@@ -1292,18 +1292,12 @@ class UFHControllerDataUpdateCoordinator(
         old_zone_ids = set(self._controller.zone_ids)
         saved_state = self._build_storage_state()
 
-        # Preserve flush_until separately (not persisted to storage)
-        saved_flush_until = self._controller.state.flush_until
-
         # Rebuild controller with updated config
         self._controller = self._build_controller(self.config_entry)
 
         # Restore controller-level state using existing method (V2 format)
         controller_data = saved_state.get("controller", {})
         self._restore_controller_state(controller_data)
-
-        # Restore flush_until (runtime-only state)
-        self._controller.state.flush_until = saved_flush_until
 
         # Restore zone state for zones that still exist using existing method
         new_zone_ids = set(self._controller.zone_ids)
