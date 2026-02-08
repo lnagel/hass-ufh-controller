@@ -149,6 +149,7 @@ class UFHControllerDataUpdateCoordinator(
         # Build controller first to get timing config
         self._controller = self._build_controller(entry)
         self._status: ControllerStatus = ControllerStatus.INITIALIZING
+        self._init_started_at: datetime = datetime.now(UTC)
 
         super().__init__(
             hass,
@@ -183,9 +184,6 @@ class UFHControllerDataUpdateCoordinator(
 
         # Track listener unsubscribe callback for re-setup on config reload
         self._entities_listener_unsub: Callable[[], None] | None = None
-
-        # Track coordinator start
-        self._started_at: datetime = datetime.now(UTC)
 
     def _build_controller(self, entry: UFHControllerConfigEntry) -> HeatingController:
         """Build HeatingController from config entry."""
@@ -952,7 +950,7 @@ class UFHControllerDataUpdateCoordinator(
         """Update controller status based on zone statuses."""
         # Defer transition out of INITIALIZING while entities haven't reported yet
         if self._status == ControllerStatus.INITIALIZING and self._entities_pending:
-            elapsed = (now - self._started_at).total_seconds()
+            elapsed = (now - self._init_started_at).total_seconds()
             if elapsed < INITIALIZING_TIMEOUT:
                 return  # remain INITIALIZING
 
@@ -1294,6 +1292,8 @@ class UFHControllerDataUpdateCoordinator(
 
         # Rebuild controller with updated config
         self._controller = self._build_controller(self.config_entry)
+        self._status: ControllerStatus = ControllerStatus.INITIALIZING
+        self._init_started_at: datetime = datetime.now(UTC)
 
         # Restore controller-level state using existing method (V2 format)
         controller_data = saved_state.get("controller", {})

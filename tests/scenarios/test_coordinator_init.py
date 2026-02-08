@@ -219,7 +219,7 @@ class TestInitializationTimeout:
         hass.states.async_set("switch.zone1_valve", "off")
         await hass.async_block_till_done()
 
-        coordinator._started_at = datetime.now(UTC) - timedelta(
+        coordinator._init_started_at = datetime.now(UTC) - timedelta(
             seconds=INITIALIZING_TIMEOUT + 1
         )
 
