@@ -13,6 +13,8 @@ from custom_components.ufh_controller.core.zone import (
     evaluate_zone,
 )
 
+NOW = datetime(2026, 2, 1, 12, 0, 0, tzinfo=UTC)
+
 
 class TestEvaluateZoneFlushCircuitPostDHW:
     """Test flush circuit behavior during post-DHW flush period."""
@@ -30,6 +32,7 @@ class TestEvaluateZoneFlushCircuitPostDHW:
             valve_state=ValveState.OFF,
         )
         controller = ControllerState(
+            started_at=NOW,
             flush_enabled=True,
             zones={"bathroom": zone},
         )
@@ -44,6 +47,7 @@ class TestEvaluateZoneFlushCircuitPostDHW:
             valve_state=ValveState.ON,
         )
         controller = ControllerState(
+            started_at=NOW,
             flush_enabled=True,
             zones={"bathroom": zone},
         )
@@ -59,6 +63,7 @@ class TestEvaluateZoneFlushCircuitPostDHW:
             requested_duration=0.0,  # No quota
         )
         controller = ControllerState(
+            started_at=NOW,
             flush_enabled=True,
             flush_request=False,  # Post-DHW period expired
             zones={"bathroom": zone},
@@ -84,6 +89,7 @@ class TestEvaluateZoneFlushCircuitPostDHW:
             requested_duration=1000.0,
         )
         controller = ControllerState(
+            started_at=NOW,
             flush_enabled=True,
             flush_request=False,
             zones={"bathroom": flush_zone, "living_room": regular_zone},
@@ -109,6 +115,7 @@ class TestEvaluateZoneFlushCircuitPostDHW:
             requested_duration=1000.0,  # Has demand but not running
         )
         controller = ControllerState(
+            started_at=NOW,
             flush_enabled=True,
             zones={"bathroom": flush_zone, "living_room": regular_zone},
         )
@@ -154,6 +161,7 @@ class TestFlushCircuitScenarios:
             requested_duration=1000.0,
         )
         controller = ControllerState(
+            started_at=NOW,
             flush_enabled=True,
             flush_request=False,
             zones={"bathroom": flush_zone, "living_room": regular_zone},
@@ -171,21 +179,21 @@ class TestControllerStateFlushUntil:
 
     def test_flush_until_default_none(self) -> None:
         """Test flush_until defaults to None."""
-        controller = ControllerState()
+        controller = ControllerState(started_at=NOW)
         assert controller.flush_until is None
 
     def test_flush_until_can_be_set(self) -> None:
         """Test flush_until can be set to a datetime."""
         future_time = datetime.now(UTC) + timedelta(minutes=8)
-        controller = ControllerState(flush_until=future_time)
+        controller = ControllerState(started_at=NOW, flush_until=future_time)
         assert controller.flush_until == future_time
 
     def test_flush_request_default_false(self) -> None:
         """Test flush_request defaults to False."""
-        controller = ControllerState()
+        controller = ControllerState(started_at=NOW)
         assert controller.flush_request is False
 
     def test_flush_request_can_be_set(self) -> None:
         """Test flush_request can be set to True."""
-        controller = ControllerState(flush_request=True)
+        controller = ControllerState(started_at=NOW, flush_request=True)
         assert controller.flush_request is True

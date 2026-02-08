@@ -9,7 +9,7 @@ This document describes the layered architecture of the UFH Controller and the r
 - Passes data to Controller, executes returned actions
 
 **Controller** (Pure decision engine)
-- Holds global config/state (mode, timing, DHW, flush)
+- Holds global config/state (status, mode, timing, DHW, flush)
 - `evaluate()` returns all actions (valves, heat_request, flush_request) with no side effects
 
 **Zone** (Single-zone control)

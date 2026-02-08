@@ -9,6 +9,8 @@ Using unavailable state prevents Home Assistant from recording null values to
 history during restarts, which was causing incorrect history data.
 """
 
+from datetime import UTC, datetime
+
 import pytest
 from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
@@ -21,6 +23,8 @@ from custom_components.ufh_controller.core.controller import (
 )
 from custom_components.ufh_controller.core.zone import ZoneState
 from tests.conftest import setup_zone_pid
+
+NOW = datetime(2026, 2, 1, 12, 0, 0, tzinfo=UTC)
 
 
 class TestZoneStateInitialization:
@@ -60,7 +64,7 @@ class TestControllerZoneInitialization:
         self, basic_config: ControllerConfig
     ) -> None:
         """Test zone PID state is None before first PID update."""
-        controller = HeatingController(basic_config)
+        controller = HeatingController(basic_config, started_at=NOW)
 
         runtime = controller.get_zone_runtime("living_room")
         assert runtime is not None
@@ -72,7 +76,7 @@ class TestControllerZoneInitialization:
         self, basic_config: ControllerConfig
     ) -> None:
         """Test zone PID fields have float values after PID update."""
-        controller = HeatingController(basic_config)
+        controller = HeatingController(basic_config, started_at=NOW)
         controller.set_zone_setpoint("living_room", 22.0)
 
         # Perform a PID update with a valid temperature

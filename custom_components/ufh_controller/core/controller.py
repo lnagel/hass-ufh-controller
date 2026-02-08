@@ -12,10 +12,13 @@ from datetime import datetime
 
 from custom_components.ufh_controller.const import (
     DEFAULT_CYCLE_MODE_HOURS,
+    INITIALIZING_TIMEOUT,
+    ControllerStatus,
     OperationMode,
     SummerMode,
     TimingConfig,
     ValveState,
+    ZoneStatus,
 )
 
 from .heating_curve import HeatingCurveConfig, calculate_supply_target
@@ -34,6 +37,8 @@ from .zone import (
 class ControllerState:
     """Runtime state for the entire controller."""
 
+    started_at: datetime  # Required, provided by caller (no side effects)
+    status: ControllerStatus = ControllerStatus.INITIALIZING
     mode: OperationMode = OperationMode.HEAT
     observation_start: datetime = field(default_factory=datetime.now)
     period_elapsed: float = 0.0  # Seconds elapsed in current observation period
@@ -128,16 +133,19 @@ class HeatingController:
     def __init__(
         self,
         config: ControllerConfig,
+        *,
+        started_at: datetime,
     ) -> None:
         """
         Initialize the heating controller.
 
         Args:
             config: Controller configuration.
+            started_at: Current time for initialization timestamp.
 
         """
         self.config = config
-        self._state = ControllerState(mode=OperationMode.HEAT)
+        self._state = ControllerState(started_at=started_at, mode=OperationMode.HEAT)
         self._zones: dict[str, ZoneRuntime] = {}
 
         # Initialize zones from config
@@ -172,6 +180,63 @@ class HeatingController:
     def mode(self, value: str | OperationMode) -> None:
         """Set the operation mode."""
         self._state.mode = OperationMode(value)
+
+    @property
+    def status(self) -> ControllerStatus:
+        """Get the current controller operational status."""
+        return self._state.status
+
+    def update_status(self, *, now: datetime, has_pending_entities: bool) -> None:
+        """Update controller status based on zone statuses."""
+        # Defer transition out of INITIALIZING while entities haven't reported
+        if self._state.status == ControllerStatus.INITIALIZING and has_pending_entities:
+            elapsed = (now - self._state.started_at).total_seconds()
+            if elapsed < INITIALIZING_TIMEOUT:
+                return  # remain INITIALIZING
+
+        # Zone status aggregation
+        zone_statuses = [rt.state.zone_status for rt in self._zones.values()]
+
+        if not zone_statuses:
+            self._state.status = ControllerStatus.NORMAL
+            return
+
+        # Count zones in each state
+        initializing_count = sum(
+            1 for s in zone_statuses if s == ZoneStatus.INITIALIZING
+        )
+        normal_count = sum(1 for s in zone_statuses if s == ZoneStatus.NORMAL)
+        fail_safe_count = sum(1 for s in zone_statuses if s == ZoneStatus.FAIL_SAFE)
+        degraded_count = sum(1 for s in zone_statuses if s == ZoneStatus.DEGRADED)
+
+        # Controller status logic:
+        # - If ALL zones are initializing → controller initializing
+        # - If ANY zone is normal → controller operational (degraded if others fail)
+        # - If ANY zone is still initializing → don't go to fail-safe yet
+        # - Only go to fail-safe if ALL zones are in fail-safe
+
+        if initializing_count == len(zone_statuses):
+            # All zones still initializing - controller is initializing
+            self._state.status = ControllerStatus.INITIALIZING
+        elif normal_count > 0:
+            # At least one zone is normal - controller is operational
+            if fail_safe_count > 0 or degraded_count > 0:
+                self._state.status = ControllerStatus.DEGRADED
+            else:
+                self._state.status = ControllerStatus.NORMAL
+        elif initializing_count > 0:
+            # Some zones still initializing, but no zones are normal yet
+            # Don't report fail-safe while zones are still initializing
+            if fail_safe_count > 0 or degraded_count > 0:
+                self._state.status = ControllerStatus.DEGRADED
+            else:
+                self._state.status = ControllerStatus.INITIALIZING
+        elif fail_safe_count == len(zone_statuses):
+            # ALL zones are in fail-safe (no normal, no initializing, no degraded)
+            self._state.status = ControllerStatus.FAIL_SAFE
+        else:
+            # Mix of degraded and fail-safe, but no normal or initializing
+            self._state.status = ControllerStatus.DEGRADED
 
     def get_zone_state(self, zone_id: str) -> ZoneState:
         """Get the state of a specific zone. Raises KeyError if zone_id is invalid."""

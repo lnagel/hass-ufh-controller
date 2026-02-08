@@ -1,5 +1,7 @@
 """Test zone data structures and helper functions."""
 
+from datetime import UTC, datetime
+
 import pytest
 
 from custom_components.ufh_controller.const import (
@@ -19,6 +21,8 @@ from custom_components.ufh_controller.core.zone import (
     calculate_requested_duration,
     evaluate_zone,
 )
+
+NOW = datetime(2026, 2, 1, 12, 0, 0, tzinfo=UTC)
 
 
 class TestCalculateRequestedDuration:
@@ -80,7 +84,7 @@ class TestPeriodTransitionScenario:
             used_duration=6480.0,  # 90% used, 720s remaining quota
         )
         # 7200 - 7190 = 10 seconds remaining (simulates 13:59:50)
-        controller = ControllerState(period_elapsed=7190.0)
+        controller = ControllerState(started_at=NOW, period_elapsed=7190.0)
         result = evaluate_zone(zone, controller, timing)
         # Freeze active: valve off stays off, even though quota remains
         assert result == ZoneAction.STAY_OFF
@@ -96,7 +100,7 @@ class TestPeriodTransitionScenario:
             used_duration=6480.0,  # 90% used
         )
         # Only 10 seconds remaining
-        controller = ControllerState(period_elapsed=7190.0)
+        controller = ControllerState(started_at=NOW, period_elapsed=7190.0)
         result = evaluate_zone(zone, controller, timing)
         # Freeze active: valve on stays on
         assert result == ZoneAction.STAY_ON
@@ -115,7 +119,7 @@ class TestPeriodTransitionScenario:
             used_duration=30.0,  # Only 30s used in new period
         )
         # Fresh period: only 30 seconds elapsed
-        controller = ControllerState(period_elapsed=30.0)
+        controller = ControllerState(started_at=NOW, period_elapsed=30.0)
         result = evaluate_zone(zone, controller, timing)
         # Normal quota logic: has plenty of quota, can turn on
         assert result == ZoneAction.TURN_ON
@@ -142,6 +146,7 @@ class TestPeriodTransitionScenario:
             used_duration=60.0,  # 1 minute used
         )
         controller = ControllerState(
+            started_at=NOW,
             period_elapsed=60.0,
             zones={"zone1": zone1, "zone2": zone2},
         )
@@ -209,7 +214,7 @@ class TestControllerState:
 
     def test_default_values(self) -> None:
         """Test default values are set correctly."""
-        controller = ControllerState()
+        controller = ControllerState(started_at=NOW)
         assert controller.mode == OperationMode.HEAT
         assert controller.period_elapsed == 0.0
         assert controller.heat_request is None
@@ -223,7 +228,7 @@ class TestControllerState:
             "zone1": ZoneState(zone_id="zone1"),
             "zone2": ZoneState(zone_id="zone2"),
         }
-        controller = ControllerState(zones=zones)
+        controller = ControllerState(started_at=NOW, zones=zones)
         assert len(controller.zones) == 2
 
 

@@ -20,6 +20,8 @@ from custom_components.ufh_controller.core.zone import (
 )
 from tests.conftest import setup_zone_historical, setup_zone_pid
 
+NOW = datetime(2026, 2, 1, 12, 0, 0, tzinfo=UTC)
+
 
 @pytest.fixture
 def basic_config() -> ControllerConfig:
@@ -74,7 +76,7 @@ class TestHeatingControllerInit:
 
     def test_init_with_zones(self, basic_config: ControllerConfig) -> None:
         """Test controller initializes with zones."""
-        controller = HeatingController(basic_config)
+        controller = HeatingController(basic_config, started_at=NOW)
 
         assert len(controller.zone_ids) == 2
         assert "living_room" in controller.zone_ids
@@ -82,12 +84,12 @@ class TestHeatingControllerInit:
 
     def test_init_default_mode(self, basic_config: ControllerConfig) -> None:
         """Test controller starts in heat mode."""
-        controller = HeatingController(basic_config)
+        controller = HeatingController(basic_config, started_at=NOW)
         assert controller.mode == OperationMode.HEAT
 
     def test_init_zone_state(self, basic_config: ControllerConfig) -> None:
         """Test zone state is initialized correctly."""
-        controller = HeatingController(basic_config)
+        controller = HeatingController(basic_config, started_at=NOW)
 
         state = controller.get_zone_state("living_room")
         assert state is not None
@@ -102,12 +104,12 @@ class TestModeProperty:
 
     def test_get_mode(self, basic_config: ControllerConfig) -> None:
         """Test getting mode."""
-        controller = HeatingController(basic_config)
+        controller = HeatingController(basic_config, started_at=NOW)
         assert controller.mode == OperationMode.HEAT
 
     def test_set_mode(self, basic_config: ControllerConfig) -> None:
         """Test setting mode."""
-        controller = HeatingController(basic_config)
+        controller = HeatingController(basic_config, started_at=NOW)
         controller.mode = OperationMode.FLUSH
         assert controller.mode == OperationMode.FLUSH
 
@@ -117,7 +119,7 @@ class TestSetZoneSetpoint:
 
     def test_set_valid_setpoint(self, basic_config: ControllerConfig) -> None:
         """Test setting a valid setpoint."""
-        controller = HeatingController(basic_config)
+        controller = HeatingController(basic_config, started_at=NOW)
         result = controller.set_zone_setpoint("living_room", 22.0)
 
         assert result is True
@@ -127,7 +129,7 @@ class TestSetZoneSetpoint:
 
     def test_set_setpoint_clamped_high(self, basic_config: ControllerConfig) -> None:
         """Test setpoint clamped to max."""
-        controller = HeatingController(basic_config)
+        controller = HeatingController(basic_config, started_at=NOW)
         result = controller.set_zone_setpoint("living_room", 35.0)
 
         assert result is True
@@ -137,7 +139,7 @@ class TestSetZoneSetpoint:
 
     def test_set_setpoint_clamped_low(self, basic_config: ControllerConfig) -> None:
         """Test setpoint clamped to min."""
-        controller = HeatingController(basic_config)
+        controller = HeatingController(basic_config, started_at=NOW)
         result = controller.set_zone_setpoint("living_room", 10.0)
 
         assert result is True
@@ -147,7 +149,7 @@ class TestSetZoneSetpoint:
 
     def test_set_setpoint_unknown_zone(self, basic_config: ControllerConfig) -> None:
         """Test setting setpoint for unknown zone."""
-        controller = HeatingController(basic_config)
+        controller = HeatingController(basic_config, started_at=NOW)
         result = controller.set_zone_setpoint("unknown", 22.0)
         assert result is False
 
@@ -157,7 +159,7 @@ class TestSetZoneEnabled:
 
     def test_disable_zone(self, basic_config: ControllerConfig) -> None:
         """Test disabling a zone."""
-        controller = HeatingController(basic_config)
+        controller = HeatingController(basic_config, started_at=NOW)
         result = controller.set_zone_enabled("living_room", enabled=False)
 
         assert result is True
@@ -167,7 +169,7 @@ class TestSetZoneEnabled:
 
     def test_enable_zone(self, basic_config: ControllerConfig) -> None:
         """Test enabling a zone."""
-        controller = HeatingController(basic_config)
+        controller = HeatingController(basic_config, started_at=NOW)
         controller.set_zone_enabled("living_room", enabled=False)
         result = controller.set_zone_enabled("living_room", enabled=True)
 
@@ -178,7 +180,7 @@ class TestSetZoneEnabled:
 
     def test_enable_unknown_zone(self, basic_config: ControllerConfig) -> None:
         """Test enabling unknown zone."""
-        controller = HeatingController(basic_config)
+        controller = HeatingController(basic_config, started_at=NOW)
         result = controller.set_zone_enabled("unknown", enabled=True)
         assert result is False
 
@@ -188,7 +190,7 @@ class TestUpdateZonePID:
 
     def test_update_with_temperature(self, basic_config: ControllerConfig) -> None:
         """Test PID update with temperature reading."""
-        controller = HeatingController(basic_config)
+        controller = HeatingController(basic_config, started_at=NOW)
         controller.set_zone_setpoint("living_room", 22.0)
 
         setup_zone_pid(controller, "living_room", 20.0, 60.0)
@@ -201,7 +203,7 @@ class TestUpdateZonePID:
 
     def test_update_with_none_temperature(self, basic_config: ControllerConfig) -> None:
         """Test PID update with no temperature reading."""
-        controller = HeatingController(basic_config)
+        controller = HeatingController(basic_config, started_at=NOW)
 
         # First update with valid temp
         setup_zone_pid(controller, "living_room", 20.0, 60.0)
@@ -215,7 +217,7 @@ class TestUpdateZonePID:
 
     def test_update_unknown_zone(self, basic_config: ControllerConfig) -> None:
         """Test PID update for unknown zone raises KeyError."""
-        controller = HeatingController(basic_config)
+        controller = HeatingController(basic_config, started_at=NOW)
         with pytest.raises(KeyError):
             setup_zone_pid(controller, "unknown", 20.0, 60.0)
 
@@ -225,7 +227,7 @@ class TestPIDIntegrationPause:
 
     def test_pid_paused_in_all_off_mode(self, basic_config: ControllerConfig) -> None:
         """Test PID integration is paused when mode is all_off."""
-        controller = HeatingController(basic_config)
+        controller = HeatingController(basic_config, started_at=NOW)
 
         # First update in heat mode to establish baseline integral
         setup_zone_pid(controller, "living_room", 20.0, 60.0)
@@ -246,7 +248,7 @@ class TestPIDIntegrationPause:
 
     def test_pid_paused_in_flush_mode(self, basic_config: ControllerConfig) -> None:
         """Test PID integration is paused when mode is flush."""
-        controller = HeatingController(basic_config)
+        controller = HeatingController(basic_config, started_at=NOW)
 
         # First update in heat mode
         setup_zone_pid(controller, "living_room", 20.0, 60.0)
@@ -265,7 +267,7 @@ class TestPIDIntegrationPause:
 
     def test_pid_paused_in_all_on_mode(self, basic_config: ControllerConfig) -> None:
         """Test PID integration is paused when mode is all_on."""
-        controller = HeatingController(basic_config)
+        controller = HeatingController(basic_config, started_at=NOW)
 
         setup_zone_pid(controller, "living_room", 20.0, 60.0)
         runtime = controller.get_zone_runtime("living_room")
@@ -280,7 +282,7 @@ class TestPIDIntegrationPause:
 
     def test_pid_paused_in_off_mode(self, basic_config: ControllerConfig) -> None:
         """Test PID integration is paused when mode is off."""
-        controller = HeatingController(basic_config)
+        controller = HeatingController(basic_config, started_at=NOW)
 
         setup_zone_pid(controller, "living_room", 20.0, 60.0)
         runtime = controller.get_zone_runtime("living_room")
@@ -295,7 +297,7 @@ class TestPIDIntegrationPause:
 
     def test_pid_paused_in_cycle_mode(self, basic_config: ControllerConfig) -> None:
         """Test PID integration is paused when mode is cycle."""
-        controller = HeatingController(basic_config)
+        controller = HeatingController(basic_config, started_at=NOW)
 
         setup_zone_pid(controller, "living_room", 20.0, 60.0)
         runtime = controller.get_zone_runtime("living_room")
@@ -312,7 +314,7 @@ class TestPIDIntegrationPause:
         self, basic_config: ControllerConfig
     ) -> None:
         """Test PID integration is paused when zone is disabled."""
-        controller = HeatingController(basic_config)
+        controller = HeatingController(basic_config, started_at=NOW)
 
         # First update with zone enabled
         setup_zone_pid(controller, "living_room", 20.0, 60.0)
@@ -331,7 +333,7 @@ class TestPIDIntegrationPause:
 
     def test_pid_paused_when_paused(self, basic_config: ControllerConfig) -> None:
         """Test PID integration is paused when window was recently open."""
-        controller = HeatingController(basic_config)
+        controller = HeatingController(basic_config, started_at=NOW)
 
         # First update with no recent window activity
         setup_zone_pid(controller, "living_room", 20.0, 60.0)
@@ -352,7 +354,7 @@ class TestPIDIntegrationPause:
         self, basic_config: ControllerConfig
     ) -> None:
         """Test PID integration continues when window was not recently open."""
-        controller = HeatingController(basic_config)
+        controller = HeatingController(basic_config, started_at=NOW)
 
         # First update
         setup_zone_pid(controller, "living_room", 20.0, 60.0)
@@ -373,7 +375,7 @@ class TestPIDIntegrationPause:
         self, basic_config: ControllerConfig
     ) -> None:
         """Test PID runs normally in heat mode with enabled zone and closed window."""
-        controller = HeatingController(basic_config)
+        controller = HeatingController(basic_config, started_at=NOW)
         assert controller.mode == OperationMode.HEAT
 
         # First update
@@ -392,7 +394,7 @@ class TestPIDIntegrationPause:
         self, basic_config: ControllerConfig
     ) -> None:
         """Test that duty cycle is maintained when PID is paused."""
-        controller = HeatingController(basic_config)
+        controller = HeatingController(basic_config, started_at=NOW)
 
         # Establish a duty cycle in auto mode
         setup_zone_pid(controller, "living_room", 20.0, 60.0)
@@ -415,7 +417,7 @@ class TestPIDIntegrationPause:
         self, basic_config: ControllerConfig
     ) -> None:
         """Test that error is preserved (not updated) when PID is paused."""
-        controller = HeatingController(basic_config)
+        controller = HeatingController(basic_config, started_at=NOW)
         controller.set_zone_setpoint("living_room", 22.0)
 
         # Establish state in auto mode
@@ -439,7 +441,7 @@ class TestPIDIntegrationPause:
 
     def test_pid_resumes_after_pause(self, basic_config: ControllerConfig) -> None:
         """Test that PID resumes accumulating integral after pause ends."""
-        controller = HeatingController(basic_config)
+        controller = HeatingController(basic_config, started_at=NOW)
 
         # Initial update in auto mode
         setup_zone_pid(controller, "living_room", 20.0, 60.0)
@@ -468,7 +470,7 @@ class TestPIDIntegrationPause:
         self, basic_config: ControllerConfig
     ) -> None:
         """Test PID is paused when temperature is unavailable."""
-        controller = HeatingController(basic_config)
+        controller = HeatingController(basic_config, started_at=NOW)
 
         # First update with valid temp
         setup_zone_pid(controller, "living_room", 20.0, 60.0)
@@ -492,7 +494,7 @@ class TestUpdateZoneHistorical:
 
     def test_update_historical_data(self, basic_config: ControllerConfig) -> None:
         """Test updating zone historical data sets flow state."""
-        controller = HeatingController(basic_config)
+        controller = HeatingController(basic_config, started_at=NOW)
 
         # Set duty cycle first
         setup_zone_pid(controller, "living_room", 20.0, 60.0)
@@ -515,7 +517,7 @@ class TestUpdateZoneHistorical:
         self, basic_config: ControllerConfig
     ) -> None:
         """Test that flow is False when valve not open long enough."""
-        controller = HeatingController(basic_config)
+        controller = HeatingController(basic_config, started_at=NOW)
 
         setup_zone_historical(
             controller,
@@ -530,7 +532,7 @@ class TestUpdateZoneHistorical:
 
     def test_update_unknown_zone(self, basic_config: ControllerConfig) -> None:
         """Test updating unknown zone raises KeyError."""
-        controller = HeatingController(basic_config)
+        controller = HeatingController(basic_config, started_at=NOW)
         with pytest.raises(KeyError):
             setup_zone_historical(
                 controller,
@@ -548,7 +550,7 @@ class TestUpdateZoneHistorical:
         used_duration is now an internal accumulator rather than being
         calculated from recorder data.
         """
-        controller = HeatingController(basic_config)
+        controller = HeatingController(basic_config, started_at=NOW)
 
         # Set up zone with high duty cycle
         setup_zone_pid(controller, "living_room", 19.0, 60.0)
@@ -581,7 +583,7 @@ class TestHeatRequestFromEvaluate:
 
     def test_off_mode_no_action(self, basic_config: ControllerConfig) -> None:
         """Test off mode returns no heat request action (None)."""
-        controller = HeatingController(basic_config)
+        controller = HeatingController(basic_config, started_at=NOW)
         controller.mode = OperationMode.OFF
         actions = controller.evaluate(now=datetime.now(UTC))
         # Off mode: heat_request is None (no actions)
@@ -589,21 +591,21 @@ class TestHeatRequestFromEvaluate:
 
     def test_all_off_mode_no_request(self, basic_config: ControllerConfig) -> None:
         """Test all_off mode returns heat_request=False."""
-        controller = HeatingController(basic_config)
+        controller = HeatingController(basic_config, started_at=NOW)
         controller.mode = OperationMode.ALL_OFF
         actions = controller.evaluate(now=datetime.now(UTC))
         assert actions.heat_request is False
 
     def test_all_on_mode_requests_heat(self, basic_config: ControllerConfig) -> None:
         """Test all_on mode returns heat_request=True."""
-        controller = HeatingController(basic_config)
+        controller = HeatingController(basic_config, started_at=NOW)
         controller.mode = OperationMode.ALL_ON
         actions = controller.evaluate(now=datetime.now(UTC))
         assert actions.heat_request is True
 
     def test_flush_mode_no_heat_request(self, basic_config: ControllerConfig) -> None:
         """Test flush mode returns heat_request=False."""
-        controller = HeatingController(basic_config)
+        controller = HeatingController(basic_config, started_at=NOW)
         controller.mode = OperationMode.FLUSH
         actions = controller.evaluate(now=datetime.now(UTC))
         assert actions.heat_request is False
@@ -612,7 +614,7 @@ class TestHeatRequestFromEvaluate:
         self, basic_config: ControllerConfig
     ) -> None:
         """Test heat mode returns heat_request=True when valve is open and ready."""
-        controller = HeatingController(basic_config)
+        controller = HeatingController(basic_config, started_at=NOW)
 
         # Set up zone with valve on and fully open
         setup_zone_pid(controller, "living_room", 20.0, 60.0)
@@ -638,7 +640,7 @@ class TestGetSummerModeValue:
 
     def test_no_summer_mode_entity(self, basic_config: ControllerConfig) -> None:
         """Test returns None when no summer mode entity configured."""
-        controller = HeatingController(basic_config)
+        controller = HeatingController(basic_config, started_at=NOW)
         assert controller.get_summer_mode_value(heat_request=True) is None
 
     def test_off_mode_returns_none(self) -> None:
@@ -649,7 +651,7 @@ class TestGetSummerModeValue:
             summer_mode_entity="select.boiler_summer",
             zones=[],
         )
-        controller = HeatingController(config)
+        controller = HeatingController(config, started_at=NOW)
         controller.mode = OperationMode.OFF
         assert controller.get_summer_mode_value(heat_request=True) is None
 
@@ -661,7 +663,7 @@ class TestGetSummerModeValue:
             summer_mode_entity="select.boiler_summer",
             zones=[],
         )
-        controller = HeatingController(config)
+        controller = HeatingController(config, started_at=NOW)
         controller.mode = OperationMode.FLUSH
         assert controller.get_summer_mode_value(heat_request=True) == SummerMode.SUMMER
 
@@ -673,7 +675,7 @@ class TestGetSummerModeValue:
             summer_mode_entity="select.boiler_summer",
             zones=[],
         )
-        controller = HeatingController(config)
+        controller = HeatingController(config, started_at=NOW)
         controller.mode = OperationMode.ALL_OFF
         assert controller.get_summer_mode_value(heat_request=False) == SummerMode.SUMMER
 
@@ -685,7 +687,7 @@ class TestGetSummerModeValue:
             summer_mode_entity="select.boiler_summer",
             zones=[],
         )
-        controller = HeatingController(config)
+        controller = HeatingController(config, started_at=NOW)
         controller.mode = OperationMode.ALL_ON
         assert controller.get_summer_mode_value(heat_request=True) == SummerMode.WINTER
 
@@ -697,7 +699,7 @@ class TestGetSummerModeValue:
             summer_mode_entity="select.boiler_summer",
             zones=[],
         )
-        controller = HeatingController(config)
+        controller = HeatingController(config, started_at=NOW)
         assert controller.get_summer_mode_value(heat_request=True) == SummerMode.WINTER
 
     def test_heat_mode_without_heat_request(self) -> None:
@@ -708,7 +710,7 @@ class TestGetSummerModeValue:
             summer_mode_entity="select.boiler_summer",
             zones=[],
         )
-        controller = HeatingController(config)
+        controller = HeatingController(config, started_at=NOW)
         assert controller.get_summer_mode_value(heat_request=False) == SummerMode.SUMMER
 
 
@@ -719,7 +721,7 @@ class TestComputeActionsWithFlushZones:
         self, flush_config: ControllerConfig
     ) -> None:
         """Test that evaluate() returns actions for flush zones."""
-        controller = HeatingController(flush_config)
+        controller = HeatingController(flush_config, started_at=NOW)
 
         # Set up both zones with PID data
         setup_zone_pid(controller, "living_room", 20.0, 60.0)
@@ -749,7 +751,7 @@ class TestComputeActionsWithFlushZones:
         self, flush_config: ControllerConfig
     ) -> None:
         """Test that flush zone evaluation receives flush_request parameter."""
-        controller = HeatingController(flush_config)
+        controller = HeatingController(flush_config, started_at=NOW)
 
         # Enable flush
         controller.state.flush_enabled = True

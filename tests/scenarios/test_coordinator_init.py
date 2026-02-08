@@ -1,6 +1,5 @@
 """Tests for coordinator initialization deferral via pending entities."""
 
-import logging
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock
 
@@ -202,9 +201,8 @@ class TestInitializationTimeout:
         self,
         hass: HomeAssistant,
         mock_config_entry: MockConfigEntry,
-        caplog: pytest.LogCaptureFixture,
     ) -> None:
-        """After timeout, controller proceeds and logs a warning."""
+        """After timeout, controller proceeds past INITIALIZING."""
         mock_config_entry.add_to_hass(hass)
         hass.states.async_set("sensor.zone1_temp", "20.5")
         # Valve not set → zone stays INITIALIZING → controller INITIALIZING
@@ -219,18 +217,14 @@ class TestInitializationTimeout:
         hass.states.async_set("switch.zone1_valve", "off")
         await hass.async_block_till_done()
 
-        coordinator._init_started_at = datetime.now(UTC) - timedelta(
+        coordinator._controller.state.started_at = datetime.now(UTC) - timedelta(
             seconds=INITIALIZING_TIMEOUT + 1
         )
 
-        with caplog.at_level(logging.WARNING):
-            await coordinator.async_refresh()
-            await hass.async_block_till_done()
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
 
         assert coordinator.status == ControllerStatus.NORMAL
-        assert any(
-            "Timed out waiting for entities" in r.message for r in caplog.records
-        )
 
     async def test_no_timeout_before_deadline(
         self,

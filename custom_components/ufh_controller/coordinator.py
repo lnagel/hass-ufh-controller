@@ -45,7 +45,6 @@ from .const import (
     DEFAULT_TEMP_EMA_TIME_CONSTANT,
     DEFAULT_TIMING,
     DOMAIN,
-    INITIALIZING_TIMEOUT,
     INITIALIZING_UPDATE_INTERVAL,
     LOGGER,
     SUBENTRY_TYPE_CONTROLLER,
@@ -148,8 +147,6 @@ class UFHControllerDataUpdateCoordinator(
         """Initialize the coordinator."""
         # Build controller first to get timing config
         self._controller = self._build_controller(entry)
-        self._status: ControllerStatus = ControllerStatus.INITIALIZING
-        self._init_started_at: datetime = datetime.now(UTC)
 
         super().__init__(
             hass,
@@ -283,7 +280,7 @@ class UFHControllerDataUpdateCoordinator(
             zones=zones,
         )
 
-        return HeatingController(config)
+        return HeatingController(config, started_at=datetime.now(UTC))
 
     @property
     def controller(self) -> HeatingController:
@@ -516,7 +513,7 @@ class UFHControllerDataUpdateCoordinator(
     @property
     def status(self) -> ControllerStatus:
         """Return the current controller operational status."""
-        return self._status
+        return self._controller.status
 
     async def _execute_fail_safe_actions(self) -> None:
         """Execute fail-safe mode actions - close all valves and disable heating."""
@@ -592,27 +589,29 @@ class UFHControllerDataUpdateCoordinator(
         for zone_id in self._controller.zone_ids:
             await self._update_zone(zone_id, now, dt)
 
-        previous_status = self._status
+        previous_status = self._controller.status
 
         # Update controller status from pending entities and zone statuses
-        self._update_controller_status(now)
+        self._controller.update_status(
+            now=now, has_pending_entities=bool(self._entities_pending)
+        )
 
         # Detect initialization finished
         if (
             previous_status == ControllerStatus.INITIALIZING
-            and previous_status != self._status
+            and previous_status != self._controller.status
         ):
             self.update_interval = timedelta(
                 seconds=self._controller.config.timing.controller_loop_interval
             )
 
         # If ALL zones are in fail-safe, execute controller-level fail-safe
-        if self._status == ControllerStatus.FAIL_SAFE:
+        if self._controller.status == ControllerStatus.FAIL_SAFE:
             await self._execute_fail_safe_actions()
             return self._build_state_dict()
 
         # Skip zone evaluation while initializing
-        if self._status == ControllerStatus.INITIALIZING:
+        if self._controller.status == ControllerStatus.INITIALIZING:
             return self._build_state_dict()
 
         # Evaluate all zones and get all actions
@@ -946,65 +945,6 @@ class UFHControllerDataUpdateCoordinator(
         elif result.transition == ZoneStatusTransition.RECOVERED:
             LOGGER.info("Zone %s recovered to normal operation", zone_id)
 
-    def _update_controller_status(self, now: datetime) -> None:
-        """Update controller status based on zone statuses."""
-        # Defer transition out of INITIALIZING while entities haven't reported yet
-        if self._status == ControllerStatus.INITIALIZING and self._entities_pending:
-            elapsed = (now - self._init_started_at).total_seconds()
-            if elapsed < INITIALIZING_TIMEOUT:
-                return  # remain INITIALIZING
-
-            LOGGER.warning(
-                "Timed out waiting for entities to report valid state: %s",
-                self._entities_pending,
-            )
-
-        zone_statuses = [
-            self._controller.get_zone_runtime(zone_id).state.zone_status
-            for zone_id in self._controller.zone_ids
-        ]
-
-        if not zone_statuses:
-            self._status = ControllerStatus.NORMAL
-            return
-
-        # Count zones in each state
-        initializing_count = sum(
-            1 for s in zone_statuses if s == ZoneStatus.INITIALIZING
-        )
-        normal_count = sum(1 for s in zone_statuses if s == ZoneStatus.NORMAL)
-        fail_safe_count = sum(1 for s in zone_statuses if s == ZoneStatus.FAIL_SAFE)
-        degraded_count = sum(1 for s in zone_statuses if s == ZoneStatus.DEGRADED)
-
-        # Controller status logic:
-        # - If ALL zones are initializing → controller initializing
-        # - If ANY zone is normal → controller operational (degraded if others fail)
-        # - If ANY zone is still initializing → don't go to fail-safe yet
-        # - Only go to fail-safe if ALL zones are in fail-safe
-
-        if initializing_count == len(zone_statuses):
-            # All zones still initializing - controller is initializing
-            self._status = ControllerStatus.INITIALIZING
-        elif normal_count > 0:
-            # At least one zone is normal - controller is operational
-            if fail_safe_count > 0 or degraded_count > 0:
-                self._status = ControllerStatus.DEGRADED
-            else:
-                self._status = ControllerStatus.NORMAL
-        elif initializing_count > 0:
-            # Some zones still initializing, but no zones are normal yet
-            # Don't report fail-safe while zones are still initializing
-            if fail_safe_count > 0 or degraded_count > 0:
-                self._status = ControllerStatus.DEGRADED
-            else:
-                self._status = ControllerStatus.INITIALIZING
-        elif fail_safe_count == len(zone_statuses):
-            # ALL zones are in fail-safe (no normal, no initializing, no degraded)
-            self._status = ControllerStatus.FAIL_SAFE
-        else:
-            # Mix of degraded and fail-safe, but no normal or initializing
-            self._status = ControllerStatus.DEGRADED
-
     def _any_zone_in_fail_safe(self) -> bool:
         """Check if any zone is in fail-safe mode."""
         return any(
@@ -1192,7 +1132,7 @@ class UFHControllerDataUpdateCoordinator(
                 "zones_window": zones_window,
                 "observation_start": self._controller.state.observation_start,
                 "period_elapsed": self._controller.state.period_elapsed,
-                "status": self._status.value,
+                "status": self._controller.status.value,
                 "zones_initializing": zones_initializing,
                 "zones_normal": zones_normal,
                 "zones_degraded": zones_degraded,
@@ -1292,8 +1232,6 @@ class UFHControllerDataUpdateCoordinator(
 
         # Rebuild controller with updated config
         self._controller = self._build_controller(self.config_entry)
-        self._status: ControllerStatus = ControllerStatus.INITIALIZING
-        self._init_started_at: datetime = datetime.now(UTC)
 
         # Restore controller-level state using existing method (V2 format)
         controller_data = saved_state.get("controller", {})

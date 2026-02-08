@@ -439,60 +439,6 @@ class TestZoneIsolation:
         # Zone 2 should be in fail-safe
         assert zone2.state.zone_status == ZoneStatus.FAIL_SAFE
 
-    async def test_controller_never_fail_safe_if_one_zone_works(
-        self,
-        hass: HomeAssistant,
-        mock_config_entry_multiple_zones: MockConfigEntry,
-    ) -> None:
-        """Test controller never enters fail-safe if at least one zone is working."""
-        mock_config_entry_multiple_zones.add_to_hass(hass)
-        # Zone 1 works, zone 2 is in fail-safe
-        hass.states.async_set("sensor.zone1_temp", "20.5")
-        hass.states.async_set("sensor.zone2_temp", "unavailable")
-        hass.states.async_set("switch.zone1_valve", "off")
-        hass.states.async_set("switch.zone2_valve", "off")
-
-        coordinator = UFHControllerDataUpdateCoordinator(
-            hass, mock_config_entry_multiple_zones
-        )
-
-        # Put zone2 into fail-safe
-        zone2 = coordinator._controller.get_zone_runtime("zone2")
-        assert zone2 is not None
-        zone2.state.zone_status = ZoneStatus.FAIL_SAFE
-
-        # Update controller status
-        coordinator._update_controller_status(datetime.now(UTC))
-
-        # Controller should be degraded, NOT fail-safe
-        assert coordinator.status == ControllerStatus.DEGRADED
-
-    async def test_controller_fail_safe_only_when_all_zones_fail(
-        self,
-        hass: HomeAssistant,
-        mock_config_entry_multiple_zones: MockConfigEntry,
-    ) -> None:
-        """Test controller fail-safe requires all zones in fail-safe."""
-        mock_config_entry_multiple_zones.add_to_hass(hass)
-
-        coordinator = UFHControllerDataUpdateCoordinator(
-            hass, mock_config_entry_multiple_zones
-        )
-
-        # Put both zones into fail-safe
-        zone1 = coordinator._controller.get_zone_runtime("zone1")
-        zone2 = coordinator._controller.get_zone_runtime("zone2")
-        assert zone1 is not None
-        assert zone2 is not None
-        zone1.state.zone_status = ZoneStatus.FAIL_SAFE
-        zone2.state.zone_status = ZoneStatus.FAIL_SAFE
-
-        # Update controller status
-        coordinator._update_controller_status(datetime.now(UTC))
-
-        # NOW controller should be in fail-safe
-        assert coordinator.status == ControllerStatus.FAIL_SAFE
-
     async def test_zone_recovery_from_degraded(
         self,
         hass: HomeAssistant,
