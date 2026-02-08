@@ -1004,6 +1004,58 @@ async def test_no_valve_actions_during_initializing(
     assert coordinator.status == ControllerStatus.INITIALIZING
 
 
+async def test_supply_target_temp_preserved_during_initializing(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """
+    Test supply_target_temp from state is preserved during INITIALIZING.
+
+    When the controller starts with a stored supply_target_temp and the
+    outdoor sensor hasn't reported yet (None), the restored value should
+    be preserved instead of being recalculated to the config default.
+    """
+    stored_data = {
+        "controller": {
+            "mode": "heat",
+            "supply_target_temp": 35.0,
+        },
+        "zones": {
+            "zone1": {
+                "pid_error": 0.0,
+                "pid_proportional": 0.0,
+                "pid_integral": 0.0,
+                "pid_derivative": 0.0,
+                "duty_cycle": 0.0,
+            },
+        },
+    }
+
+    # NOTE: No temperature sensor — zone stays INITIALIZING
+    # NOTE: No outdoor sensor — outdoor temp is None
+
+    with patch(
+        "homeassistant.helpers.storage.Store.async_load",
+        return_value=stored_data,
+    ):
+        mock_config_entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    coordinator = mock_config_entry.runtime_data.coordinator
+
+    # Controller should be INITIALIZING (no temp sensor)
+    assert coordinator.status == ControllerStatus.INITIALIZING
+
+    # supply_target_temp should be the restored value, not overwritten
+    assert coordinator.controller.state.supply_target_temp == 35.0
+
+    # Run another refresh — should still preserve the value
+    await coordinator.async_refresh()
+    assert coordinator.status == ControllerStatus.INITIALIZING
+    assert coordinator.controller.state.supply_target_temp == 35.0
+
+
 async def test_valve_actions_execute_after_initialization(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,

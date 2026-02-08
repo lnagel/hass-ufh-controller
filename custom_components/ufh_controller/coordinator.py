@@ -581,7 +581,7 @@ class UFHControllerDataUpdateCoordinator(
         await self._update_dhw_state()
 
         # Update outdoor temperature and calculate supply target for heating curve
-        self._set_outdoor_temp()
+        self._update_outdoor_temp()
 
         # Update each zone (each zone tracks its own failure state)
         for zone_id in self._controller.zone_ids:
@@ -678,7 +678,7 @@ class UFHControllerDataUpdateCoordinator(
         except (ValueError, TypeError):
             return None
 
-    def _set_outdoor_temp(self) -> None:
+    def _update_outdoor_temp(self) -> None:
         """
         Update outdoor temperature on the controller.
 
@@ -697,6 +697,13 @@ class UFHControllerDataUpdateCoordinator(
                 curve_config.outdoor_temp_warm,
                 curve_config.outdoor_temp_cold,
             )
+
+        if (
+            outdoor_temp is None
+            and self._controller.status == ControllerStatus.INITIALIZING
+        ):
+            # don't overwrite yet
+            return
 
         self._controller.set_outdoor_temp(outdoor_temp)
 
@@ -1149,6 +1156,11 @@ class UFHControllerDataUpdateCoordinator(
 
         if "flush_enabled" in controller_data:
             self._controller.state.flush_enabled = controller_data["flush_enabled"]
+
+        if "supply_target_temp" in controller_data:
+            self._controller.state.supply_target_temp = controller_data[
+                "supply_target_temp"
+            ]
 
         if ts := controller_data.get("last_force_update"):
             with contextlib.suppress(ValueError, TypeError):
