@@ -1296,9 +1296,12 @@ async def test_used_duration_preserved_across_restart_within_same_period(
     now_iso = now.isoformat()
 
     stored_data = {
-        "controller": {"mode": "heat", "flush_enabled": False},
+        "controller": {
+            "mode": "heat",
+            "flush_enabled": False,
+            "last_force_update": now_iso,
+        },
         "last_update_success_time": now_iso,
-        "last_force_update": now_iso,
         "zones": {
             "zone1": {
                 "setpoint": 21.0,
@@ -1341,9 +1344,12 @@ async def test_invalid_last_force_update_timestamp_handled_gracefully(
     be ignored (set to None) and the coordinator should recover normally.
     """
     stored_data = {
-        "controller": {"mode": "heat", "flush_enabled": False},
+        "controller": {
+            "mode": "heat",
+            "flush_enabled": False,
+            "last_force_update": "not-a-valid-timestamp",  # Invalid!
+        },
         "last_update_success_time": "2026-01-31T12:00:00+00:00",
-        "last_force_update": "not-a-valid-timestamp",  # Invalid!
         "zones": {
             "zone1": {
                 "setpoint": 21.0,
@@ -1364,11 +1370,10 @@ async def test_invalid_last_force_update_timestamp_handled_gracefully(
 
     coordinator = mock_config_entry.runtime_data.coordinator
 
-    # Should recover gracefully - _last_force_update stays None (invalid parse)
+    # Should recover gracefully - last_force_update stays None (invalid parse)
     # OR becomes a datetime if the coordinator ran a refresh that set it
-    assert coordinator._last_force_update is None or isinstance(
-        coordinator._last_force_update, datetime
-    )
+    lfu = coordinator._controller.state.last_force_update
+    assert lfu is None or isinstance(lfu, datetime)
 
 
 async def test_used_duration_reset_when_restarting_in_new_period(
@@ -1386,9 +1391,12 @@ async def test_used_duration_reset_when_restarting_in_new_period(
     old_timestamp = (now - timedelta(hours=3)).isoformat()
 
     stored_data = {
-        "controller": {"mode": "heat", "flush_enabled": False},
+        "controller": {
+            "mode": "heat",
+            "flush_enabled": False,
+            "last_force_update": old_timestamp,
+        },
         "last_update_success_time": old_timestamp,
-        "last_force_update": old_timestamp,
         "zones": {
             "zone1": {
                 "setpoint": 21.0,

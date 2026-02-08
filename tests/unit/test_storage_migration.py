@@ -156,36 +156,86 @@ class TestMigrateV1ToV2:
         assert v2_data["zones"] == {}
 
 
+class TestMigrateV2ToV3:
+    """Test V2 to V3 storage migration."""
+
+    def test_moves_last_force_update_to_controller(self) -> None:
+        """Test last_force_update is moved from root to controller section."""
+        v2_data = {
+            "controller": {"mode": "heat", "flush_enabled": False},
+            "zones": {},
+            "last_force_update": "2026-01-01T12:00:00+00:00",
+        }
+        v3_data = UFHControllerStore._migrate_v2_to_v3(v2_data)
+
+        assert "last_force_update" not in v3_data
+        assert v3_data["controller"]["last_force_update"] == "2026-01-01T12:00:00+00:00"
+
+    def test_no_last_force_update_is_noop(self) -> None:
+        """Test migration is a no-op when last_force_update is absent."""
+        v2_data = {
+            "controller": {"mode": "heat"},
+            "zones": {},
+        }
+        v3_data = UFHControllerStore._migrate_v2_to_v3(v2_data)
+
+        assert "last_force_update" not in v3_data
+        assert "last_force_update" not in v3_data["controller"]
+
+
 class TestAsyncMigrateFunc:
     """Test the _async_migrate_func method."""
 
-    async def test_migrates_v1_to_v2(self) -> None:
-        """Test that version 1 data triggers migration to V2."""
+    async def test_v1_migrates_through_v2_to_v3(self) -> None:
+        """Test that V1 data is migrated through V2 to V3."""
         store = UFHControllerStore.__new__(UFHControllerStore)
-        v1_data = {"controller_mode": "heat", "zones": {}}
+        v1_data = {
+            "controller_mode": "heat",
+            "zones": {},
+            "last_force_update": "2026-01-01T12:00:00+00:00",
+        }
 
         result = await store._async_migrate_func(1, 0, v1_data)
 
-        # Should have V2 format
-        assert "controller" in result
         assert result["controller"]["mode"] == "heat"
+        # V1→V2 puts at root, V2→V3 moves to controller
+        assert "last_force_update" not in result
+        assert result["controller"]["last_force_update"] == "2026-01-01T12:00:00+00:00"
 
-    async def test_returns_data_unchanged_for_v2(self) -> None:
-        """Test that version 2+ data is returned unchanged."""
+    async def test_v2_migrates_to_v3(self) -> None:
+        """Test that V2 data triggers V2→V3 migration."""
         store = UFHControllerStore.__new__(UFHControllerStore)
-        v2_data = {"controller": {"mode": "heat"}, "zones": {}}
+        v2_data = {
+            "controller": {"mode": "heat"},
+            "zones": {},
+            "last_force_update": "2026-01-01T12:00:00+00:00",
+        }
 
         result = await store._async_migrate_func(2, 0, v2_data)
 
-        # Should be unchanged
-        assert result is v2_data
+        assert "last_force_update" not in result
+        assert result["controller"]["last_force_update"] == "2026-01-01T12:00:00+00:00"
 
-    async def test_returns_data_unchanged_for_future_versions(self) -> None:
+    async def test_v3_data_unchanged(self) -> None:
+        """Test that V3 data is returned unchanged."""
+        store = UFHControllerStore.__new__(UFHControllerStore)
+        v3_data = {
+            "controller": {
+                "mode": "heat",
+                "last_force_update": "2026-01-01T12:00:00+00:00",
+            },
+            "zones": {},
+        }
+
+        result = await store._async_migrate_func(3, 0, v3_data)
+
+        assert result is v3_data
+
+    async def test_future_versions_unchanged(self) -> None:
         """Test that future versions are returned unchanged."""
         store = UFHControllerStore.__new__(UFHControllerStore)
         future_data = {"controller": {"mode": "heat"}, "zones": {}, "new_field": True}
 
-        result = await store._async_migrate_func(3, 0, future_data)
+        result = await store._async_migrate_func(4, 0, future_data)
 
-        # Should be unchanged
         assert result is future_data

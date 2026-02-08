@@ -58,7 +58,7 @@ from .const import (
 )
 from .core.controller import ControllerConfig, HeatingController
 from .core.heating_curve import HeatingCurveConfig
-from .core.history import get_observation_start, get_valve_open_window
+from .core.history import get_valve_open_window
 from .core.pid import PIDState
 from .core.zone import (
     CircuitType,
@@ -70,12 +70,12 @@ from .core.zone import (
 from .recorder import get_state_average, was_any_window_open_recently
 
 # Storage constants
-STORAGE_VERSION = 2
+STORAGE_VERSION = 3
 STORAGE_KEY = "ufh_controller"
 
 
 class UFHControllerStore(Store[dict[str, Any]]):
-    """Store with V1→V2 migration support."""
+    """Store with migration support."""
 
     async def _async_migrate_func(
         self,
@@ -85,7 +85,12 @@ class UFHControllerStore(Store[dict[str, Any]]):
     ) -> dict[str, Any]:
         """Migrate storage data to current version."""
         if old_major_version == 1:
-            return self._migrate_v1_to_v2(old_data)
+            old_data = self._migrate_v1_to_v2(old_data)
+            old_major_version = 2
+
+        if old_major_version == 2:  # noqa: PLR2004
+            old_data = self._migrate_v2_to_v3(old_data)
+
         return old_data
 
     @staticmethod
@@ -125,6 +130,13 @@ class UFHControllerStore(Store[dict[str, Any]]):
             "last_force_update": old_data.get("last_force_update"),
         }
 
+    @staticmethod
+    def _migrate_v2_to_v3(old_data: dict[str, Any]) -> dict[str, Any]:
+        """Move last_force_update from root level into controller section."""
+        if ts := old_data.pop("last_force_update", None):
+            old_data.setdefault("controller", {})["last_force_update"] = ts
+        return old_data
+
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -163,9 +175,6 @@ class UFHControllerDataUpdateCoordinator(
             f"{STORAGE_KEY}.{entry.entry_id}",
         )
         self._state_restored: bool = False
-
-        # Track last force-update to ensure commands are sent at least once per cycle
-        self._last_force_update: datetime | None = None
 
         # Track expected states for entities we control
         self._entities_expected_states: dict[str, str | None] = {}
@@ -312,10 +321,6 @@ class UFHControllerDataUpdateCoordinator(
         if ts := stored_data.get("last_update_success_time"):
             with contextlib.suppress(ValueError, TypeError):
                 self.last_update_success_time = datetime.fromisoformat(ts)
-
-        if ts := stored_data.get("last_force_update"):
-            with contextlib.suppress(ValueError, TypeError):
-                self._last_force_update = datetime.fromisoformat(ts)
 
     async def async_config_entry_first_refresh(self) -> None:
         """Perform first refresh and set up state change listeners."""
@@ -478,10 +483,6 @@ class UFHControllerDataUpdateCoordinator(
         if self.last_update_success_time is not None:
             data["last_update_success_time"] = self.last_update_success_time.isoformat()
 
-        # Include last force update timestamp for observation period tracking
-        if self._last_force_update is not None:
-            data["last_force_update"] = self._last_force_update.isoformat()
-
         return data
 
     async def async_save_state(self) -> None:
@@ -566,7 +567,7 @@ class UFHControllerDataUpdateCoordinator(
             return self._build_state_dict()
 
         # Handle observation period transition
-        force_update = self._handle_observation_period_transition(now)
+        force_update = self._controller.handle_observation_period_transition(now)
 
         # Check current state of pending entities
         self._entities_pending = {
@@ -647,45 +648,9 @@ class UFHControllerDataUpdateCoordinator(
 
         state = self.hass.states.get(dhw_entity)
         current_dhw_active = state is not None and state.state == "on"
-        self._controller.update_dhw_state(current_dhw_active, now=datetime.now(UTC))
-
-    def _handle_observation_period_transition(self, now: datetime) -> bool:
-        """
-        Handle observation period transition and return whether force update is needed.
-
-        This method:
-        1. Updates observation_start and period_elapsed
-        2. Detects if we've transitioned to a new observation period
-        3. Resets used_duration for all zones on period transition
-        4. Updates _last_force_update timestamp
-
-        Returns True if force update is needed (new period started).
-        """
-        timing = self._controller.config.timing
-
-        # Update observation start and elapsed time
-        self._controller.state.observation_start = get_observation_start(
-            now, timing.observation_period
+        self._controller.update_dhw_state(
+            dhw_active=current_dhw_active, now=datetime.now(UTC)
         )
-        self._controller.state.period_elapsed = (
-            now - self._controller.state.observation_start
-        ).total_seconds()
-
-        # Check if we've transitioned to a new observation period
-        new_period = (
-            self._last_force_update is None
-            or self._last_force_update < self._controller.state.observation_start
-        )
-
-        if new_period:
-            # Reset used_duration for all zones at period boundary
-            for runtime in self._controller.zone_runtimes:
-                runtime.reset_used_duration()
-
-            # Mark this period as handled
-            self._last_force_update = now
-
-        return new_period
 
     def _get_supply_temp(self) -> float | None:
         """Get current supply temperature if available."""
@@ -1113,6 +1078,11 @@ class UFHControllerDataUpdateCoordinator(
                 "heat_request": self._controller.state.heat_request,
                 "outdoor_temp": self._controller.state.outdoor_temp,
                 "supply_target_temp": self._controller.state.supply_target_temp,
+                "last_force_update": (
+                    self._controller.state.last_force_update.isoformat()
+                    if self._controller.state.last_force_update is not None
+                    else None
+                ),
             },
             "zones": {},
         }
@@ -1178,6 +1148,10 @@ class UFHControllerDataUpdateCoordinator(
 
         if "flush_enabled" in controller_data:
             self._controller.state.flush_enabled = controller_data["flush_enabled"]
+
+        if ts := controller_data.get("last_force_update"):
+            with contextlib.suppress(ValueError, TypeError):
+                self._controller.state.last_force_update = datetime.fromisoformat(ts)
 
     async def async_reload_config(self) -> None:
         """

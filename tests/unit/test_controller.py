@@ -807,9 +807,7 @@ class TestAnyZoneInFailSafe:
 class TestUpdateDhwState:
     """Test update_dhw_state method."""
 
-    def test_off_to_on_clears_flush_until(
-        self, basic_config: ControllerConfig
-    ) -> None:
+    def test_off_to_on_clears_flush_until(self, basic_config: ControllerConfig) -> None:
         """Test OFF→ON transition clears flush_until."""
         controller = HeatingController(basic_config, started_at=NOW)
         controller.state.flush_until = NOW + timedelta(seconds=480)
@@ -830,9 +828,7 @@ class TestUpdateDhwState:
         controller.update_dhw_state(dhw_active=False, now=NOW)
 
         flush_duration = controller.config.timing.flush_duration
-        assert controller.state.flush_until == NOW + timedelta(
-            seconds=flush_duration
-        )
+        assert controller.state.flush_until == NOW + timedelta(seconds=flush_duration)
         assert controller.state.dhw_active is False
 
     def test_on_to_off_no_flush_when_disabled(
@@ -873,3 +869,93 @@ class TestUpdateDhwState:
         controller.update_dhw_state(dhw_active=False, now=NOW)
 
         assert controller.state.flush_until == existing_flush_until
+
+
+class TestHandleObservationPeriodTransition:
+    """Test handle_observation_period_transition method."""
+
+    def test_first_call_returns_true(self, basic_config: ControllerConfig) -> None:
+        """Test first call (last_force_update=None) returns True."""
+        controller = HeatingController(basic_config, started_at=NOW)
+        assert controller.state.last_force_update is None
+
+        result = controller.handle_observation_period_transition(NOW)
+
+        assert result is True
+        assert controller.state.last_force_update == NOW
+
+    def test_first_call_resets_used_duration(
+        self, basic_config: ControllerConfig
+    ) -> None:
+        """Test first call resets used_duration for all zones."""
+        controller = HeatingController(basic_config, started_at=NOW)
+
+        # Set some used_duration on zones
+        for zone_id in controller.zone_ids:
+            controller.get_zone_runtime(zone_id).state.used_duration = 500.0
+
+        controller.handle_observation_period_transition(NOW)
+
+        for zone_id in controller.zone_ids:
+            rt = controller.get_zone_runtime(zone_id)
+            assert rt.state.used_duration == 0.0
+
+    def test_same_period_returns_false(self, basic_config: ControllerConfig) -> None:
+        """Test same period returns False and does not reset used_duration."""
+        controller = HeatingController(basic_config, started_at=NOW)
+
+        # First call to establish period
+        controller.handle_observation_period_transition(NOW)
+
+        # Set used_duration after period established
+        for zone_id in controller.zone_ids:
+            controller.get_zone_runtime(zone_id).state.used_duration = 500.0
+
+        # Second call within same period
+        same_period_time = NOW + timedelta(seconds=60)
+        result = controller.handle_observation_period_transition(same_period_time)
+
+        assert result is False
+        # used_duration should NOT be reset
+        for zone_id in controller.zone_ids:
+            rt = controller.get_zone_runtime(zone_id)
+            assert rt.state.used_duration == 500.0
+
+    def test_new_period_returns_true(self, basic_config: ControllerConfig) -> None:
+        """Test new period boundary returns True and resets used_duration."""
+        controller = HeatingController(basic_config, started_at=NOW)
+
+        # First call at noon
+        controller.handle_observation_period_transition(NOW)
+
+        # Set used_duration
+        for zone_id in controller.zone_ids:
+            controller.get_zone_runtime(zone_id).state.used_duration = 500.0
+
+        # Move to next observation period (default 7200s = 2h)
+        next_period = NOW + timedelta(seconds=7200)
+        result = controller.handle_observation_period_transition(next_period)
+
+        assert result is True
+        for zone_id in controller.zone_ids:
+            rt = controller.get_zone_runtime(zone_id)
+            assert rt.state.used_duration == 0.0
+
+    def test_updates_observation_start_and_elapsed(
+        self, basic_config: ControllerConfig
+    ) -> None:
+        """Test observation_start and period_elapsed are updated."""
+        controller = HeatingController(basic_config, started_at=NOW)
+
+        # NOW is 12:00:00, so observation_start should be 12:00:00
+        controller.handle_observation_period_transition(NOW)
+
+        assert controller.state.observation_start == NOW
+        assert controller.state.period_elapsed == 0.0
+
+        # 30 minutes into the period
+        later = NOW + timedelta(minutes=30)
+        controller.handle_observation_period_transition(later)
+
+        assert controller.state.observation_start == NOW
+        assert controller.state.period_elapsed == pytest.approx(1800.0)
