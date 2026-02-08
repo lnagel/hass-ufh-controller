@@ -66,6 +66,9 @@ CONF_OUTDOOR_TEMP_WARM = "outdoor_temp_warm"
 CONF_OUTDOOR_TEMP_COLD = "outdoor_temp_cold"
 CONF_SUPPLY_TEMP_WARM = "supply_temp_warm"
 CONF_SUPPLY_TEMP_COLD = "supply_temp_cold"
+CONF_NOMINAL_FLOW_RATE = "nominal_flow_rate"
+CONF_OPTIMAL_FLOW_RATE_MIN = "optimal_flow_rate_min"
+CONF_OPTIMAL_FLOW_RATE_MAX = "optimal_flow_rate_max"
 
 
 def get_timing_schema(timing: TimingDefaults | None = None) -> vol.Schema:
@@ -295,8 +298,8 @@ def get_zone_schema(
                 )
             ),
             vol.Optional(
-                "nominal_flow_rate",
-                description={"suggested_value": defaults.get("nominal_flow_rate")},
+                CONF_NOMINAL_FLOW_RATE,
+                description={"suggested_value": defaults.get(CONF_NOMINAL_FLOW_RATE)},
             ): selector.NumberSelector(
                 selector.NumberSelectorConfig(
                     min=UI_NOMINAL_FLOW_RATE["min"],
@@ -348,8 +351,8 @@ def get_zone_entities_schema(
                 selector.EntitySelectorConfig(domain="binary_sensor", multiple=True)
             ),
             vol.Optional(
-                "nominal_flow_rate",
-                description={"suggested_value": defaults.get("nominal_flow_rate")},
+                CONF_NOMINAL_FLOW_RATE,
+                description={"suggested_value": defaults.get(CONF_NOMINAL_FLOW_RATE)},
             ): selector.NumberSelector(
                 selector.NumberSelectorConfig(
                     min=UI_NOMINAL_FLOW_RATE["min"],
@@ -573,10 +576,10 @@ def build_zone_data(user_input: dict[str, Any]) -> dict[str, Any]:
         "presets": dict(DEFAULT_PRESETS),
     }
     if (
-        "nominal_flow_rate" in user_input
-        and user_input["nominal_flow_rate"] is not None
+        CONF_NOMINAL_FLOW_RATE in user_input
+        and user_input[CONF_NOMINAL_FLOW_RATE] is not None
     ):
-        data["nominal_flow_rate"] = user_input["nominal_flow_rate"]
+        data[CONF_NOMINAL_FLOW_RATE] = user_input[CONF_NOMINAL_FLOW_RATE]
     return data
 
 
@@ -940,15 +943,19 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
         if user_input is not None:
             new_flow: dict[str, float] = {}
             if (
-                "optimal_flow_rate_min" in user_input
-                and user_input["optimal_flow_rate_min"] is not None
+                CONF_OPTIMAL_FLOW_RATE_MIN in user_input
+                and user_input[CONF_OPTIMAL_FLOW_RATE_MIN] is not None
             ):
-                new_flow["optimal_flow_rate_min"] = user_input["optimal_flow_rate_min"]
+                new_flow[CONF_OPTIMAL_FLOW_RATE_MIN] = user_input[
+                    CONF_OPTIMAL_FLOW_RATE_MIN
+                ]
             if (
-                "optimal_flow_rate_max" in user_input
-                and user_input["optimal_flow_rate_max"] is not None
+                CONF_OPTIMAL_FLOW_RATE_MAX in user_input
+                and user_input[CONF_OPTIMAL_FLOW_RATE_MAX] is not None
             ):
-                new_flow["optimal_flow_rate_max"] = user_input["optimal_flow_rate_max"]
+                new_flow[CONF_OPTIMAL_FLOW_RATE_MAX] = user_input[
+                    CONF_OPTIMAL_FLOW_RATE_MAX
+                ]
 
             # Update the controller subentry with new flow scheduling
             for subentry in self.config_entry.subentries.values():
@@ -969,10 +976,10 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
             data_schema=vol.Schema(
                 {
                     vol.Optional(
-                        "optimal_flow_rate_min",
+                        CONF_OPTIMAL_FLOW_RATE_MIN,
                         description={
                             "suggested_value": flow_scheduling.get(
-                                "optimal_flow_rate_min"
+                                CONF_OPTIMAL_FLOW_RATE_MIN
                             )
                         },
                     ): selector.NumberSelector(
@@ -985,10 +992,10 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
                         )
                     ),
                     vol.Optional(
-                        "optimal_flow_rate_max",
+                        CONF_OPTIMAL_FLOW_RATE_MAX,
                         description={
                             "suggested_value": flow_scheduling.get(
-                                "optimal_flow_rate_max"
+                                CONF_OPTIMAL_FLOW_RATE_MAX
                             )
                         },
                     ): selector.NumberSelector(
@@ -1072,12 +1079,12 @@ class ZoneSubentryFlowHandler(ConfigSubentryFlow):
             }
             # Handle optional flow rate (store if provided, remove if cleared)
             if (
-                "nominal_flow_rate" in user_input
-                and user_input["nominal_flow_rate"] is not None
+                CONF_NOMINAL_FLOW_RATE in user_input
+                and user_input[CONF_NOMINAL_FLOW_RATE] is not None
             ):
-                new_data["nominal_flow_rate"] = user_input["nominal_flow_rate"]
+                new_data[CONF_NOMINAL_FLOW_RATE] = user_input[CONF_NOMINAL_FLOW_RATE]
             else:
-                new_data.pop("nominal_flow_rate", None)
+                new_data.pop(CONF_NOMINAL_FLOW_RATE, None)
             LOGGER.debug("Updating zone entities: %s", new_data["id"])
             return self.async_update_and_abort(
                 self._get_entry(),

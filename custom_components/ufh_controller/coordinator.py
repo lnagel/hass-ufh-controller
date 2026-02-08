@@ -9,6 +9,9 @@ from typing import TYPE_CHECKING, Any
 from .config_flow import (
     CONF_DHW_ACTIVE_ENTITY,
     CONF_HEAT_REQUEST_ENTITY,
+    CONF_NOMINAL_FLOW_RATE,
+    CONF_OPTIMAL_FLOW_RATE_MAX,
+    CONF_OPTIMAL_FLOW_RATE_MIN,
     CONF_OUTDOOR_TEMP_ENTITY,
     CONF_PUMP_REQUEST_ENTITY,
     CONF_SUMMER_MODE_ENTITY,
@@ -265,7 +268,7 @@ class UFHControllerDataUpdateCoordinator(
                     temp_ema_time_constant=zone_data.get(
                         "temp_ema_time_constant", DEFAULT_TEMP_EMA_TIME_CONSTANT
                     ),
-                    nominal_flow_rate=zone_data.get("nominal_flow_rate"),
+                    nominal_flow_rate=zone_data.get(CONF_NOMINAL_FLOW_RATE),
                 )
             )
 
@@ -289,8 +292,8 @@ class UFHControllerDataUpdateCoordinator(
             summer_mode_entity=data.get(CONF_SUMMER_MODE_ENTITY),
             supply_temp_entity=data.get(CONF_SUPPLY_TEMP_ENTITY),
             outdoor_temp_entity=data.get(CONF_OUTDOOR_TEMP_ENTITY),
-            optimal_flow_rate_min=flow_scheduling.get("optimal_flow_rate_min"),
-            optimal_flow_rate_max=flow_scheduling.get("optimal_flow_rate_max"),
+            optimal_flow_rate_min=flow_scheduling.get(CONF_OPTIMAL_FLOW_RATE_MIN),
+            optimal_flow_rate_max=flow_scheduling.get(CONF_OPTIMAL_FLOW_RATE_MAX),
             heating_curve=heating_curve,
             timing=timing,
             zones=zones,
