@@ -598,6 +598,7 @@ class HeatingController:
                     runtime.apply_period_end_back_calculation(observation_period)
             for runtime in self._zones.values():
                 runtime.reset_used_duration()
+                runtime.snapshot_commanded_duty_cycle()
             self._state.last_force_update = now
 
         return new_period

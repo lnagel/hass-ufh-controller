@@ -104,6 +104,7 @@ class ZoneState:
     supply_coefficient: float | None = None
     used_duration: float = 0.0
     requested_duration: float = 0.0
+    commanded_duty_cycle: float = 0.0  # Snapshot at period start for anti-windup
 
     # Zone enabled state
     enabled: bool = True
@@ -354,9 +355,10 @@ class ZoneRuntime:
         """
         Apply back-calculation anti-windup at observation period boundary.
 
-        Compares actual delivery (used_duration) against the current PID
-        duty cycle and corrects the integral term to prevent windup when
-        the valve couldn't deliver the commanded output.
+        Compares actual delivery (used_duration) against the duty cycle
+        that was snapshotted at period start (commanded_duty_cycle) and
+        corrects the integral term to prevent windup when the valve
+        couldn't deliver the commanded output.
 
         Args:
             observation_period: Full observation period in seconds.
@@ -367,11 +369,17 @@ class ZoneRuntime:
         if not self.state.enabled:
             return
         u_actual = (self.state.used_duration / observation_period) * 100
-        u_commanded = self.pid.state.duty_cycle
+        u_commanded = self.state.commanded_duty_cycle
         self.pid.apply_saturation_correction(
             u_actual=u_actual,
             u_commanded=u_commanded,
             dt=float(observation_period),
+        )
+
+    def snapshot_commanded_duty_cycle(self) -> None:
+        """Snapshot the current PID duty cycle for back-calculation anti-windup."""
+        self.state.commanded_duty_cycle = (
+            self.pid.state.duty_cycle if self.pid.state else 0.0
         )
 
     def reset_used_duration(self) -> None:

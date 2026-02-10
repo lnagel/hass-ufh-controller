@@ -1029,13 +1029,10 @@ class TestHandleObservationPeriodTransition:
     def test_back_calculation_applied_on_period_transition(
         self, basic_config: ControllerConfig
     ) -> None:
-        """Verify correction + reset happen in order on period transition."""
+        """Verify correction + snapshot + reset happen in order on transition."""
         controller = HeatingController(basic_config, started_at=NOW)
 
-        # First period transition (no correction on first)
-        controller.handle_observation_period_transition(NOW)
-
-        # Set up PID state and used_duration for all zones
+        # Set up PID state before first transition so snapshot captures it
         for zone_id in controller.zone_ids:
             rt = controller.get_zone_runtime(zone_id)
             rt.pid.set_state(
@@ -1047,7 +1044,13 @@ class TestHandleObservationPeriodTransition:
                     duty_cycle=50.0,
                 )
             )
-            # Zone only delivered 360s = 5% actual vs 50% commanded
+
+        # First period transition — snapshots commanded_duty_cycle=50%
+        controller.handle_observation_period_transition(NOW)
+
+        # During the period: zone only delivered 360s = 5% actual
+        for zone_id in controller.zone_ids:
+            rt = controller.get_zone_runtime(zone_id)
             rt.state.used_duration = 360.0
 
         # Trigger second period transition
@@ -1057,16 +1060,20 @@ class TestHandleObservationPeriodTransition:
         assert result is True
         for zone_id in controller.zone_ids:
             rt = controller.get_zone_runtime(zone_id)
-            # Integral should be corrected (reduced)
+            # Kt = 0.001/50 = 0.00002
+            # correction = 0.00002 * (5 - 50) * 7200 = -6.48
+            # new_integral = 30 - 6.48 = 23.52
             assert rt.pid.state is not None
             assert rt.pid.state.integral == pytest.approx(23.52)
-            # used_duration should be reset after correction
+            # used_duration reset after correction
             assert rt.state.used_duration == 0.0
+            # commanded_duty_cycle re-snapshotted (PID duty_cycle is still 50)
+            assert rt.state.commanded_duty_cycle == 50.0
 
     def test_first_period_skips_back_calculation(
         self, basic_config: ControllerConfig
     ) -> None:
-        """No correction on initial period (last_force_update is None)."""
+        """No correction on initial period, but snapshot is taken."""
         controller = HeatingController(basic_config, started_at=NOW)
 
         # Set up PID state with used_duration before first transition
@@ -1083,7 +1090,7 @@ class TestHandleObservationPeriodTransition:
             )
             rt.state.used_duration = 360.0
 
-        # First transition - should NOT apply correction
+        # First transition - should NOT apply correction but SHOULD snapshot
         result = controller.handle_observation_period_transition(NOW)
 
         assert result is True
@@ -1094,3 +1101,5 @@ class TestHandleObservationPeriodTransition:
             assert rt.pid.state.integral == 30.0
             # used_duration still reset
             assert rt.state.used_duration == 0.0
+            # commanded_duty_cycle snapshotted for next period
+            assert rt.state.commanded_duty_cycle == 50.0
