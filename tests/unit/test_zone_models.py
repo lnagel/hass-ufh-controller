@@ -11,7 +11,7 @@ from custom_components.ufh_controller.const import (
     ValveState,
 )
 from custom_components.ufh_controller.core.controller import ControllerState
-from custom_components.ufh_controller.core.pid import PIDController
+from custom_components.ufh_controller.core.pid import PIDController, PIDState
 from custom_components.ufh_controller.core.zone import (
     CircuitType,
     ZoneAction,
@@ -553,3 +553,94 @@ class TestZoneRuntimeRequestedDuration:
         # Don't call update_pid - state is None
         zone_runtime.update_requested_duration(7200)
         assert zone_runtime.state.requested_duration == 0.0
+
+
+class TestZoneRuntimeBackCalculation:
+    """Test apply_period_end_back_calculation method."""
+
+    @pytest.fixture
+    def zone_runtime(self) -> ZoneRuntime:
+        """Create a zone runtime with known PID gains for testing."""
+        config = ZoneConfig(
+            zone_id="test",
+            name="Test Zone",
+            temp_sensor="sensor.test",
+            valve_switch="switch.test",
+            kp=50.0,
+            ki=0.001,
+            kd=0.0,
+        )
+        pid = PIDController(kp=50.0, ki=0.001, kd=0.0)
+        state = ZoneState(zone_id="test")
+        return ZoneRuntime(config=config, pid=pid, state=state)
+
+    def test_correction_applied_at_period_end(self, zone_runtime: ZoneRuntime) -> None:
+        """Integral reduced when used < commanded."""
+        zone_runtime.pid.set_state(
+            PIDState(
+                error=0.5,
+                proportional=25.0,
+                integral=30.0,
+                derivative=0.0,
+                duty_cycle=50.0,
+            )
+        )
+        # Zone only delivered 360s out of 7200s = 5% actual
+        zone_runtime.state.used_duration = 360.0
+
+        zone_runtime.apply_period_end_back_calculation(7200)
+
+        # Kt = 0.001/50 = 0.00002
+        # correction = 0.00002 * (5 - 50) * 7200 = -6.48
+        # new_integral = 30 - 6.48 = 23.52
+        assert zone_runtime.pid.state is not None
+        assert zone_runtime.pid.state.integral == pytest.approx(23.52)
+
+    def test_no_correction_zone_disabled(self, zone_runtime: ZoneRuntime) -> None:
+        """Skipped when zone disabled."""
+        zone_runtime.pid.set_state(
+            PIDState(
+                error=0.5,
+                proportional=25.0,
+                integral=30.0,
+                derivative=0.0,
+                duty_cycle=50.0,
+            )
+        )
+        zone_runtime.state.used_duration = 360.0
+        zone_runtime.state.enabled = False
+
+        zone_runtime.apply_period_end_back_calculation(7200)
+
+        assert zone_runtime.pid.state is not None
+        assert zone_runtime.pid.state.integral == 30.0  # Unchanged
+
+    def test_no_correction_when_fully_delivered(
+        self, zone_runtime: ZoneRuntime
+    ) -> None:
+        """No change when used_duration matches commanded duty cycle."""
+        zone_runtime.pid.set_state(
+            PIDState(
+                error=0.5,
+                proportional=25.0,
+                integral=30.0,
+                derivative=0.0,
+                duty_cycle=50.0,
+            )
+        )
+        # 50% of 7200 = 3600s delivered exactly
+        zone_runtime.state.used_duration = 3600.0
+
+        zone_runtime.apply_period_end_back_calculation(7200)
+
+        assert zone_runtime.pid.state is not None
+        assert zone_runtime.pid.state.integral == 30.0  # Unchanged
+
+    def test_no_correction_no_pid_state(self, zone_runtime: ZoneRuntime) -> None:
+        """No crash when PID state is None."""
+        assert zone_runtime.pid.state is None
+        zone_runtime.state.used_duration = 360.0
+
+        zone_runtime.apply_period_end_back_calculation(7200)
+
+        assert zone_runtime.pid.state is None
