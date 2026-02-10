@@ -591,6 +591,11 @@ class HeatingController:
         )
 
         if new_period:
+            is_first_period = self._state.last_force_update is None
+            if not is_first_period:
+                observation_period = timing.observation_period
+                for runtime in self._zones.values():
+                    runtime.apply_period_end_back_calculation(observation_period)
             for runtime in self._zones.values():
                 runtime.reset_used_duration()
             self._state.last_force_update = now

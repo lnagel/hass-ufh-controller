@@ -350,6 +350,30 @@ class ZoneRuntime:
             # Fallback: simple accumulation
             self.state.used_duration += dt
 
+    def apply_period_end_back_calculation(self, observation_period: int) -> None:
+        """
+        Apply back-calculation anti-windup at observation period boundary.
+
+        Compares actual delivery (used_duration) against the current PID
+        duty cycle and corrects the integral term to prevent windup when
+        the valve couldn't deliver the commanded output.
+
+        Args:
+            observation_period: Full observation period in seconds.
+
+        """
+        if self.pid.state is None:
+            return
+        if not self.state.enabled:
+            return
+        u_actual = (self.state.used_duration / observation_period) * 100
+        u_commanded = self.pid.state.duty_cycle
+        self.pid.apply_saturation_correction(
+            u_actual=u_actual,
+            u_commanded=u_commanded,
+            dt=float(observation_period),
+        )
+
     def reset_used_duration(self) -> None:
         """Reset used_duration at the start of a new observation period."""
         self.state.used_duration = 0.0
