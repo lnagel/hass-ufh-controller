@@ -24,6 +24,7 @@ Each coordinator update cycle follows this flow:
 Coordinator._async_update_data()
     │
     ├─► Update observation period (observation_start, period_elapsed)
+    │       └─► On new period: back-calculate anti-windup, reset quotas, snapshot duty cycle
     │
     ├─► Update DHW state from HA entity
     │
