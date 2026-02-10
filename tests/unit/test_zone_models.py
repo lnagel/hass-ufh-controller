@@ -585,6 +585,8 @@ class TestZoneRuntimeBackCalculation:
                 duty_cycle=50.0,
             )
         )
+        # Snapshot commanded at period start (50%)
+        zone_runtime.state.commanded_duty_cycle = 50.0
         # Zone only delivered 360s out of 7200s = 5% actual
         zone_runtime.state.used_duration = 360.0
 
@@ -607,6 +609,7 @@ class TestZoneRuntimeBackCalculation:
                 duty_cycle=50.0,
             )
         )
+        zone_runtime.state.commanded_duty_cycle = 50.0
         zone_runtime.state.used_duration = 360.0
         zone_runtime.state.enabled = False
 
@@ -628,6 +631,7 @@ class TestZoneRuntimeBackCalculation:
                 duty_cycle=50.0,
             )
         )
+        zone_runtime.state.commanded_duty_cycle = 50.0
         # 50% of 7200 = 3600s delivered exactly
         zone_runtime.state.used_duration = 3600.0
 
@@ -644,3 +648,79 @@ class TestZoneRuntimeBackCalculation:
         zone_runtime.apply_period_end_back_calculation(7200)
 
         assert zone_runtime.pid.state is None
+
+    def test_uses_snapshot_not_current_duty_cycle(
+        self, zone_runtime: ZoneRuntime
+    ) -> None:
+        """
+        Correction uses period-start snapshot, not drifted end-of-period value.
+
+        Scenario: PI outputs 15% at period start, valve opens for min_run_time
+        (12.5% actual), then room warms and duty cycle drops to 6% by period end.
+        Correction should compare actual (12.5%) vs commanded (15%), not vs 6%.
+        """
+        zone_runtime.pid.set_state(
+            PIDState(
+                error=0.1,
+                proportional=5.0,
+                integral=30.0,
+                derivative=0.0,
+                duty_cycle=6.0,  # End-of-period value (drifted down)
+            )
+        )
+        zone_runtime.state.commanded_duty_cycle = 15.0  # Period-start snapshot
+        # Valve ran for min_run_time: 900s / 7200s = 12.5% actual
+        zone_runtime.state.used_duration = 900.0
+
+        zone_runtime.apply_period_end_back_calculation(7200)
+
+        # Kt = 0.001/50 = 0.00002
+        # correction = 0.00002 * (12.5 - 15) * 7200 = 0.00002 * -2.5 * 7200 = -0.36
+        # new_integral = 30 - 0.36 = 29.64 (small downward nudge, correct direction)
+        assert zone_runtime.pid.state is not None
+        assert zone_runtime.pid.state.integral == pytest.approx(29.64)
+
+
+class TestZoneRuntimeSnapshotCommandedDutyCycle:
+    """Test snapshot_commanded_duty_cycle method."""
+
+    def test_snapshots_current_duty_cycle(self) -> None:
+        """Snapshot captures current PID duty cycle."""
+        config = ZoneConfig(
+            zone_id="test",
+            name="Test Zone",
+            temp_sensor="sensor.test",
+            valve_switch="switch.test",
+        )
+        pid = PIDController(kp=50.0, ki=0.001, kd=0.0)
+        pid.set_state(
+            PIDState(
+                error=1.0,
+                proportional=50.0,
+                integral=30.0,
+                derivative=0.0,
+                duty_cycle=42.0,
+            )
+        )
+        state = ZoneState(zone_id="test")
+        runtime = ZoneRuntime(config=config, pid=pid, state=state)
+
+        runtime.snapshot_commanded_duty_cycle()
+
+        assert runtime.state.commanded_duty_cycle == 42.0
+
+    def test_snapshots_zero_when_no_pid_state(self) -> None:
+        """Snapshot is 0 when PID state is None."""
+        config = ZoneConfig(
+            zone_id="test",
+            name="Test Zone",
+            temp_sensor="sensor.test",
+            valve_switch="switch.test",
+        )
+        pid = PIDController(kp=50.0, ki=0.001, kd=0.0)
+        state = ZoneState(zone_id="test")
+        runtime = ZoneRuntime(config=config, pid=pid, state=state)
+
+        runtime.snapshot_commanded_duty_cycle()
+
+        assert runtime.state.commanded_duty_cycle == 0.0
