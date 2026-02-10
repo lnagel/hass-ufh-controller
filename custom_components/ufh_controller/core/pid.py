@@ -121,7 +121,7 @@ class PIDController:
 
         Args:
             u_actual: The actual output delivered (0-100%).
-            u_commanded: The commanded output at period end (0-100%).
+            u_commanded: The commanded output (0-100%).
             dt: Duration over which the discrepancy occurred (seconds).
 
         """
