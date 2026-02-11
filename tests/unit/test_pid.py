@@ -372,6 +372,23 @@ class TestApplySaturationCorrection:
         assert pid.state is not None
         assert pid.state.integral == 0.0
 
+    def test_clamps_integral_at_maximum(self) -> None:
+        """Integral respects upper bound after correction."""
+        pid = PIDController(kp=50.0, ki=0.001, kd=0.0, integral_max=50.0)
+        pid.set_state(
+            PIDState(
+                error=1.0,
+                proportional=50.0,
+                integral=48.0,
+                derivative=0.0,
+                duty_cycle=50.0,
+            )
+        )
+        # Large positive correction should clamp at integral_max=50
+        pid.apply_saturation_correction(u_actual=100.0, u_commanded=0.0, dt=7200.0)
+        assert pid.state is not None
+        assert pid.state.integral == 50.0
+
     def test_zero_kp_noop(self) -> None:
         """No correction when kp=0."""
         pid = PIDController(kp=0.0, ki=0.001, kd=0.0)
