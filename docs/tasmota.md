@@ -24,7 +24,7 @@ WebButton4 Zone4;
 
 ## Dead-Man-Switch (PulseTime)
 
-Enable PulseTime to automatically turn off relays if no command is received within a timeout. This acts as a safety net — if Home Assistant or the network goes down, the valves will close rather than stay open indefinitely.
+Enable PulseTime to automatically turn off relays if no command is received within a timeout. PulseTime operates at the ESP firmware level, independent of network connectivity or Home Assistant availability — a true local dead-man switch. If the controller fails to refresh the relay command, valves return to their normally-closed state.
 
 Set PulseTime to your observation period plus a margin. For the default 2-hour observation period, 2h 30min works well.
 

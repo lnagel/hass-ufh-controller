@@ -6,10 +6,14 @@ quota while receiving less heating benefit than zones open at peak supply temper
 
 ## Supply Temperature Normalization
 
-The chosen approach requires only a single additional sensor (manifold supply temperature) and naturally handles boiler
+The chosen approach mirrors the principle behind EN 834 electronic heat cost allocators — integrating temperature
+difference over time rather than time alone. It requires only a supply temperature sensor and naturally handles boiler
 cycling: when the boiler fires, supply temperature rises and quota consumption increases; during coast-down, supply
 temperature decays and quota consumption slows proportionally. This normalizes quota usage to actual supply conditions
 without the complexity, cost, or failure modes of the alternatives.
+
+The normalization ignores per-circuit flow rate differences and floor covering resistance, but for relative allocation
+among zones on a single manifold it is a meaningful improvement over pure time tracking.
 
 When no supply temperature sensor is configured, the system falls back to simple time-based quota tracking.
 
@@ -52,10 +56,10 @@ At each observation period boundary (default: every 2 hours) all zones' `used_du
 
 **1. Full ΔT-based thermal energy calculation (Q = ṁ × c × ΔT)**
 
-Requires both supply and return temperature sensors at each zone or manifold, plus a flow meter or flow estimation.
-Additionally, when the boiler cycles off, the supply-return ΔT collapses while stored thermal energy in the water mass
-continues heating zones ("coast-down"), requiring complex water mass energy balance calculations to avoid
-under-counting.
+EN 1434 mandates flow sensors, paired temperature sensors, and calculators for thermal energy measurement. Instrumenting
+a 6-zone manifold would require 6 flow meters, 12 temperature sensors, and 6 calculators. Additionally, when the boiler
+cycles off, the supply-return ΔT collapses while the floor's thermal mass continues heating the room ("coast-down"),
+requiring complex energy balance calculations to avoid under-counting.
 
 **2. Boiler energy meter apportionment**
 

@@ -1,6 +1,8 @@
 # Heating Curve
 
-The heating curve feature dynamically adjusts the supply target temperature based on outdoor conditions. This is industry standard for underfloor heating systems and ensures optimal comfort while maximizing efficiency.
+Weather compensation is standard practice for hydronic UFH systems (EN 15316-2, EN 15232) and ensures optimal comfort
+while maximizing efficiency. The heating curve feature dynamically adjusts the supply target temperature based on
+outdoor conditions.
 
 ## How It Works
 

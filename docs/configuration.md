@@ -58,7 +58,7 @@ If either check fails, the valve maintains its current state.
 **Range:** 60-600 seconds (1 to 10 minutes)
 **Config location:** Controller subentry → `data.timing.valve_open_time`
 
-The time window used to detect when a valve is fully open before requesting heat from the boiler.
+The time window used to detect when a valve is fully open before requesting heat from the boiler. The 3.5-minute default matches typical thermal wax actuator travel times (e.g. Danfoss TWA specifies ~3 min spindle travel).
 
 **How it works:** The controller queries the valve's historical state over the last `valve_open_time` seconds. If the valve has been on for at least 85% of that window (`open_state_avg ≥ 0.85`), it's considered fully open and can contribute to the heat request. This prevents firing the boiler before water can flow through the zone.
 
@@ -209,7 +209,7 @@ The time constant for the Exponential Moving Average (EMA) filter applied to tem
 
 **Restart behavior:** The filtered temperature value is persisted across Home Assistant restarts. On startup, the EMA continues from its previous value, ensuring smooth operation without step changes or re-initialization artifacts.
 
-**Why it matters:** Temperature sensors (especially wireless ones like Zigbee) can produce noisy readings due to measurement variance, RF interference, or environmental factors. Without filtering, this noise propagates to the PID controller, causing unnecessary valve cycling and wear. The EMA filter provides a clean, stable temperature signal while maintaining responsiveness to actual temperature changes.
+**Why it matters:** Temperature sensors (especially wireless ones like Zigbee) can produce noisy readings due to irregular reporting intervals, quantization steps, and occasional erroneous readings. Without filtering, this noise propagates to the PID controller, causing unnecessary valve cycling and wear. A 600s time constant introduces lag equal to just 0.5–1.7% of the UFH process time constant (10–30 hours), well within the recommended <10% guideline — negligible control impact with meaningful noise reduction.
 
 **Tip:** Start with the default 600s (10 minutes). If the system feels sluggish, reduce to 300s. If you see excessive valve cycling, increase to 900s or higher.
 
@@ -233,7 +233,7 @@ The derivative gain responds to the rate of change of temperature error, providi
 - Error changed from 0.5°C to 2.0°C in 60 seconds, `kd=10`:
   - `derivative = 10 × (2.0 - 0.5) / 60 = 0.25%` (positive because error is increasing)
 
-**Why it matters:** Derivative control can reduce overshoot and oscillation in fast-responding systems. However, hydronic heating systems are very slow and derivative control often adds noise rather than improvement. The default `kd=0.0` disables derivative control, which is appropriate for most UFH systems.
+**Why it matters:** Derivative control can reduce overshoot and oscillation in fast-responding systems. However, for slow hydronic systems with time constants of 10–30 hours, derivative action amplifies sensor noise without meaningful predictive benefit. Kd=0 is standard practice for HVAC systems.
 
 #### integral_min
 

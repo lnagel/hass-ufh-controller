@@ -8,7 +8,8 @@ Default mode. Full PID control with quota-based scheduling.
 - PID controllers update every 60 seconds
 - Valves managed based on duty cycle and observation period quota
 - Window blocking active
-- DHW flush priority active (if configured)
+- DHW priority active (if configured)
+- Post-DHW residual heat capture active (if configured)
 
 ### Flush Mode (`flush`)
 
