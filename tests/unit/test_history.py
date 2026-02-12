@@ -1,5 +1,6 @@
 """Test history query helpers."""
 
+from contextlib import AbstractContextManager
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -15,6 +16,35 @@ from custom_components.ufh_controller.recorder import (
     get_state_average,
     get_valve_position,
 )
+
+
+@pytest.fixture
+def mock_hass() -> MagicMock:
+    """Create a mock HomeAssistant instance."""
+    hass = MagicMock(spec=HomeAssistant)
+    hass.states = MagicMock()
+    return hass
+
+
+def mock_recorder_states(
+    entity_id: str, states: list | None = None
+) -> AbstractContextManager:
+    """Return a context manager that patches the recorder with given states."""
+    result = {entity_id: states} if states else {}
+    recorder = MagicMock()
+    recorder.async_add_executor_job = AsyncMock(return_value=result)
+    return patch(
+        "homeassistant.components.recorder.get_instance",
+        return_value=recorder,
+    )
+
+
+def make_state(value: str, last_changed: datetime) -> MagicMock:
+    """Create a mock State with the given value and last_changed."""
+    state = MagicMock(spec=State)
+    state.state = value
+    state.last_changed = last_changed
+    return state
 
 
 class TestGetObservationStart:
@@ -140,13 +170,6 @@ class TestGetValvePositionWindow:
 class TestGetStateAverage:
     """Test cases for get_state_average."""
 
-    @pytest.fixture
-    def mock_hass(self) -> MagicMock:
-        """Create a mock HomeAssistant instance."""
-        hass = MagicMock(spec=HomeAssistant)
-        hass.states = MagicMock()
-        return hass
-
     async def test_no_state_changes_entity_on(self, mock_hass: MagicMock) -> None:
         """Test when no state changes and entity is on."""
         start = datetime(2024, 1, 15, 14, 0, 0, tzinfo=UTC)
@@ -156,13 +179,7 @@ class TestGetStateAverage:
         mock_state.state = "on"
         mock_hass.states.get.return_value = mock_state
 
-        with patch(
-            "homeassistant.components.recorder.get_instance"
-        ) as mock_get_instance:
-            mock_recorder = MagicMock()
-            mock_recorder.async_add_executor_job = AsyncMock(return_value={})
-            mock_get_instance.return_value = mock_recorder
-
+        with mock_recorder_states("switch.test"):
             result = await get_state_average(
                 mock_hass, "switch.test", start, end, on_value="on"
             )
@@ -178,13 +195,7 @@ class TestGetStateAverage:
         mock_state.state = "off"
         mock_hass.states.get.return_value = mock_state
 
-        with patch(
-            "homeassistant.components.recorder.get_instance"
-        ) as mock_get_instance:
-            mock_recorder = MagicMock()
-            mock_recorder.async_add_executor_job = AsyncMock(return_value={})
-            mock_get_instance.return_value = mock_recorder
-
+        with mock_recorder_states("switch.test"):
             result = await get_state_average(
                 mock_hass, "switch.test", start, end, on_value="on"
             )
@@ -197,23 +208,9 @@ class TestGetStateAverage:
         end = datetime(2024, 1, 15, 15, 0, 0, tzinfo=UTC)
         mid = datetime(2024, 1, 15, 14, 30, 0, tzinfo=UTC)
 
-        state1 = MagicMock(spec=State)
-        state1.state = "off"
-        state1.last_changed = start
+        states = [make_state("off", start), make_state("on", mid)]
 
-        state2 = MagicMock(spec=State)
-        state2.state = "on"
-        state2.last_changed = mid
-
-        with patch(
-            "homeassistant.components.recorder.get_instance"
-        ) as mock_get_instance:
-            mock_recorder = MagicMock()
-            mock_recorder.async_add_executor_job = AsyncMock(
-                return_value={"switch.test": [state1, state2]}
-            )
-            mock_get_instance.return_value = mock_recorder
-
+        with mock_recorder_states("switch.test", states):
             result = await get_state_average(
                 mock_hass, "switch.test", start, end, on_value="on"
             )
@@ -233,13 +230,6 @@ class TestGetStateAverage:
 
 class TestRecorderQueryFailure:
     """Test Recorder query failure handling - exceptions propagate to caller."""
-
-    @pytest.fixture
-    def mock_hass(self) -> MagicMock:
-        """Create a mock HomeAssistant instance."""
-        hass = MagicMock(spec=HomeAssistant)
-        hass.states = MagicMock()
-        return hass
 
     async def test_get_state_average_raises_on_operational_error(
         self, mock_hass: MagicMock
@@ -306,13 +296,6 @@ class TestRecorderQueryFailure:
 class TestGetValvePosition:
     """Test cases for get_valve_position (physical ramp simulation)."""
 
-    @pytest.fixture
-    def mock_hass(self) -> MagicMock:
-        """Create a mock HomeAssistant instance."""
-        hass = MagicMock(spec=HomeAssistant)
-        hass.states = MagicMock()
-        return hass
-
     async def test_no_state_changes_entity_on(self, mock_hass: MagicMock) -> None:
         """Test fully open when no state changes and entity is on."""
         start = datetime(2024, 1, 15, 14, 0, 0, tzinfo=UTC)
@@ -322,13 +305,7 @@ class TestGetValvePosition:
         mock_state.state = "on"
         mock_hass.states.get.return_value = mock_state
 
-        with patch(
-            "homeassistant.components.recorder.get_instance"
-        ) as mock_get_instance:
-            mock_recorder = MagicMock()
-            mock_recorder.async_add_executor_job = AsyncMock(return_value={})
-            mock_get_instance.return_value = mock_recorder
-
+        with mock_recorder_states("switch.test"):
             result = await get_valve_position(
                 mock_hass,
                 "switch.test",
@@ -349,13 +326,7 @@ class TestGetValvePosition:
         mock_state.state = "off"
         mock_hass.states.get.return_value = mock_state
 
-        with patch(
-            "homeassistant.components.recorder.get_instance"
-        ) as mock_get_instance:
-            mock_recorder = MagicMock()
-            mock_recorder.async_add_executor_job = AsyncMock(return_value={})
-            mock_get_instance.return_value = mock_recorder
-
+        with mock_recorder_states("switch.test"):
             result = await get_valve_position(
                 mock_hass,
                 "switch.test",
@@ -373,19 +344,7 @@ class TestGetValvePosition:
         end = datetime(2024, 1, 15, 14, 7, 0, tzinfo=UTC)  # 420s window
 
         # Valve was on the entire time
-        state1 = MagicMock(spec=State)
-        state1.state = "on"
-        state1.last_changed = start
-
-        with patch(
-            "homeassistant.components.recorder.get_instance"
-        ) as mock_get_instance:
-            mock_recorder = MagicMock()
-            mock_recorder.async_add_executor_job = AsyncMock(
-                return_value={"switch.test": [state1]}
-            )
-            mock_get_instance.return_value = mock_recorder
-
+        with mock_recorder_states("switch.test", [make_state("on", start)]):
             result = await get_valve_position(
                 mock_hass,
                 "switch.test",
@@ -403,24 +362,13 @@ class TestGetValvePosition:
         start = datetime(2024, 1, 15, 14, 0, 0, tzinfo=UTC)
         end = datetime(2024, 1, 15, 14, 7, 0, tzinfo=UTC)  # 420s window
 
-        # Valve was off initially, turned on at midpoint (210s in)
-        state1 = MagicMock(spec=State)
-        state1.state = "off"
-        state1.last_changed = start
+        # Valve was off initially, turned on 315s in
+        states = [
+            make_state("off", start),
+            make_state("on", start + timedelta(seconds=315)),
+        ]
 
-        state2 = MagicMock(spec=State)
-        state2.state = "on"
-        state2.last_changed = start + timedelta(seconds=315)
-
-        with patch(
-            "homeassistant.components.recorder.get_instance"
-        ) as mock_get_instance:
-            mock_recorder = MagicMock()
-            mock_recorder.async_add_executor_job = AsyncMock(
-                return_value={"switch.test": [state1, state2]}
-            )
-            mock_get_instance.return_value = mock_recorder
-
+        with mock_recorder_states("switch.test", states):
             result = await get_valve_position(
                 mock_hass,
                 "switch.test",
@@ -440,23 +388,12 @@ class TestGetValvePosition:
         end = datetime(2024, 1, 15, 14, 7, 0, tzinfo=UTC)  # 420s window
 
         # Valve was on for 210s, then off for 210s
-        state1 = MagicMock(spec=State)
-        state1.state = "on"
-        state1.last_changed = start
+        states = [
+            make_state("on", start),
+            make_state("off", start + timedelta(seconds=210)),
+        ]
 
-        state2 = MagicMock(spec=State)
-        state2.state = "off"
-        state2.last_changed = start + timedelta(seconds=210)
-
-        with patch(
-            "homeassistant.components.recorder.get_instance"
-        ) as mock_get_instance:
-            mock_recorder = MagicMock()
-            mock_recorder.async_add_executor_job = AsyncMock(
-                return_value={"switch.test": [state1, state2]}
-            )
-            mock_get_instance.return_value = mock_recorder
-
+        with mock_recorder_states("switch.test", states):
             result = await get_valve_position(
                 mock_hass,
                 "switch.test",
@@ -476,24 +413,13 @@ class TestGetValvePosition:
         end = datetime(2024, 1, 15, 14, 7, 0, tzinfo=UTC)  # 420s window
 
         # Valve was on for 210s (full open), then off for 210s (partial close)
-        state1 = MagicMock(spec=State)
-        state1.state = "on"
-        state1.last_changed = start
+        states = [
+            make_state("on", start),
+            make_state("off", start + timedelta(seconds=210)),
+        ]
 
-        state2 = MagicMock(spec=State)
-        state2.state = "off"
-        state2.last_changed = start + timedelta(seconds=210)
-
-        with patch(
-            "homeassistant.components.recorder.get_instance"
-        ) as mock_get_instance:
-            mock_recorder = MagicMock()
-            mock_recorder.async_add_executor_job = AsyncMock(
-                return_value={"switch.test": [state1, state2]}
-            )
-            mock_get_instance.return_value = mock_recorder
-
-            # Closing takes 420s (twice as long as opening)
+        # Closing takes 420s (twice as long as opening)
+        with mock_recorder_states("switch.test", states):
             result = await get_valve_position(
                 mock_hass,
                 "switch.test",
@@ -513,19 +439,7 @@ class TestGetValvePosition:
         end = datetime(2024, 1, 15, 14, 7, 0, tzinfo=UTC)
 
         # Valve was on the entire time, but open_time is 0
-        state1 = MagicMock(spec=State)
-        state1.state = "on"
-        state1.last_changed = start
-
-        with patch(
-            "homeassistant.components.recorder.get_instance"
-        ) as mock_get_instance:
-            mock_recorder = MagicMock()
-            mock_recorder.async_add_executor_job = AsyncMock(
-                return_value={"switch.test": [state1]}
-            )
-            mock_get_instance.return_value = mock_recorder
-
+        with mock_recorder_states("switch.test", [make_state("on", start)]):
             result = await get_valve_position(
                 mock_hass,
                 "switch.test",

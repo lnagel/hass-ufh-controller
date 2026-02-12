@@ -14,7 +14,32 @@ from typing import TYPE_CHECKING
 from .const import DEFAULT_WINDOW_OPEN_THRESHOLD
 
 if TYPE_CHECKING:
-    from homeassistant.core import HomeAssistant
+    from homeassistant.core import HomeAssistant, State
+
+
+async def _query_entity_states(
+    hass: HomeAssistant,
+    entity_id: str,
+    start: datetime,
+    end: datetime,
+) -> list[State] | None:
+    """Query recorder for entity state changes, returning None if empty."""
+    # Import here to allow testing without HA recorder
+    from homeassistant.components.recorder import get_instance  # noqa: PLC0415
+    from homeassistant.components.recorder.history import (  # noqa: PLC0415
+        state_changes_during_period,
+    )
+
+    states = await get_instance(hass).async_add_executor_job(
+        state_changes_during_period,
+        hass,
+        start,
+        end,
+        entity_id,
+    )
+
+    entity_states = states.get(entity_id)
+    return entity_states if entity_states else None
 
 
 async def get_state_average(
@@ -44,26 +69,11 @@ async def get_state_average(
         SQLAlchemyError: If Recorder query fails.
 
     """
-    # Import here to allow testing without HA recorder
-    from homeassistant.components.recorder import get_instance  # noqa: PLC0415
-    from homeassistant.components.recorder.history import (  # noqa: PLC0415
-        state_changes_during_period,
-    )
-
     total_time = (end - start).total_seconds()
     if total_time <= 0:
         return 0.0
 
-    # Query recorder for state changes
-    states = await get_instance(hass).async_add_executor_job(
-        state_changes_during_period,
-        hass,
-        start,
-        end,
-        entity_id,
-    )
-
-    entity_states = states.get(entity_id)
+    entity_states = await _query_entity_states(hass, entity_id, start, end)
     if not entity_states:
         # No state changes - check current state
         current_state = hass.states.get(entity_id)
@@ -121,22 +131,7 @@ async def get_valve_position(  # noqa: PLR0913
         SQLAlchemyError: If Recorder query fails.
 
     """
-    # Import here to allow testing without HA recorder
-    from homeassistant.components.recorder import get_instance  # noqa: PLC0415
-    from homeassistant.components.recorder.history import (  # noqa: PLC0415
-        state_changes_during_period,
-    )
-
-    # Query recorder for state changes
-    states = await get_instance(hass).async_add_executor_job(
-        state_changes_during_period,
-        hass,
-        start,
-        end,
-        entity_id,
-    )
-
-    entity_states = states.get(entity_id)
+    entity_states = await _query_entity_states(hass, entity_id, start, end)
     if not entity_states:
         # No state changes - check current state
         current_state = hass.states.get(entity_id)
