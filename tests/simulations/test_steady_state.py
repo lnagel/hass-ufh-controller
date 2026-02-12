@@ -6,7 +6,11 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from .conftest import ROOM_ARCHETYPES, assert_stable_temperature
+from .conftest import (
+    ROOM_ARCHETYPES,
+    assert_heat_request_stable,
+    assert_stable_temperature,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -87,6 +91,16 @@ class TestSteadyStateConvergence:
             f"Avg temp {avg_temp:.1f}°C exceeds physical max {t_max:.1f}°C"
         )
 
+        # At 100% demand, heat request should be asserted for the vast majority
+        # of time. It deasserts briefly near observation period boundaries when
+        # remaining_duration drops below closing_warning_duration (boiler warning).
+        heat_requests = [e.heat_request for e in entries if e.heat_request is not None]
+        true_pct = sum(heat_requests) / len(heat_requests) * 100
+        assert true_pct >= 90.0, (
+            f"Heat request True only {true_pct:.0f}% of time at 100% demand "
+            f"(expected >=90%)"
+        )
+
     @pytest.mark.xfail(
         reason="Controller overshoots ~2.7°C from cold start due to integral "
         "accumulation during the long rise. Needs anti-windup improvement.",
@@ -156,3 +170,28 @@ class TestSteadyStateConvergence:
 
         # Should converge within ±1°C (broader tolerance for varied ki)
         assert_stable_temperature(log, zid, 21.0, tolerance=1.0, after_hours=24)
+
+
+class TestHeatRequestBehavior:
+    """Verify heat request signal behavior at steady state."""
+
+    @pytest.mark.xfail(
+        reason="Heat request chatters at ~10 transitions/hour at steady state "
+        "(limit: 6/hour per typical boiler max cycling rate). The observation "
+        "period scheduling creates multiple valve on/off cycles within each "
+        "period, each toggling the heat request signal.",
+        strict=True,
+    )
+    def test_heat_request_chattering(
+        self,
+        make_single_zone_system: Callable[
+            ..., tuple[SimulationHarness, HeatingController, str]
+        ],
+    ) -> None:
+        """Heat request should not toggle more than 6 times/hour at steady state."""
+        room = ROOM_ARCHETYPES["well_insulated"]
+        harness, _controller, zid = make_single_zone_system(room, setpoint=21.0)
+
+        log = harness.run(24 * 3600)  # 24 hours
+
+        assert_heat_request_stable(log, zid, after_hours=16)

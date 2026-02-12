@@ -80,6 +80,14 @@ class TestAntiWindup:
                 f"with room_temp={e.room_temp:.2f}°C > setpoint={e.setpoint}°C"
             )
 
+        # Heat request should be False during cooling phase (no heating needed)
+        cooling_with_hr = [e for e in cooling_phase if e.heat_request is not None]
+        for e in cooling_with_hr:
+            assert not e.heat_request, (
+                f"Heat request should be False while cooling above setpoint "
+                f"at t={e.time:.0f}s (room={e.room_temp:.2f}°C > sp={e.setpoint}°C)"
+            )
+
     def test_integral_recovers_from_clamp(
         self,
         make_single_zone_system: Callable[

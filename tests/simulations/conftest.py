@@ -342,3 +342,79 @@ def assert_integral_stable(
         f"Integral range {integral_range:.2f} exceeds max drift {max_drift:.2f} "
         f"after {after_hours}h (min={min(integrals):.2f}, max={max(integrals):.2f})"
     )
+
+
+def assert_ashrae55_drift(
+    log: SimulationLog,
+    zone_id: str,
+    *,
+    after_hours: float = 6,
+    dt: float = 60.0,
+    max_15min_drift: float = 1.1,
+    max_1hour_drift: float = 2.2,
+) -> None:
+    """
+    Assert temperature drift within ASHRAE 55-2023 limits.
+
+    ASHRAE Standard 55 specifies maximum operative temperature drift
+    of 1.1°C in any 15-minute window and 2.2°C in any 1-hour window.
+    """
+    entries = log.zone_entries_after(zone_id, after_hours * 3600)
+    temps = [e.room_temp for e in entries]
+
+    for window_seconds, max_drift, label in [
+        (900, max_15min_drift, "15-min"),
+        (3600, max_1hour_drift, "1-hour"),
+    ]:
+        window_steps = int(window_seconds / dt)
+        if len(temps) < window_steps:
+            continue
+        for i in range(len(temps) - window_steps + 1):
+            window_temps = temps[i : i + window_steps]
+            drift = max(window_temps) - min(window_temps)
+            assert drift <= max_drift, (
+                f"ASHRAE 55 {label} drift {drift:.2f}°C exceeds {max_drift}°C "
+                f"at t={entries[i].time:.0f}s "
+                f"(min={min(window_temps):.2f}, max={max(window_temps):.2f})"
+            )
+
+
+def assert_heat_request_stable(
+    log: SimulationLog,
+    zone_id: str,
+    *,
+    after_hours: float = 6,
+    max_transitions_per_hour: float = 6.0,
+) -> None:
+    """
+    Assert heat request doesn't chatter excessively.
+
+    Typical boilers tolerate 3-6 cycles/hour. Excessive heat request
+    toggling indicates poor hysteresis or oscillating demand.
+    """
+    entries = log.zone_entries_after(zone_id, after_hours * 3600)
+    if len(entries) < 2:
+        return
+
+    transitions = 0
+    prev_hr = entries[0].heat_request
+    for e in entries[1:]:
+        if (
+            e.heat_request is not None
+            and prev_hr is not None
+            and e.heat_request != prev_hr
+        ):
+            transitions += 1
+        if e.heat_request is not None:
+            prev_hr = e.heat_request
+
+    duration_hours = (entries[-1].time - entries[0].time) / 3600
+    if duration_hours < 0.5:
+        return
+
+    rate = transitions / duration_hours
+    assert rate <= max_transitions_per_hour, (
+        f"Heat request chattering: {rate:.1f} transitions/hour "
+        f"(max {max_transitions_per_hour}) over {duration_hours:.1f}h "
+        f"({transitions} total transitions)"
+    )
