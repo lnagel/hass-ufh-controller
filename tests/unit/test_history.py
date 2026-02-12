@@ -286,7 +286,7 @@ class TestRecorderQueryFailure:
 
 
 class TestGetValvePosition:
-    """Test cases for get_valve_position (physical ramp simulation)."""
+    """Test cases for get_valve_position (physical ramp estimation)."""
 
     async def test_no_state_changes_entity_on(self, mock_hass: MagicMock) -> None:
         """Test fully open when no state changes and entity is on."""

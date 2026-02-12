@@ -106,7 +106,7 @@ async def get_valve_position(  # noqa: PLR0913
     on_value: str = "on",
 ) -> float:
     """
-    Simulate physical valve position by walking through state change history.
+    Estimate physical valve position by walking through state change history.
 
     Models thermal-wax actuator ramp-up (when powered) and ramp-down
     (passive wax cooling + spring return) to estimate how open the valve

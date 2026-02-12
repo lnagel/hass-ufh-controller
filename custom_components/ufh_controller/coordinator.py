@@ -761,7 +761,7 @@ class UFHControllerDataUpdateCoordinator(
         timing = self._controller.config.timing
         runtime.update_requested_duration(timing.observation_period)
 
-        # NON-CRITICAL: Valve position simulation (physical ramp model)
+        # NON-CRITICAL: Valve position estimation (physical ramp model)
         # Fallback: Use current valve entity state
         valve_start, valve_end = get_valve_position_window(
             now, timing.valve_open_time, timing.valve_close_time

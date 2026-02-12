@@ -60,11 +60,11 @@ If either check fails, the valve maintains its current state.
 
 The time for a thermal wax actuator to fully open when powered. The 3.5-minute default matches typical actuator travel times (e.g. Danfoss TWA specifies ~3 min spindle travel).
 
-**How it works:** The controller simulates the physical valve position by walking through historical state changes over a window of `valve_open_time + valve_close_time` seconds. During ON segments, the simulated position ramps up at a rate of `duration / valve_open_time`. When the simulated position reaches ≥ 0.85, the valve is considered fully open and can contribute to the heat request. This prevents firing the boiler before water can flow through the zone.
+**How it works:** The controller estimates the physical valve position by walking through historical state changes over a window of `valve_open_time + valve_close_time` seconds. During ON segments, the estimated position ramps up at a rate of `duration / valve_open_time`. When the estimated position reaches ≥ 0.85, the valve is considered fully open and can contribute to the heat request. This prevents firing the boiler before water can flow through the zone.
 
 **Examples:**
-- Valve turned on 4 minutes ago. With `valve_open_time=210s`, the simulated position is `min(1.0, 240/210) = 1.0` (fully open). The zone requests heat.
-- Valve just turned on 30 seconds ago. With `valve_open_time=210s`, the simulated position is `30/210 ≈ 0.14`, which is < 0.85. The zone doesn't request heat yet.
+- Valve turned on 4 minutes ago. With `valve_open_time=210s`, the estimated position is `min(1.0, 240/210) = 1.0` (fully open). The zone requests heat.
+- Valve just turned on 30 seconds ago. With `valve_open_time=210s`, the estimated position is `30/210 ≈ 0.14`, which is < 0.85. The zone doesn't request heat yet.
 
 **Why it matters:** Too short risks firing the boiler before valves are open, wasting energy. Too long delays heat delivery and reduces comfort.
 
@@ -76,10 +76,10 @@ The time for a thermal wax actuator to fully open when powered. The 3.5-minute d
 
 The time for a thermal wax actuator to fully close when unpowered. Closing is passive (wax cooling + spring return), so it may differ from the opening time.
 
-**How it works:** During OFF segments in the valve position simulation, the position ramps down at a rate of `duration / valve_close_time`. This models the physical reality that a valve doesn't close instantly when power is removed.
+**How it works:** During OFF segments, the estimated position ramps down at a rate of `duration / valve_close_time`. This models the physical reality that a valve doesn't close instantly when power is removed.
 
 **Examples:**
-- Valve was fully open and turned off 105 seconds ago. With `valve_close_time=210s`, the simulated position is `1.0 - 105/210 = 0.5` (half closed).
+- Valve was fully open and turned off 105 seconds ago. With `valve_close_time=210s`, the estimated position is `1.0 - 105/210 = 0.5` (half closed).
 - With asymmetric times (`valve_open_time=210s`, `valve_close_time=420s`), the valve opens in 3.5 minutes but takes 7 minutes to fully close.
 
 **Why it matters:** Actuators often have asymmetric open/close times. Modelling the close time separately provides a more accurate representation of the actual valve position, improving flow detection accuracy.

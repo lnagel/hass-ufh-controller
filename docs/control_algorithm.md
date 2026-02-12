@@ -47,7 +47,7 @@ This prevents the common problem of integral windup where the integral term accu
 | Window | Duration | Calculation                                  |
 |--------|----------|----------------------------------------------|
 | **Observation Period** | 2 hours (default) | Aligned to midnight (00:00, 02:00, 04:00...) |
-| **Valve Position Simulation** | 7 minutes (default) | `valve_open_time + valve_close_time` (physical position simulation) |
+| **Valve Position Estimation** | 7 minutes (default) | `valve_open_time + valve_close_time` (physical position estimation) |
 
 ### Heat Accounting
 

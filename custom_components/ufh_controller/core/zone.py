@@ -270,7 +270,7 @@ class ZoneRuntime:
         Update zone historical averages from Recorder queries.
 
         Args:
-            valve_position: Simulated physical valve position (0.0-1.0).
+            valve_position: Estimated physical valve position (0.0-1.0).
             window: Whether a window was open within the blocking period.
 
         """

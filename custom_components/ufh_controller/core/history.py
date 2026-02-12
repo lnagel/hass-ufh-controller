@@ -42,10 +42,10 @@ def get_valve_position_window(
     valve_close_time: int,
 ) -> tuple[datetime, datetime]:
     """
-    Get the time window for valve position simulation.
+    Get the time window for valve position estimation.
 
     The window spans both open and close times to provide enough history
-    to simulate through both opening and closing transitions.
+    to estimate position through both opening and closing transitions.
 
     Args:
         now: Current datetime.

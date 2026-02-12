@@ -76,7 +76,7 @@ def setup_zone_historical(
     Args:
         controller: HeatingController instance.
         zone_id: Zone identifier.
-        valve_position: Simulated physical valve position (0.0-1.0).
+        valve_position: Estimated physical valve position (0.0-1.0).
         window: Whether a window was open within the blocking period.
 
     Raises:
