@@ -18,6 +18,7 @@ To control the boiler, configure either a Heat Request Switch or Summer Mode Sel
 |-------|------|----------|-------------|
 | name | string | Yes | Controller display name |
 | controller_id | string | Auto | Unique ID (auto-generated from name) |
+| pump_request_entity | entity (switch) | No | Switch to control independent circulation pump |
 | heat_request_entity | entity (switch) | No | Switch to signal heat demand to boiler |
 | dhw_active_entity | entity (binary_sensor) | No | Sensor indicating DHW tank is heating |
 | summer_mode_entity | entity (select) | No | Select to enable/disable boiler UFH circuit |
@@ -82,7 +83,7 @@ These settings are stored in the **controller subentry** data.
 ```
 ┌────────────────────────────────────────────────────────────────┐
 │                        ConfigEntry                             │
-│  data: {name, controller_id, heat_request_entity, ...}         │
+│  data: {name, controller_id, pump_request_entity, ...}         │
 ├────────────────────────────────────────────────────────────────┤
 │                        Subentries                              │
 │  ┌──────────────────────────────────────────────────────────┐  │
@@ -90,7 +91,7 @@ These settings are stored in the **controller subentry** data.
 │  │  - type: "controller"                                    │  │
 │  │  - data: {timing: {...}}                                 │  │
 │  │  - Entities: mode select, flush enabled switch,          │  │
-│  │              zone counting sensors, status, heat_request │  │
+│  │    zone sensors, status, pump/heat_request               │  │
 │  └──────────────────────────────────────────────────────────┘  │
 │  ┌──────────────────────────────────────────────────────────┐  │
 │  │  Zone Subentry (user-created via "+ Add Heating Zone")   │  │

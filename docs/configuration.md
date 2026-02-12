@@ -412,6 +412,22 @@ Maximum temperature for rapid heating or special situations.
 
 These parameters are configured once for the entire controller during initial setup.
 
+#### pump_request_entity
+
+**Type:** Switch entity
+**Required:** No
+**Config location:** ConfigEntry → `data.pump_request_entity`
+
+A switch entity that controls an independent circulation pump. When any zone has confirmed water flow, this switch is turned on. When no zones are flowing, it's turned off.
+
+**How it works:** The controller sets this switch based on zone flow state (`valve_position ≥ 0.85`). On combi boilers the pump is integral to the boiler and stops when the heat request drops — residual heat sits in pipes/screed without being distributed. An independent pump relay keeps water circulating through open valves even when the boiler isn't firing, distributing residual heat through the floor.
+
+**Safety lockout:** Heat request requires pump request. The boiler cannot fire (`heat_request=True`) unless the pump is running (`pump_request=True`). The reverse is normal — `pump_request=True` with `heat_request=False` distributes residual heat.
+
+**Example:** `switch.ufh_circulation_pump` → When any zone valve is fully open, this switch turns on the circulation pump. The pump continues running after the boiler stops firing, distributing residual heat through the screed.
+
+**Why it matters:** Enables residual heat distribution on systems where the boiler pump stops with the heat request. If not configured, the controller manages valves and heat request only.
+
 #### heat_request_entity
 
 **Type:** Switch entity

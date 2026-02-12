@@ -29,6 +29,7 @@ Verify your entities are working before setup:
 |-------------|---------|---------|
 | Temperature sensor | `sensor.bedroom_temperature` | Required per zone |
 | Valve switch | `switch.bedroom_valve` | Required per zone |
+| Pump request switch | `switch.ufh_circulation_pump` | Optional: independent circulation pump |
 | Heat request switch | `switch.boiler_heat_request` | Optional: signals boiler to fire |
 | Summer mode select | `select.boiler_summer_mode` | Optional: EMS-ESP boiler control |
 | DHW active sensor | `binary_sensor.boiler_dhw_active` | Optional: hot water priority |
@@ -69,6 +70,9 @@ Navigate to **Settings → Devices & Services → Add Integration** and search f
 
 **Do you have a simple boiler relay?**
 → Configure `heat_request_entity` to point to your relay switch. The controller turns this on when zones need heat.
+
+**Do you have a separate circulation pump?**
+→ Configure `pump_request_entity` to point to your pump relay switch. The controller turns this on when any zone valve is fully open, enabling residual heat distribution even after the boiler stops firing.
 
 **Boiler always on or controlled externally?**
 → Leave both blank. The controller will manage valves only.

@@ -8,8 +8,9 @@ The coordinator runs every **60 seconds** and performs:
 1. **PID Update** (per zone)
 2. **Historical State Query** (per zone)
 3. **Zone Decision** (per zone)
-4. **Heat Request Aggregation**
-5. **Boiler Mode Management**
+4. **Pump & Heat Request Aggregation**
+5. **Safety Lockout**
+6. **Boiler Mode Management**
 
 ### PID Controller
 
