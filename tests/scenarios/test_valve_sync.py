@@ -457,7 +457,7 @@ async def test_force_update_sends_pump_request_even_when_matching(
     assert ("turn_off", "switch.pump_request") in switch_calls
     switch_calls.clear()
 
-    # Second refresh in same observation period - no force-update
+    # Second refresh: state matches → skip (no service call)
     freezer.tick(60)
     with patch(
         "homeassistant.components.recorder.get_instance",
@@ -465,5 +465,16 @@ async def test_force_update_sends_pump_request_even_when_matching(
     ):
         await coordinator.async_refresh()
 
-    # No pump_request call - state matches and force-update already done
     assert ("turn_off", "switch.pump_request") not in switch_calls
+
+    # Third refresh: state mismatches → service call without force-update
+    hass.states.async_set("switch.pump_request", "on")  # Mismatch: on vs expected off
+    switch_calls.clear()
+    freezer.tick(60)
+    with patch(
+        "homeassistant.components.recorder.get_instance",
+        return_value=mock_recorder,
+    ):
+        await coordinator.async_refresh()
+
+    assert ("turn_off", "switch.pump_request") in switch_calls
