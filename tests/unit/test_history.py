@@ -507,6 +507,38 @@ class TestGetValvePosition:
         # Off for 210s: 1.0 - 210/420 = 0.5 (half closed)
         assert result == pytest.approx(0.5)
 
+    async def test_zero_valve_times(self, mock_hass: MagicMock) -> None:
+        """Test that zero open/close times don't cause division by zero."""
+        start = datetime(2024, 1, 15, 14, 0, 0, tzinfo=UTC)
+        end = datetime(2024, 1, 15, 14, 7, 0, tzinfo=UTC)
+
+        # Valve was on the entire time, but open_time is 0
+        state1 = MagicMock(spec=State)
+        state1.state = "on"
+        state1.last_changed = start
+
+        with patch(
+            "homeassistant.components.recorder.get_instance"
+        ) as mock_get_instance:
+            mock_recorder = MagicMock()
+            mock_recorder.async_add_executor_job = AsyncMock(
+                return_value={"switch.test": [state1]}
+            )
+            mock_get_instance.return_value = mock_recorder
+
+            result = await get_valve_position(
+                mock_hass,
+                "switch.test",
+                start,
+                end,
+                valve_open_time=0,
+                valve_close_time=0,
+            )
+
+        # Initial position is 1.0 (first state is "on")
+        # Zero open_time means ramp-up is skipped, position stays at initial
+        assert result == 1.0
+
     async def test_error_propagation(self, mock_hass: MagicMock) -> None:
         """Test that OperationalError propagates to caller."""
         start = datetime(2024, 1, 15, 14, 0, 0, tzinfo=UTC)
