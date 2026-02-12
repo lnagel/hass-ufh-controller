@@ -438,8 +438,13 @@ class TestGetValvePosition:
         start = datetime(2024, 1, 15, 14, 0, 0, tzinfo=UTC)
         end = datetime(2024, 1, 15, 14, 7, 0, tzinfo=UTC)
 
-        # Valve was on the entire time, but open_time is 0
-        with mock_recorder_states("switch.test", [make_state("on", start)]):
+        # Valve on then off, both with zero times
+        states = [
+            make_state("on", start),
+            make_state("off", start + timedelta(seconds=210)),
+        ]
+
+        with mock_recorder_states("switch.test", states):
             result = await get_valve_position(
                 mock_hass,
                 "switch.test",
@@ -450,7 +455,8 @@ class TestGetValvePosition:
             )
 
         # Initial position is 1.0 (first state is "on")
-        # Zero open_time means ramp-up is skipped, position stays at initial
+        # Zero open_time: ramp-up skipped, position stays 1.0
+        # Zero close_time: ramp-down skipped, position stays 1.0
         assert result == 1.0
 
     async def test_error_propagation(self, mock_hass: MagicMock) -> None:
