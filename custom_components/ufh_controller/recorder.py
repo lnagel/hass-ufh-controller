@@ -11,6 +11,9 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
+from homeassistant.components import recorder as ha_recorder
+from homeassistant.components.recorder.history import state_changes_during_period
+
 from .const import DEFAULT_WINDOW_OPEN_THRESHOLD
 
 if TYPE_CHECKING:
@@ -24,13 +27,7 @@ async def _query_entity_states(
     end: datetime,
 ) -> list[State] | None:
     """Query recorder for entity state changes, returning None if empty."""
-    # Import here to allow testing without HA recorder
-    from homeassistant.components.recorder import get_instance  # noqa: PLC0415
-    from homeassistant.components.recorder.history import (  # noqa: PLC0415
-        state_changes_during_period,
-    )
-
-    states = await get_instance(hass).async_add_executor_job(
+    states = await ha_recorder.get_instance(hass).async_add_executor_job(
         state_changes_during_period,
         hass,
         start,
