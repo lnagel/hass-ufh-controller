@@ -14,4 +14,5 @@ A custom Home Assistant integration for multi-zone hydronic heating control with
 - [Operation Modes](operation_modes.md) - Heat, flush, cycle, and manual modes
 - [Fault Isolation](fault_isolation.md) - Zone failure handling and recovery
 - [Configuration](configuration.md) - Detailed parameter reference
+- [Simulation Tests](simulations.md) - Physics-based validation of the control algorithm
 - [Tasmota Relay Configuration](tasmota.md) - Setting up Tasmota-controlled relay boards
