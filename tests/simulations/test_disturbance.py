@@ -33,11 +33,11 @@ class TestDisturbanceRecovery:
             ..., tuple[SimulationHarness, HeatingController, str]
         ],
     ) -> None:
-        """Window open for 10min at hour 12 + temp drop: recovers gracefully."""
+        """Window open for 10min at hour 4 + temp drop: recovers gracefully."""
         room = ROOM_ARCHETYPES["well_insulated"]
 
-        # Window schedule: open from 12h to 12h10m (after system has settled)
-        window_start = 12 * 3600
+        # Window schedule: open from 4h to 4h10m (system still settling)
+        window_start = 4 * 3600
         window_end = window_start + 600  # 10 minutes
 
         def window_schedule(t: float) -> bool:
@@ -83,7 +83,7 @@ class TestDisturbanceRecovery:
             ..., tuple[SimulationHarness, HeatingController, str]
         ],
     ) -> None:
-        """Setpoint change 21->23 at hour 12: smooth approach, no oscillation."""
+        """Setpoint change 21->23 at hour 4: smooth approach, no oscillation."""
         room = ROOM_ARCHETYPES["well_insulated"]
         harness, _controller, zid = make_single_zone_system(room, setpoint=21.0)
 
@@ -93,7 +93,7 @@ class TestDisturbanceRecovery:
 
         log = harness.run(
             48 * 3600,
-            mutations=[(12 * 3600, raise_setpoint)],
+            mutations=[(4 * 3600, raise_setpoint)],
         )
 
         # Should converge to the new setpoint
@@ -115,7 +115,7 @@ class TestDisturbanceRecovery:
             ..., tuple[SimulationHarness, HeatingController, str]
         ],
     ) -> None:
-        """Outdoor temp 5->-5 at hour 12: adapts to new steady state."""
+        """Outdoor temp 5->-5 at hour 6: adapts to new steady state."""
         room = ROOM_ARCHETYPES["well_insulated"]
         harness, _controller, zid = make_single_zone_system(room, setpoint=21.0)
 
@@ -126,7 +126,7 @@ class TestDisturbanceRecovery:
 
         log = harness.run(
             48 * 3600,
-            mutations=[(12 * 3600, drop_outdoor)],
+            mutations=[(6 * 3600, drop_outdoor)],
         )
 
         # Should still maintain setpoint after adapting

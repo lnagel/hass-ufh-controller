@@ -285,12 +285,13 @@ def assert_no_rapid_cycling(
     *,
     min_on_duration: float | None = None,
     dt: float = 60.0,
+    after_hours: float = 0,
 ) -> None:
     """Assert no valve on-periods shorter than min_on_duration."""
     if min_on_duration is None:
         min_on_duration = dt * 2  # At least 2 steps
 
-    entries = log.zone_entries(zone_id)
+    entries = log.zone_entries_after(zone_id, after_hours * 3600)
     on_start: float | None = None
 
     for e in entries:

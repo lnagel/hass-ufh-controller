@@ -128,6 +128,15 @@ class TestSteadyStateConvergence:
                     strict=True,
                 ),
             ),
+            pytest.param(
+                "borderline",
+                marks=pytest.mark.xfail(
+                    reason="Borderline room physically cannot reach 21°C "
+                    "(max temp 16.4°C). Controller correctly saturates at "
+                    "100% duty but cannot converge to setpoint.",
+                    strict=True,
+                ),
+            ),
         ],
     )
     @pytest.mark.parametrize("ki", [0.0005, 0.001, 0.005])

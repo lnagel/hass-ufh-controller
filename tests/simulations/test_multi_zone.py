@@ -120,7 +120,7 @@ class TestMultiZone:
             ..., tuple[SimulationHarness, HeatingController, list[str]]
         ],
     ) -> None:
-        """DHW active for 20min mid-period: zones recover afterwards."""
+        """DHW active for 20min mid-period: zones off during DHW, recover after."""
         specs = [
             ZoneSpec(
                 zone_id="z1",
@@ -147,6 +147,18 @@ class TestMultiZone:
 
         log = harness.run(48 * 3600)
 
-        # Both zones should recover to setpoint
+        # During DHW, zone valves should be turned off (DHW priority).
+        # The controller gives DHW exclusive access to the boiler.
+        for zid in zone_ids:
+            dhw_entries = [
+                e for e in log.zone_entries(zid) if dhw_start <= e.time < dhw_end
+            ]
+            for e in dhw_entries:
+                assert not e.valve_on, (
+                    f"{zid}: valve on at t={e.time:.0f}s during DHW "
+                    f"(DHW priority should turn zones off)"
+                )
+
+        # Both zones should recover to setpoint after DHW
         for zid in zone_ids:
             assert_stable_temperature(log, zid, 21.0, tolerance=0.5, after_hours=30)

@@ -4,10 +4,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import pytest
+
 from .conftest import (
     RoomParams,
     assert_integral_bounded,
     assert_integral_stable,
+    assert_no_rapid_cycling,
 )
 
 if TYPE_CHECKING:
@@ -32,6 +35,12 @@ class TestBorderlineDuty:
     threshold ≈ 540/7200*100 = 7.5%
     """
 
+    @pytest.mark.xfail(
+        reason="Valve runs for only 300s at observation period boundary "
+        "(min_run_time=540s). The controller does not enforce min_run_time "
+        "across period transitions.",
+        strict=True,
+    )
     def test_duty_just_above_threshold(
         self,
         make_single_zone_system: Callable[
@@ -54,6 +63,9 @@ class TestBorderlineDuty:
 
         # Integral should stabilize (not drift monotonically)
         assert_integral_stable(log, zid, after_hours=8, max_drift=5.0)
+
+        # Valve on-durations should respect min_run_time (skip init phase)
+        assert_no_rapid_cycling(log, zid, min_on_duration=540.0, after_hours=4)
 
         # Valve should run in each observation period after settling.
         # Count distinct periods (2h each) with at least one valve-on step.
@@ -78,7 +90,7 @@ class TestBorderlineDuty:
             ..., tuple[SimulationHarness, HeatingController, str]
         ],
     ) -> None:
-        """Zone with ~6% duty: valve mostly off, integral bounded."""
+        """Zone with ~6% duty: valve mostly off, integral doesn't ratchet."""
         room = RoomParams(
             thermal_mass=50,
             heat_loss_coeff=30,
@@ -87,13 +99,16 @@ class TestBorderlineDuty:
         )
         harness, _controller, zid = make_single_zone_system(room, setpoint=21.0)
 
-        log = harness.run(24 * 3600)  # 24 hours
+        log = harness.run(48 * 3600)  # 48 hours — many observation periods
 
         # Integral should stay bounded
         assert_integral_bounded(log, zid)
 
+        # Integral should not ratchet upward unboundedly — must converge
+        assert_integral_stable(log, zid, after_hours=24, max_drift=5.0)
+
         # Temperature should still be reasonable (slightly below setpoint is OK)
-        entries = log.zone_entries_after(zid, 12 * 3600)
+        entries = log.zone_entries_after(zid, 24 * 3600)
         temps = [e.room_temp for e in entries]
         avg_temp = sum(temps) / len(temps)
         # Room should be close-ish to setpoint even without running the valve
