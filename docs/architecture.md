@@ -31,8 +31,8 @@ Coordinator._async_update_data()
     │       ├─► Read raw temperature from HA
     │       ├─► zone.update_temperature(raw_temp, dt)
     │       ├─► zone.update_pid(dt, mode)
-    │       ├─► Query Recorder for historical averages
-    │       ├─► zone.update_historical(open_avg, window)
+    │       ├─► Query Recorder for valve position and window state
+    │       ├─► zone.update_historical(valve_position, window)
     │       ├─► zone.update_supply_coefficient(supply_temp, supply_target_temp)
     │       ├─► zone.update_heat_state()
     │       ├─► zone.update_used_duration(dt)

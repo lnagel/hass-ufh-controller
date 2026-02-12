@@ -46,7 +46,7 @@ The coefficient is capped at 200% to prevent runaway accumulation.
 
 Each update cycle, `used_duration` accumulates when the zone is receiving heat:
 
-1. **Flow requirement**: Only accumulates when `flow=True` (valve open ≥85% of detection window)
+1. **Flow requirement**: Only accumulates when `flow=True` (simulated valve position ≥ 0.85)
 2. **Weighted**: `used_duration += dt × (supply_coefficient / 100)`
 3. **Fallback**: Without a supply sensor, uses simple time: `used_duration += dt`
 
