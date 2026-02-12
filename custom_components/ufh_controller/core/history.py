@@ -38,8 +38,8 @@ def get_observation_start(
 
 def get_valve_position_window(
     now: datetime,
-    valve_open_time: int = DEFAULT_TIMING["valve_open_time"],
-    valve_close_time: int = DEFAULT_TIMING["valve_close_time"],
+    valve_open_time: int,
+    valve_close_time: int,
 ) -> tuple[datetime, datetime]:
     """
     Get the time window for valve position simulation.
@@ -49,8 +49,8 @@ def get_valve_position_window(
 
     Args:
         now: Current datetime.
-        valve_open_time: Time for valve to fully open in seconds (default 210).
-        valve_close_time: Time for valve to fully close in seconds (default 210).
+        valve_open_time: Time for valve to fully open in seconds.
+        valve_close_time: Time for valve to fully close in seconds.
 
     Returns:
         Tuple of (start, end) datetime for valve position detection.

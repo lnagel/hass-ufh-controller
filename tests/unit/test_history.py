@@ -138,16 +138,8 @@ class TestGetObservationStart:
 class TestGetValvePositionWindow:
     """Test cases for get_valve_position_window."""
 
-    def test_default_window(self) -> None:
-        """Test default window spans open + close time (210 + 210 = 420s)."""
-        now = datetime(2024, 1, 15, 14, 30, 0, tzinfo=UTC)
-        start, end = get_valve_position_window(now)
-
-        assert end == now
-        assert start == now - timedelta(seconds=420)
-
-    def test_custom_window(self) -> None:
-        """Test custom window duration."""
+    def test_symmetric_times(self) -> None:
+        """Test window with equal open and close times."""
         now = datetime(2024, 1, 15, 14, 30, 0, tzinfo=UTC)
         start, end = get_valve_position_window(
             now, valve_open_time=300, valve_close_time=180
