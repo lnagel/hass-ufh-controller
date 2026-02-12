@@ -59,7 +59,7 @@ class TestEvaluateZonesHeatMode:
         setup_zone_historical(
             controller,
             "living_room",
-            open_state_avg=0.0,
+            valve_position=0.0,
             window=False,
         )
 

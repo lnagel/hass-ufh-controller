@@ -64,7 +64,7 @@ def setup_zone_historical(
     controller: "HeatingController",
     zone_id: str,
     *,
-    open_state_avg: float,
+    valve_position: float,
     window: bool,
 ) -> None:
     """
@@ -76,7 +76,7 @@ def setup_zone_historical(
     Args:
         controller: HeatingController instance.
         zone_id: Zone identifier.
-        open_state_avg: Average valve state for open detection (0.0-1.0).
+        valve_position: Simulated physical valve position (0.0-1.0).
         window: Whether a window was open within the blocking period.
 
     Raises:
@@ -85,7 +85,7 @@ def setup_zone_historical(
     """
     runtime = controller.get_zone_runtime(zone_id)
     runtime.update_historical(
-        open_state_avg=open_state_avg,
+        valve_position=valve_position,
         window=window,
     )
 

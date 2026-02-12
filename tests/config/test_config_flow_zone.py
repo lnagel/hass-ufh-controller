@@ -530,6 +530,7 @@ def test_get_timing_schema_with_defaults() -> None:
     assert "observation_period" in schema_keys
     assert "min_run_time" in schema_keys
     assert "valve_open_time" in schema_keys
+    assert "valve_close_time" in schema_keys
     assert "closing_warning_duration" in schema_keys
     assert "window_block_time" in schema_keys
 
@@ -540,6 +541,7 @@ def test_get_timing_schema_with_custom() -> None:
         "observation_period": 9000,
         "min_run_time": 600,
         "valve_open_time": 300,
+        "valve_close_time": 300,
         "closing_warning_duration": 300,
         "window_block_time": 900,
         "controller_loop_interval": 60,

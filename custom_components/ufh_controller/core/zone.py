@@ -95,7 +95,7 @@ class ZoneState:
     valve_state: ValveState = ValveState.UNKNOWN
 
     # Historical averages from Recorder queries
-    open_state_avg: float = 0.0
+    valve_position: float = 0.0
     flow: bool = False
     heat: bool = False
     window: bool = False
@@ -263,19 +263,19 @@ class ZoneRuntime:
     def update_historical(
         self,
         *,
-        open_state_avg: float,
+        valve_position: float,
         window: bool,
     ) -> None:
         """
         Update zone historical averages from Recorder queries.
 
         Args:
-            open_state_avg: Average valve state for open detection.
+            valve_position: Simulated physical valve position (0.0-1.0).
             window: Whether a window was open within the blocking period.
 
         """
-        self.state.open_state_avg = open_state_avg
-        self.state.flow = open_state_avg >= DEFAULT_VALVE_OPEN_THRESHOLD
+        self.state.valve_position = valve_position
+        self.state.flow = valve_position >= DEFAULT_VALVE_OPEN_THRESHOLD
         self.state.window = window
 
     def update_supply_coefficient(

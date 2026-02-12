@@ -241,6 +241,7 @@ class TestTimingConfig:
         assert timing.observation_period == 7200
         assert timing.min_run_time == 540
         assert timing.valve_open_time == 210
+        assert timing.valve_close_time == 210
         assert timing.closing_warning_duration == 240
         assert timing.window_block_time == 600
 

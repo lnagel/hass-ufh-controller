@@ -9,9 +9,12 @@ from sqlalchemy.exc import OperationalError
 
 from custom_components.ufh_controller.core.history import (
     get_observation_start,
-    get_valve_open_window,
+    get_valve_position_window,
 )
-from custom_components.ufh_controller.recorder import get_state_average
+from custom_components.ufh_controller.recorder import (
+    get_state_average,
+    get_valve_position,
+)
 
 
 class TestGetObservationStart:
@@ -102,24 +105,36 @@ class TestGetObservationStart:
         assert result == datetime(2024, 1, 15, 22, 30, 0, tzinfo=UTC)
 
 
-class TestGetValveOpenWindow:
-    """Test cases for get_valve_open_window."""
+class TestGetValvePositionWindow:
+    """Test cases for get_valve_position_window."""
 
     def test_default_window(self) -> None:
-        """Test default 3.5 minute window."""
+        """Test default window spans open + close time (210 + 210 = 420s)."""
         now = datetime(2024, 1, 15, 14, 30, 0, tzinfo=UTC)
-        start, end = get_valve_open_window(now)
+        start, end = get_valve_position_window(now)
 
         assert end == now
-        assert start == now - timedelta(seconds=210)
+        assert start == now - timedelta(seconds=420)
 
     def test_custom_window(self) -> None:
         """Test custom window duration."""
         now = datetime(2024, 1, 15, 14, 30, 0, tzinfo=UTC)
-        start, end = get_valve_open_window(now, valve_open_time=300)
+        start, end = get_valve_position_window(
+            now, valve_open_time=300, valve_close_time=180
+        )
 
         assert end == now
-        assert start == now - timedelta(seconds=300)
+        assert start == now - timedelta(seconds=480)
+
+    def test_asymmetric_times(self) -> None:
+        """Test window with different open and close times."""
+        now = datetime(2024, 1, 15, 14, 30, 0, tzinfo=UTC)
+        start, end = get_valve_position_window(
+            now, valve_open_time=210, valve_close_time=300
+        )
+
+        assert end == now
+        assert start == now - timedelta(seconds=510)
 
 
 class TestGetStateAverage:
@@ -286,3 +301,234 @@ class TestRecorderQueryFailure:
             # Second call should succeed
             result2 = await get_state_average(mock_hass, "switch.test", start, end)
             assert result2 == 1.0
+
+
+class TestGetValvePosition:
+    """Test cases for get_valve_position (physical ramp simulation)."""
+
+    @pytest.fixture
+    def mock_hass(self) -> MagicMock:
+        """Create a mock HomeAssistant instance."""
+        hass = MagicMock(spec=HomeAssistant)
+        hass.states = MagicMock()
+        return hass
+
+    async def test_no_state_changes_entity_on(self, mock_hass: MagicMock) -> None:
+        """Test fully open when no state changes and entity is on."""
+        start = datetime(2024, 1, 15, 14, 0, 0, tzinfo=UTC)
+        end = datetime(2024, 1, 15, 14, 7, 0, tzinfo=UTC)
+
+        mock_state = MagicMock()
+        mock_state.state = "on"
+        mock_hass.states.get.return_value = mock_state
+
+        with patch(
+            "homeassistant.components.recorder.get_instance"
+        ) as mock_get_instance:
+            mock_recorder = MagicMock()
+            mock_recorder.async_add_executor_job = AsyncMock(return_value={})
+            mock_get_instance.return_value = mock_recorder
+
+            result = await get_valve_position(
+                mock_hass,
+                "switch.test",
+                start,
+                end,
+                valve_open_time=210,
+                valve_close_time=210,
+            )
+
+        assert result == 1.0
+
+    async def test_no_state_changes_entity_off(self, mock_hass: MagicMock) -> None:
+        """Test fully closed when no state changes and entity is off."""
+        start = datetime(2024, 1, 15, 14, 0, 0, tzinfo=UTC)
+        end = datetime(2024, 1, 15, 14, 7, 0, tzinfo=UTC)
+
+        mock_state = MagicMock()
+        mock_state.state = "off"
+        mock_hass.states.get.return_value = mock_state
+
+        with patch(
+            "homeassistant.components.recorder.get_instance"
+        ) as mock_get_instance:
+            mock_recorder = MagicMock()
+            mock_recorder.async_add_executor_job = AsyncMock(return_value={})
+            mock_get_instance.return_value = mock_recorder
+
+            result = await get_valve_position(
+                mock_hass,
+                "switch.test",
+                start,
+                end,
+                valve_open_time=210,
+                valve_close_time=210,
+            )
+
+        assert result == 0.0
+
+    async def test_full_ramp_up(self, mock_hass: MagicMock) -> None:
+        """Test valve fully opens after being on for valve_open_time."""
+        start = datetime(2024, 1, 15, 14, 0, 0, tzinfo=UTC)
+        end = datetime(2024, 1, 15, 14, 7, 0, tzinfo=UTC)  # 420s window
+
+        # Valve was on the entire time
+        state1 = MagicMock(spec=State)
+        state1.state = "on"
+        state1.last_changed = start
+
+        with patch(
+            "homeassistant.components.recorder.get_instance"
+        ) as mock_get_instance:
+            mock_recorder = MagicMock()
+            mock_recorder.async_add_executor_job = AsyncMock(
+                return_value={"switch.test": [state1]}
+            )
+            mock_get_instance.return_value = mock_recorder
+
+            result = await get_valve_position(
+                mock_hass,
+                "switch.test",
+                start,
+                end,
+                valve_open_time=210,
+                valve_close_time=210,
+            )
+
+        # 420s on / 210s open_time = 2.0, clamped to 1.0
+        assert result == 1.0
+
+    async def test_partial_ramp_up(self, mock_hass: MagicMock) -> None:
+        """Test valve partially open after being on for less than valve_open_time."""
+        start = datetime(2024, 1, 15, 14, 0, 0, tzinfo=UTC)
+        end = datetime(2024, 1, 15, 14, 7, 0, tzinfo=UTC)  # 420s window
+
+        # Valve was off initially, turned on at midpoint (210s in)
+        state1 = MagicMock(spec=State)
+        state1.state = "off"
+        state1.last_changed = start
+
+        state2 = MagicMock(spec=State)
+        state2.state = "on"
+        state2.last_changed = start + timedelta(seconds=315)
+
+        with patch(
+            "homeassistant.components.recorder.get_instance"
+        ) as mock_get_instance:
+            mock_recorder = MagicMock()
+            mock_recorder.async_add_executor_job = AsyncMock(
+                return_value={"switch.test": [state1, state2]}
+            )
+            mock_get_instance.return_value = mock_recorder
+
+            result = await get_valve_position(
+                mock_hass,
+                "switch.test",
+                start,
+                end,
+                valve_open_time=210,
+                valve_close_time=210,
+            )
+
+        # Off for 315s (position stays 0, can't go below 0)
+        # Then on for 105s: 0 + 105/210 = 0.5
+        assert result == pytest.approx(0.5)
+
+    async def test_ramp_down_after_on(self, mock_hass: MagicMock) -> None:
+        """Test valve closing after being turned off."""
+        start = datetime(2024, 1, 15, 14, 0, 0, tzinfo=UTC)
+        end = datetime(2024, 1, 15, 14, 7, 0, tzinfo=UTC)  # 420s window
+
+        # Valve was on for 210s, then off for 210s
+        state1 = MagicMock(spec=State)
+        state1.state = "on"
+        state1.last_changed = start
+
+        state2 = MagicMock(spec=State)
+        state2.state = "off"
+        state2.last_changed = start + timedelta(seconds=210)
+
+        with patch(
+            "homeassistant.components.recorder.get_instance"
+        ) as mock_get_instance:
+            mock_recorder = MagicMock()
+            mock_recorder.async_add_executor_job = AsyncMock(
+                return_value={"switch.test": [state1, state2]}
+            )
+            mock_get_instance.return_value = mock_recorder
+
+            result = await get_valve_position(
+                mock_hass,
+                "switch.test",
+                start,
+                end,
+                valve_open_time=210,
+                valve_close_time=210,
+            )
+
+        # On for 210s: 0 + 210/210 = 1.0 (fully open)
+        # Off for 210s: 1.0 - 210/210 = 0.0 (fully closed)
+        assert result == pytest.approx(0.0)
+
+    async def test_asymmetric_open_close_times(self, mock_hass: MagicMock) -> None:
+        """Test with different open and close times."""
+        start = datetime(2024, 1, 15, 14, 0, 0, tzinfo=UTC)
+        end = datetime(2024, 1, 15, 14, 7, 0, tzinfo=UTC)  # 420s window
+
+        # Valve was on for 210s (full open), then off for 210s (partial close)
+        state1 = MagicMock(spec=State)
+        state1.state = "on"
+        state1.last_changed = start
+
+        state2 = MagicMock(spec=State)
+        state2.state = "off"
+        state2.last_changed = start + timedelta(seconds=210)
+
+        with patch(
+            "homeassistant.components.recorder.get_instance"
+        ) as mock_get_instance:
+            mock_recorder = MagicMock()
+            mock_recorder.async_add_executor_job = AsyncMock(
+                return_value={"switch.test": [state1, state2]}
+            )
+            mock_get_instance.return_value = mock_recorder
+
+            # Closing takes 420s (twice as long as opening)
+            result = await get_valve_position(
+                mock_hass,
+                "switch.test",
+                start,
+                end,
+                valve_open_time=210,
+                valve_close_time=420,
+            )
+
+        # On for 210s: 0 + 210/210 = 1.0 (fully open)
+        # Off for 210s: 1.0 - 210/420 = 0.5 (half closed)
+        assert result == pytest.approx(0.5)
+
+    async def test_error_propagation(self, mock_hass: MagicMock) -> None:
+        """Test that OperationalError propagates to caller."""
+        start = datetime(2024, 1, 15, 14, 0, 0, tzinfo=UTC)
+        end = datetime(2024, 1, 15, 14, 7, 0, tzinfo=UTC)
+
+        with patch(
+            "homeassistant.components.recorder.get_instance"
+        ) as mock_get_instance:
+            mock_recorder = MagicMock()
+            mock_recorder.async_add_executor_job = AsyncMock(
+                side_effect=OperationalError(
+                    "statement", {}, Exception("DB unavailable")
+                )
+            )
+            mock_get_instance.return_value = mock_recorder
+
+            with pytest.raises(OperationalError):
+                await get_valve_position(
+                    mock_hass,
+                    "switch.test",
+                    start,
+                    end,
+                    valve_open_time=210,
+                    valve_close_time=210,
+                )

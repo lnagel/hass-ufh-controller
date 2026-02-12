@@ -68,7 +68,8 @@ The options flow provides access to **timing parameters** that apply to the enti
 |-------|------|-------------|
 | observation_period | number (s) | Time window for quota-based scheduling (default: 7200s / 2h) |
 | min_run_time | number (s) | Minimum valve on duration (default: 540s / 9min) |
-| valve_open_time | number (s) | Time to detect valve fully open (default: 210s / 3.5min) |
+| valve_open_time | number (s) | Time for valve to fully open (default: 210s / 3.5min) |
+| valve_close_time | number (s) | Time for valve to fully close (default: 210s / 3.5min) |
 | closing_warning_duration | number (s) | Warning before valve closes (default: 240s / 4min) |
 | window_block_time | number (s) | Window open time to trigger blocking (default: 600s / 10min) |
 | controller_loop_interval | number (s) | PID update interval (default: 60s / 1min) |

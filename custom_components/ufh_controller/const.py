@@ -111,6 +111,7 @@ class TimingDefaults(TypedDict):
     observation_period: int
     min_run_time: int
     valve_open_time: int
+    valve_close_time: int
     closing_warning_duration: int
     window_block_time: int
     controller_loop_interval: int
@@ -151,6 +152,7 @@ DEFAULT_TIMING: TimingDefaults = {
     "observation_period": 7200,  # 2 hours
     "min_run_time": 540,  # 9 minutes
     "valve_open_time": 210,  # 3.5 minutes
+    "valve_close_time": 210,  # 3.5 minutes (passive spring return)
     "closing_warning_duration": 240,  # 4 minutes
     "window_block_time": 600,  # 10 minutes - block if window open this long
     "controller_loop_interval": 60,  # PID update interval
@@ -169,6 +171,7 @@ class TimingConfig:
     observation_period: int = DEFAULT_TIMING["observation_period"]
     min_run_time: int = DEFAULT_TIMING["min_run_time"]
     valve_open_time: int = DEFAULT_TIMING["valve_open_time"]
+    valve_close_time: int = DEFAULT_TIMING["valve_close_time"]
     closing_warning_duration: int = DEFAULT_TIMING["closing_warning_duration"]
     window_block_time: int = DEFAULT_TIMING["window_block_time"]
     controller_loop_interval: int = DEFAULT_TIMING["controller_loop_interval"]
@@ -230,6 +233,7 @@ UI_HEATING_CURVE_SUPPLY = {"min": 20.0, "max": 60.0, "step": 1.0}
 UI_TIMING_OBSERVATION_PERIOD = {"min": 1800, "max": 14400, "step": 600}
 UI_TIMING_MIN_RUN_TIME = {"min": 60, "max": 1800, "step": 60}
 UI_TIMING_VALVE_OPEN_TIME = {"min": 60, "max": 600, "step": 30}
+UI_TIMING_VALVE_CLOSE_TIME = {"min": 60, "max": 600, "step": 30}
 UI_TIMING_CLOSING_WARNING = {"min": 60, "max": 600, "step": 30}
 UI_TIMING_WINDOW_BLOCK_TIME = {"min": 0, "max": 3600, "step": 60}
 UI_TIMING_CONTROLLER_LOOP_INTERVAL = {"min": 10, "max": 300, "step": 5}

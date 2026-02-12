@@ -504,15 +504,15 @@ class TestUpdateZoneHistorical:
         setup_zone_historical(
             controller,
             "living_room",
-            open_state_avg=0.9,  # Above 0.85 threshold
+            valve_position=0.9,  # Above 0.85 threshold
             window=False,
         )
 
         state = controller.get_zone_state("living_room")
         assert state is not None
-        assert state.open_state_avg == 0.9
+        assert state.valve_position == 0.9
         assert state.window is False
-        # Flow is derived from open_state_avg >= 0.85
+        # Flow is derived from valve_position >= 0.85
         assert state.flow is True
 
     def test_update_historical_sets_flow_false(
@@ -524,7 +524,7 @@ class TestUpdateZoneHistorical:
         setup_zone_historical(
             controller,
             "living_room",
-            open_state_avg=0.5,  # Below 0.85 threshold
+            valve_position=0.5,  # Below 0.85 threshold
             window=False,
         )
 
@@ -539,7 +539,7 @@ class TestUpdateZoneHistorical:
             setup_zone_historical(
                 controller,
                 "unknown",
-                open_state_avg=0.9,
+                valve_position=0.9,
                 window=False,
             )
 
@@ -559,7 +559,7 @@ class TestUpdateZoneHistorical:
         setup_zone_historical(
             controller,
             "living_room",
-            open_state_avg=0.0,
+            valve_position=0.0,
             window=False,
         )
 
@@ -623,7 +623,7 @@ class TestHeatRequestFromEvaluate:
         setup_zone_historical(
             controller,
             "living_room",
-            open_state_avg=0.9,  # Above 0.85 threshold (sets flow=True)
+            valve_position=0.9,  # Above 0.85 threshold (sets flow=True)
             window=False,
         )
         # Manually set valve on and quota
@@ -733,13 +733,13 @@ class TestComputeActionsWithFlushZones:
         setup_zone_historical(
             controller,
             "living_room",
-            open_state_avg=0.0,
+            valve_position=0.0,
             window=False,
         )
         setup_zone_historical(
             controller,
             "bathroom",
-            open_state_avg=0.0,
+            valve_position=0.0,
             window=False,
         )
 
@@ -766,13 +766,13 @@ class TestComputeActionsWithFlushZones:
         setup_zone_historical(
             controller,
             "living_room",
-            open_state_avg=0.0,
+            valve_position=0.0,
             window=False,
         )
         setup_zone_historical(
             controller,
             "bathroom",
-            open_state_avg=0.0,
+            valve_position=0.0,
             window=False,
         )
 

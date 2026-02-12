@@ -44,6 +44,7 @@ from .const import (
     UI_TIMING_FLUSH_DURATION,
     UI_TIMING_MIN_RUN_TIME,
     UI_TIMING_OBSERVATION_PERIOD,
+    UI_TIMING_VALVE_CLOSE_TIME,
     UI_TIMING_VALVE_OPEN_TIME,
     UI_TIMING_WINDOW_BLOCK_TIME,
     TimingDefaults,
@@ -103,6 +104,19 @@ def get_timing_schema(timing: TimingDefaults | None = None) -> vol.Schema:
                     min=UI_TIMING_VALVE_OPEN_TIME["min"],
                     max=UI_TIMING_VALVE_OPEN_TIME["max"],
                     step=UI_TIMING_VALVE_OPEN_TIME["step"],
+                    unit_of_measurement=UnitOfTime.SECONDS,
+                )
+            ),
+            vol.Required(
+                "valve_close_time",
+                default=timing.get(
+                    "valve_close_time", DEFAULT_TIMING["valve_close_time"]
+                ),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=UI_TIMING_VALVE_CLOSE_TIME["min"],
+                    max=UI_TIMING_VALVE_CLOSE_TIME["max"],
+                    step=UI_TIMING_VALVE_CLOSE_TIME["step"],
                     unit_of_measurement=UnitOfTime.SECONDS,
                 )
             ),
@@ -700,6 +714,7 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
                 "observation_period": int(user_input["observation_period"]),
                 "min_run_time": int(user_input["min_run_time"]),
                 "valve_open_time": int(user_input["valve_open_time"]),
+                "valve_close_time": int(user_input["valve_close_time"]),
                 "closing_warning_duration": int(user_input["closing_warning_duration"]),
                 "window_block_time": int(user_input["window_block_time"]),
                 "controller_loop_interval": int(user_input["controller_loop_interval"]),

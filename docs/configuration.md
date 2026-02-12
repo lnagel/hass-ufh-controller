@@ -58,15 +58,31 @@ If either check fails, the valve maintains its current state.
 **Range:** 60-600 seconds (1 to 10 minutes)
 **Config location:** Controller subentry → `data.timing.valve_open_time`
 
-The time window used to detect when a valve is fully open before requesting heat from the boiler. The 3.5-minute default matches typical thermal wax actuator travel times (e.g. Danfoss TWA specifies ~3 min spindle travel).
+The time for a thermal wax actuator to fully open when powered. The 3.5-minute default matches typical actuator travel times (e.g. Danfoss TWA specifies ~3 min spindle travel).
 
-**How it works:** The controller queries the valve's historical state over the last `valve_open_time` seconds. If the valve has been on for at least 85% of that window (`open_state_avg ≥ 0.85`), it's considered fully open and can contribute to the heat request. This prevents firing the boiler before water can flow through the zone.
+**How it works:** The controller simulates the physical valve position by walking through historical state changes over a window of `valve_open_time + valve_close_time` seconds. During ON segments, the simulated position ramps up at a rate of `duration / valve_open_time`. When the simulated position reaches ≥ 0.85, the valve is considered fully open and can contribute to the heat request. This prevents firing the boiler before water can flow through the zone.
 
 **Examples:**
-- Valve turned on 4 minutes ago. With `valve_open_time=210s`, the controller checks the last 210 seconds and finds the valve was on for 100% of that time. The zone requests heat.
-- Valve just turned on 30 seconds ago. With `valve_open_time=210s`, the controller only sees 30 seconds of on-time, which is < 85% of 210 seconds. The zone doesn't request heat yet.
+- Valve turned on 4 minutes ago. With `valve_open_time=210s`, the simulated position is `min(1.0, 240/210) = 1.0` (fully open). The zone requests heat.
+- Valve just turned on 30 seconds ago. With `valve_open_time=210s`, the simulated position is `30/210 ≈ 0.14`, which is < 0.85. The zone doesn't request heat yet.
 
 **Why it matters:** Too short risks firing the boiler before valves are open, wasting energy. Too long delays heat delivery and reduces comfort.
+
+#### valve_close_time
+
+**Default:** 210 seconds (3.5 minutes)
+**Range:** 60-600 seconds (1 to 10 minutes)
+**Config location:** Controller subentry → `data.timing.valve_close_time`
+
+The time for a thermal wax actuator to fully close when unpowered. Closing is passive (wax cooling + spring return), so it may differ from the opening time.
+
+**How it works:** During OFF segments in the valve position simulation, the position ramps down at a rate of `duration / valve_close_time`. This models the physical reality that a valve doesn't close instantly when power is removed.
+
+**Examples:**
+- Valve was fully open and turned off 105 seconds ago. With `valve_close_time=210s`, the simulated position is `1.0 - 105/210 = 0.5` (half closed).
+- With asymmetric times (`valve_open_time=210s`, `valve_close_time=420s`), the valve opens in 3.5 minutes but takes 7 minutes to fully close.
+
+**Why it matters:** Actuators often have asymmetric open/close times. Modelling the close time separately provides a more accurate representation of the actual valve position, improving flow detection accuracy.
 
 #### closing_warning_duration
 

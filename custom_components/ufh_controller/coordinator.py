@@ -58,7 +58,7 @@ from .const import (
 )
 from .core.controller import ControllerConfig, HeatingController
 from .core.heating_curve import HeatingCurveConfig
-from .core.history import get_valve_open_window
+from .core.history import get_valve_position_window
 from .core.pid import PIDState
 from .core.zone import (
     CircuitType,
@@ -67,7 +67,7 @@ from .core.zone import (
     ZoneConfig,
     ZoneStatusTransition,
 )
-from .recorder import get_state_average, was_any_window_open_recently
+from .recorder import get_valve_position, was_any_window_open_recently
 
 # Storage constants
 STORAGE_VERSION = 3
@@ -208,6 +208,9 @@ class UFHControllerDataUpdateCoordinator(
             ),
             valve_open_time=timing_opts.get(
                 "valve_open_time", DEFAULT_TIMING["valve_open_time"]
+            ),
+            valve_close_time=timing_opts.get(
+                "valve_close_time", DEFAULT_TIMING["valve_close_time"]
             ),
             closing_warning_duration=timing_opts.get(
                 "closing_warning_duration", DEFAULT_TIMING["closing_warning_duration"]
@@ -758,30 +761,34 @@ class UFHControllerDataUpdateCoordinator(
         timing = self._controller.config.timing
         runtime.update_requested_duration(timing.observation_period)
 
-        # NON-CRITICAL: Valve state for open detection (recent window)
+        # NON-CRITICAL: Valve position simulation (physical ramp model)
         # Fallback: Use current valve entity state
-        valve_start, valve_end = get_valve_open_window(now, timing.valve_open_time)
+        valve_start, valve_end = get_valve_position_window(
+            now, timing.valve_open_time, timing.valve_close_time
+        )
         try:
-            open_state_avg = await get_state_average(
+            valve_position = await get_valve_position(
                 self.hass,
                 runtime.config.valve_switch,
                 valve_start,
                 valve_end,
+                valve_open_time=timing.valve_open_time,
+                valve_close_time=timing.valve_close_time,
                 on_value="on",
             )
         except SQLAlchemyError:
             # Fallback to current entity state
             current_valve_state = self.hass.states.get(runtime.config.valve_switch)
-            open_state_avg = (
+            valve_position = (
                 1.0
                 if ValveState.from_ha_state(current_valve_state) == ValveState.ON
                 else 0.0
             )
             LOGGER.warning(
-                "Recorder query failed for open state, using fallback valve state "
+                "Recorder query failed for valve position, using fallback valve state "
                 "for zone %s: %.2f",
                 zone_id,
-                open_state_avg,
+                valve_position,
                 exc_info=True,
             )
 
@@ -808,7 +815,7 @@ class UFHControllerDataUpdateCoordinator(
 
         # Update zone with historical data
         runtime.update_historical(
-            open_state_avg=open_state_avg,
+            valve_position=valve_position,
             window=window,
         )
 

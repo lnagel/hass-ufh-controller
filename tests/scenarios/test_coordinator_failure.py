@@ -178,7 +178,7 @@ class TestCoordinatorUpdateZoneFailure:
             assert runtime.state.zone_status == ZoneStatus.INITIALIZING
         else:
             assert runtime.state.zone_status == ZoneStatus.NORMAL
-        assert runtime.state.open_state_avg == expected_fallback
+        assert runtime.state.valve_position == expected_fallback
 
 
 class TestExecuteFailSafeActions:
