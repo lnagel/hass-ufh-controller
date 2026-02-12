@@ -55,10 +55,22 @@ class TestBorderlineDuty:
         # Integral should stabilize (not drift monotonically)
         assert_integral_stable(log, zid, after_hours=8, max_drift=5.0)
 
-        # Valve should actually run in at least some periods after settling
+        # Valve should run in each observation period after settling.
+        # Count distinct periods (2h each) with at least one valve-on step.
         entries = log.zone_entries_after(zid, 6 * 3600)
-        valve_on_count = sum(1 for e in entries if e.valve_on)
-        assert valve_on_count > 0, "Valve never opened despite duty above threshold"
+        observation_period = 7200
+        periods_with_valve: set[int] = set()
+        for e in entries:
+            if e.valve_on:
+                periods_with_valve.add(int(e.time) // observation_period)
+
+        total_periods = len({int(e.time) // observation_period for e in entries})
+        assert periods_with_valve, "Valve never opened despite duty above threshold"
+        # Valve should fire in every period (at 9.4% duty, well above 7.5% threshold)
+        assert len(periods_with_valve) == total_periods, (
+            f"Valve ran in {len(periods_with_valve)}/{total_periods} periods "
+            f"(expected every period at ~9.4% duty)"
+        )
 
     def test_duty_just_below_threshold(
         self,

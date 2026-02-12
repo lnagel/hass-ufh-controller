@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .conftest import ROOM_ARCHETYPES, assert_stable_temperature
+import pytest
+
+from .conftest import (
+    ROOM_ARCHETYPES,
+    assert_integral_bounded,
+    assert_stable_temperature,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -15,6 +21,12 @@ if TYPE_CHECKING:
 class TestDisturbanceRecovery:
     """Verify the controller recovers from mid-simulation perturbations."""
 
+    @pytest.mark.xfail(
+        reason="Controller overshoots ~3.3°C after window event. The PID's "
+        "proportional kick from the 3°C error drives aggressive heating. "
+        "Needs derivative damping or proportional gain reduction.",
+        strict=True,
+    )
     def test_window_open_event(
         self,
         make_single_zone_system: Callable[
@@ -49,26 +61,34 @@ class TestDisturbanceRecovery:
         # Should recover to setpoint after the disturbance
         assert_stable_temperature(log, zid, 21.0, tolerance=0.5, after_hours=24)
 
-        # No extreme overshoot during recovery.
-        # The proportional kick from a 3°C drop causes temporary overshoot
-        # as the PID reacts aggressively to the large error.
+        # No excessive overshoot during recovery: max 1.5°C above setpoint
         entries_after = log.zone_entries_after(zid, window_end)
         max_temp = max(e.room_temp for e in entries_after)
-        assert max_temp <= 25.0, (
-            f"Overshoot after window event: {max_temp:.2f}°C > 25.0°C"
+        assert max_temp <= 22.5, (
+            f"Overshoot after window event: {max_temp:.2f}°C > 22.5°C"
         )
 
+        # Integral should not spike during recovery
+        assert_integral_bounded(log, zid)
+
+    @pytest.mark.xfail(
+        reason="Temperature oscillates ~1.9°C after setpoint step change. "
+        "The observation-period quantization creates on/off cycling that "
+        "the PID cannot fully damp.",
+        strict=True,
+    )
     def test_setpoint_step_change(
         self,
         make_single_zone_system: Callable[
             ..., tuple[SimulationHarness, HeatingController, str]
         ],
     ) -> None:
-        """Setpoint change 21→23 at hour 12: smooth approach."""
+        """Setpoint change 21->23 at hour 12: smooth approach, no oscillation."""
         room = ROOM_ARCHETYPES["well_insulated"]
         harness, _controller, zid = make_single_zone_system(room, setpoint=21.0)
 
         def raise_setpoint(h: SimulationHarness) -> None:
+            """Raise the setpoint mid-simulation."""
             h.controller.set_zone_setpoint(zid, 23.0)
 
         log = harness.run(
@@ -79,17 +99,28 @@ class TestDisturbanceRecovery:
         # Should converge to the new setpoint
         assert_stable_temperature(log, zid, 23.0, tolerance=0.5, after_hours=36)
 
+        # No oscillation: after settling, temperature should not swing
+        # back and forth across setpoint with amplitude > 1°C
+        entries_settled = log.zone_entries_after(zid, 36 * 3600)
+        temps = [e.room_temp for e in entries_settled]
+        temp_range = max(temps) - min(temps)
+        assert temp_range <= 1.0, (
+            f"Temperature oscillation {temp_range:.2f}°C after settling "
+            f"(min={min(temps):.2f}, max={max(temps):.2f})"
+        )
+
     def test_outdoor_temp_drop(
         self,
         make_single_zone_system: Callable[
             ..., tuple[SimulationHarness, HeatingController, str]
         ],
     ) -> None:
-        """Outdoor temp 5→-5 at hour 12: adapts to new steady state."""
+        """Outdoor temp 5->-5 at hour 12: adapts to new steady state."""
         room = ROOM_ARCHETYPES["well_insulated"]
         harness, _controller, zid = make_single_zone_system(room, setpoint=21.0)
 
         def drop_outdoor(h: SimulationHarness) -> None:
+            """Simulate a cold front."""
             h.outdoor_temp = -5.0
             h.rooms[zid].outdoor_temp = -5.0
 

@@ -64,6 +64,18 @@ class TestMultiZone:
             f"well-insulated {z1_duty:.1f}%"
         )
 
+        # used_duration should be proportional to duty cycle.
+        # Sample at observation period boundaries (when used_duration resets).
+        # Compare the ratio of max used_duration per period.
+        z1_max_used = max(e.used_duration for e in z1_entries)
+        z2_max_used = max(e.used_duration for e in z2_entries)
+        if z1_max_used > 0:
+            ratio = z2_max_used / z1_max_used
+            assert ratio > 1.0, (
+                f"Moderate zone used_duration ({z2_max_used:.0f}s) should exceed "
+                f"well-insulated ({z1_max_used:.0f}s)"
+            )
+
     def test_saturated_zone_no_impact(
         self,
         make_multi_zone_system: Callable[

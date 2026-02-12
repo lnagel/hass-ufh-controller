@@ -46,11 +46,13 @@ class TestSteadyStateConvergence:
 
         assert_stable_temperature(log, zid, 21.0, tolerance=0.5, after_hours=24)
 
-        # Duty cycle should be in a moderate range at steady state
+        # Duty cycle should be near theoretical steady-state value
+        # Steady-state: duty = heat_loss * (setpoint - outdoor) / power * 100
+        # = 35 * 21 / 1000 * 100 = 73.5%
         entries = log.zone_entries_after(zid, 24 * 3600)
         duties = [e.duty_cycle for e in entries]
         avg_duty = sum(duties) / len(duties)
-        assert 40.0 <= avg_duty <= 95.0, f"Avg duty {avg_duty:.1f}% outside 40-95%"
+        assert 65.0 <= avg_duty <= 85.0, f"Avg duty {avg_duty:.1f}% outside 65-85%"
 
     def test_unreachable_setpoint(
         self,
@@ -58,9 +60,10 @@ class TestSteadyStateConvergence:
             ..., tuple[SimulationHarness, HeatingController, str]
         ],
     ) -> None:
-        """Borderline room at high setpoint should saturate at 100% duty."""
+        """Borderline room at realistic setpoint should saturate at 100% duty."""
         room = ROOM_ARCHETYPES["borderline"]
-        harness, _controller, zid = make_single_zone_system(room, setpoint=28.0)
+        # Borderline max temp = 5 + 800/70 = 16.4°C — cannot reach 21°C
+        harness, _controller, zid = make_single_zone_system(room, setpoint=21.0)
 
         log = harness.run(24 * 3600)  # 24 hours
 
@@ -84,6 +87,11 @@ class TestSteadyStateConvergence:
             f"Avg temp {avg_temp:.1f}°C exceeds physical max {t_max:.1f}°C"
         )
 
+    @pytest.mark.xfail(
+        reason="Controller overshoots ~2.7°C from cold start due to integral "
+        "accumulation during the long rise. Needs anti-windup improvement.",
+        strict=True,
+    )
     def test_cold_start_no_overshoot(
         self,
         make_single_zone_system: Callable[
@@ -101,16 +109,26 @@ class TestSteadyStateConvergence:
         # Should eventually reach target
         assert_stable_temperature(log, zid, 21.0, tolerance=0.5, after_hours=16)
 
-        # Check overshoot: max temp should not exceed setpoint + 3°C.
-        # Cold starts accumulate integral during the long rise, causing
-        # overshoot that the PID gradually corrects.
+        # Check overshoot: max temp should not exceed setpoint + 1°C.
         entries = log.zone_entries(zid)
         max_temp = max(e.room_temp for e in entries)
-        assert max_temp <= 24.0, f"Overshoot: max temp {max_temp:.2f}°C exceeds 24.0°C"
+        assert max_temp <= 22.0, f"Overshoot: max temp {max_temp:.2f}°C exceeds 22.0°C"
 
     @pytest.mark.parametrize(
         "room_key",
-        ["well_insulated", "moderate"],
+        [
+            "well_insulated",
+            "moderate",
+            pytest.param(
+                "leaky",
+                marks=pytest.mark.xfail(
+                    reason="Leaky room (high power, low thermal mass) causes "
+                    "large temperature swings. Controller needs gain scheduling "
+                    "or adaptive tuning for fast-responding rooms.",
+                    strict=True,
+                ),
+            ),
+        ],
     )
     @pytest.mark.parametrize("ki", [0.0005, 0.001, 0.005])
     def test_convergence_parametrized(

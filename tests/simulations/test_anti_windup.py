@@ -6,7 +6,12 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from .conftest import ROOM_ARCHETYPES, RoomParams, assert_integral_bounded
+from .conftest import (
+    ROOM_ARCHETYPES,
+    RoomParams,
+    assert_integral_bounded,
+    assert_integral_stable,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -25,7 +30,7 @@ class TestAntiWindup:
     ) -> None:
         """Unreachable setpoint should clamp integral at max (100)."""
         room = ROOM_ARCHETYPES["borderline"]
-        harness, _controller, zid = make_single_zone_system(room, setpoint=28.0)
+        harness, _controller, zid = make_single_zone_system(room, setpoint=21.0)
 
         log = harness.run(24 * 3600)  # 24 hours
 
@@ -75,26 +80,6 @@ class TestAntiWindup:
                 f"with room_temp={e.room_temp:.2f}°C > setpoint={e.setpoint}°C"
             )
 
-    def test_integral_stable_below_threshold(
-        self,
-        make_single_zone_system: Callable[
-            ..., tuple[SimulationHarness, HeatingController, str]
-        ],
-    ) -> None:
-        """Duty below min_run_time for many periods: integral converges."""
-        room = RoomParams(
-            thermal_mass=50,
-            heat_loss_coeff=30,
-            heating_power=800,
-            outdoor_temp=19.4,  # ~6% duty, below 7.5% threshold
-        )
-        harness, _controller, zid = make_single_zone_system(room, setpoint=21.0)
-
-        log = harness.run(24 * 3600)  # 24 hours
-
-        # Integral should stay bounded
-        assert_integral_bounded(log, zid)
-
     def test_integral_recovers_from_clamp(
         self,
         make_single_zone_system: Callable[
@@ -103,7 +88,7 @@ class TestAntiWindup:
     ) -> None:
         """Integral decreases from 100 when conditions improve."""
         room = ROOM_ARCHETYPES["borderline"]
-        harness, _controller, zid = make_single_zone_system(room, setpoint=28.0)
+        harness, _controller, zid = make_single_zone_system(room, setpoint=21.0)
 
         def warm_up_outdoor(h: SimulationHarness) -> None:
             """Warm outdoor significantly, reducing heating demand."""
@@ -140,3 +125,108 @@ class TestAntiWindup:
                 f"Integral {avg_after:.1f} didn't decrease after "
                 f"outdoor warmed and setpoint lowered"
             )
+
+
+class TestBackCalculation:
+    """
+    Verify back-calculation anti-windup per plan.
+
+    When actual valve delivery differs from PID-requested duty, the
+    integral term should adjust to prevent ratcheting.  These tests
+    will fail if the controller lacks a back-calculation mechanism.
+    """
+
+    def test_under_delivery_correction(
+        self,
+        make_single_zone_system: Callable[
+            ..., tuple[SimulationHarness, HeatingController, str]
+        ],
+    ) -> None:
+        """
+        Duty=15%, valve ramp overhead causes under-delivery: integral stable.
+
+        At 15% duty the valve is requested for ~1080s per 7200s period.
+        Valve ramp (180s to reach 85% open) means actual heat delivery is
+        less than requested.  The integral should not ratchet upward
+        indefinitely — it must converge to a stable value.
+        """
+        # 30*(21-17)/800*100 = 15%
+        room = RoomParams(
+            thermal_mass=50,
+            heat_loss_coeff=30,
+            heating_power=800,
+            outdoor_temp=17.0,
+        )
+        harness, _controller, zid = make_single_zone_system(room, setpoint=21.0)
+
+        log = harness.run(48 * 3600)  # 48 hours — many observation periods
+
+        # Integral must be bounded
+        assert_integral_bounded(log, zid)
+
+        # Integral must stabilize, not keep drifting upward
+        assert_integral_stable(log, zid, after_hours=24, max_drift=5.0)
+
+    def test_over_delivery_tolerance(
+        self,
+        make_single_zone_system: Callable[
+            ..., tuple[SimulationHarness, HeatingController, str]
+        ],
+    ) -> None:
+        """
+        Duty=8%, valve runs for min_run_time (7.5%): near-match, stable.
+
+        At 8% duty the requested duration (576s) is just above min_run_time
+        (540s).  The valve runs for min_run_time, delivering ~7.5%.
+        The 0.5% mismatch is small — integral should stay roughly stable.
+        """
+        # 30*(21-18.87)/800*100 ≈ 8%
+        room = RoomParams(
+            thermal_mass=50,
+            heat_loss_coeff=30,
+            heating_power=800,
+            outdoor_temp=18.87,
+        )
+        harness, _controller, zid = make_single_zone_system(room, setpoint=21.0)
+
+        log = harness.run(48 * 3600)  # 48 hours
+
+        # Integral must be bounded
+        assert_integral_bounded(log, zid)
+
+        # Integral should stabilize with minimal drift
+        assert_integral_stable(log, zid, after_hours=24, max_drift=5.0)
+
+    def test_sustained_under_delivery(
+        self,
+        make_single_zone_system: Callable[
+            ..., tuple[SimulationHarness, HeatingController, str]
+        ],
+    ) -> None:
+        """
+        Duty=5% (below threshold) for many periods: integral converges.
+
+        At 5% duty the requested duration (360s) is below min_run_time
+        (540s), so the valve never fires.  Without back-calculation the
+        integral will ratchet to 100%.  With proper anti-windup the
+        integral should converge to a steady value that reflects the
+        fact that no heat can be delivered below the threshold.
+        """
+        # 30*(21-19.67)/800*100 ≈ 5%
+        room = RoomParams(
+            thermal_mass=50,
+            heat_loss_coeff=30,
+            heating_power=800,
+            outdoor_temp=19.67,
+        )
+        harness, _controller, zid = make_single_zone_system(room, setpoint=21.0)
+
+        log = harness.run(48 * 3600)  # 48 hours — many observation periods
+
+        # Integral must be bounded (this is the basic clamp check)
+        assert_integral_bounded(log, zid)
+
+        # KEY CHECK: Integral should converge to a steady value, not
+        # keep growing to the clamp.  If the integral grows monotonically
+        # to 100, the controller lacks back-calculation anti-windup.
+        assert_integral_stable(log, zid, after_hours=24, max_drift=5.0)
