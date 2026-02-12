@@ -195,7 +195,7 @@ class SimulationHarness:
             window = False
             if zone_id in self.window_schedules:
                 window = self.window_schedules[zone_id](elapsed)
-            runtime.update_historical(open_state_avg=position, window=window)
+            runtime.update_historical(valve_position=position, window=window)
 
             # Supply coefficient — no supply sensor in simulations
             runtime.update_supply_coefficient(supply_temp=None, supply_target_temp=40.0)
@@ -234,7 +234,8 @@ class SimulationHarness:
             else:
                 runtime.state.valve_state = ValveState.OFF
 
-        # Store heat request
+        # Store pump and heat request
+        controller.state.pump_request = actions.pump_request
         controller.state.heat_request = actions.heat_request
 
         # Advance room models — heat only when valve sufficiently open
