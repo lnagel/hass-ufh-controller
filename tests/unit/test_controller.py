@@ -1,6 +1,7 @@
 """Test heating controller core logic."""
 
 from datetime import UTC, datetime, timedelta
+from unittest.mock import patch
 
 import pytest
 
@@ -12,6 +13,7 @@ from custom_components.ufh_controller.const import (
     ZoneStatus,
 )
 from custom_components.ufh_controller.core.controller import (
+    ControllerActions,
     ControllerConfig,
     HeatingController,
     ZoneConfig,
@@ -959,3 +961,147 @@ class TestHandleObservationPeriodTransition:
 
         assert controller.state.observation_start == NOW
         assert controller.state.period_elapsed == pytest.approx(1800.0)
+
+
+class TestPumpRequestFromEvaluate:
+    """Test pump_request computed by evaluate() for each mode."""
+
+    def test_off_mode_pump_request_none(self, basic_config: ControllerConfig) -> None:
+        """Test OFF mode returns pump_request=None (no actions)."""
+        controller = HeatingController(basic_config, started_at=NOW)
+        controller.mode = OperationMode.OFF
+        actions = controller.evaluate(now=NOW)
+        assert actions.pump_request is None
+
+    def test_all_on_mode_pump_request_true(
+        self, basic_config: ControllerConfig
+    ) -> None:
+        """Test ALL_ON mode returns pump_request=True."""
+        controller = HeatingController(basic_config, started_at=NOW)
+        controller.mode = OperationMode.ALL_ON
+        actions = controller.evaluate(now=NOW)
+        assert actions.pump_request is True
+
+    def test_all_off_mode_pump_request_false(
+        self, basic_config: ControllerConfig
+    ) -> None:
+        """Test ALL_OFF mode returns pump_request=False."""
+        controller = HeatingController(basic_config, started_at=NOW)
+        controller.mode = OperationMode.ALL_OFF
+        actions = controller.evaluate(now=NOW)
+        assert actions.pump_request is False
+
+    def test_flush_mode_pump_request_true(self, basic_config: ControllerConfig) -> None:
+        """Test FLUSH mode returns pump_request=True."""
+        controller = HeatingController(basic_config, started_at=NOW)
+        controller.mode = OperationMode.FLUSH
+        actions = controller.evaluate(now=NOW)
+        assert actions.pump_request is True
+
+    def test_cycle_rest_hour_pump_request_false(
+        self, basic_config: ControllerConfig
+    ) -> None:
+        """Test CYCLE mode rest hour returns pump_request=False (no flow)."""
+        # hour 0 mod 8 == 0 → rest hour
+        rest_hour = NOW.replace(hour=0)
+        controller = HeatingController(basic_config, started_at=rest_hour)
+        controller.mode = OperationMode.CYCLE
+        actions = controller.evaluate(now=rest_hour)
+        assert actions.pump_request is False
+
+    def test_cycle_active_hour_with_flow_pump_request_true(
+        self, basic_config: ControllerConfig
+    ) -> None:
+        """Test CYCLE mode active hour with flow returns pump_request=True."""
+        # hour 1 mod 8 == 1 → first zone active
+        active_hour = NOW.replace(hour=1)
+        controller = HeatingController(basic_config, started_at=active_hour)
+        controller.mode = OperationMode.CYCLE
+
+        # Set up flow for living_room (first zone, active at cycle_hour=1)
+        setup_zone_historical(
+            controller,
+            "living_room",
+            valve_position=0.9,
+            window=False,
+        )
+
+        actions = controller.evaluate(now=active_hour)
+        assert actions.pump_request is True
+
+    def test_heat_mode_with_flow_pump_request_true(
+        self, basic_config: ControllerConfig
+    ) -> None:
+        """Test HEAT mode with zone flow returns pump_request=True."""
+        controller = HeatingController(basic_config, started_at=NOW)
+        controller.mode = OperationMode.HEAT
+
+        # Set up zone with flow
+        setup_zone_pid(controller, "living_room", 20.0, 60.0)
+        setup_zone_historical(
+            controller,
+            "living_room",
+            valve_position=0.9,
+            window=False,
+        )
+
+        actions = controller.evaluate(now=NOW)
+        assert actions.pump_request is True
+
+    def test_heat_mode_without_flow_pump_request_false(
+        self, basic_config: ControllerConfig
+    ) -> None:
+        """Test HEAT mode without zone flow returns pump_request=False."""
+        controller = HeatingController(basic_config, started_at=NOW)
+        controller.mode = OperationMode.HEAT
+
+        # No flow set up for any zone
+        setup_zone_pid(controller, "living_room", 20.0, 60.0)
+        setup_zone_historical(
+            controller,
+            "living_room",
+            valve_position=0.0,
+            window=False,
+        )
+
+        actions = controller.evaluate(now=NOW)
+        assert actions.pump_request is False
+
+    def test_safety_lockout_heat_requires_pump(
+        self, basic_config: ControllerConfig
+    ) -> None:
+        """Test heat_request=False when pump_request=False (safety lockout)."""
+        controller = HeatingController(basic_config, started_at=NOW)
+        controller.mode = OperationMode.HEAT
+
+        # No flow → pump_request=False → heat_request must also be False
+        setup_zone_pid(controller, "living_room", 18.0, 60.0)
+        setup_zone_historical(
+            controller,
+            "living_room",
+            valve_position=0.0,
+            window=False,
+        )
+
+        actions = controller.evaluate(now=NOW)
+        assert actions.pump_request is False
+        assert actions.heat_request is False
+
+    def test_safety_net_forces_heat_false_when_pump_false(
+        self, basic_config: ControllerConfig
+    ) -> None:
+        """Test safety net corrects heat_request when pump_request is False."""
+        controller = HeatingController(basic_config, started_at=NOW)
+        controller.mode = OperationMode.HEAT
+
+        # Patch _evaluate_heat_mode to return inconsistent state
+        inconsistent = ControllerActions(
+            pump_request=False,
+            heat_request=True,
+            valve_actions={},
+        )
+        with patch.object(controller, "_evaluate_heat_mode", return_value=inconsistent):
+            actions = controller.evaluate(now=NOW)
+
+        assert actions.pump_request is False
+        assert actions.heat_request is False

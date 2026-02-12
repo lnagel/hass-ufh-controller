@@ -10,6 +10,7 @@ from .config_flow import (
     CONF_DHW_ACTIVE_ENTITY,
     CONF_HEAT_REQUEST_ENTITY,
     CONF_OUTDOOR_TEMP_ENTITY,
+    CONF_PUMP_REQUEST_ENTITY,
     CONF_SUMMER_MODE_ENTITY,
     CONF_SUPPLY_TEMP_ENTITY,
 )
@@ -279,6 +280,7 @@ class UFHControllerDataUpdateCoordinator(
         config = ControllerConfig(
             controller_id=data["controller_id"],
             name=data["name"],
+            pump_request_entity=data.get(CONF_PUMP_REQUEST_ENTITY),
             heat_request_entity=data.get(CONF_HEAT_REQUEST_ENTITY),
             dhw_active_entity=data.get(CONF_DHW_ACTIVE_ENTITY),
             summer_mode_entity=data.get(CONF_SUMMER_MODE_ENTITY),
@@ -343,6 +345,9 @@ class UFHControllerDataUpdateCoordinator(
         self._entities_refresh_trigger = set()
 
         # Collect Controller-level entities
+        if pump_request := entry.data.get(CONF_PUMP_REQUEST_ENTITY):
+            self._entities_pending.add(pump_request)
+            self._entities_refresh_trigger.add(pump_request)
         if heat_request := entry.data.get(CONF_HEAT_REQUEST_ENTITY):
             self._entities_pending.add(heat_request)
             self._entities_refresh_trigger.add(heat_request)
@@ -525,8 +530,9 @@ class UFHControllerDataUpdateCoordinator(
             # Update zone state to reflect valve is off
             runtime.state.valve_state = ValveState.OFF
 
-        # Turn off heat request
+        # Turn off heat request first, then pump (heat depends on pump)
         await self._execute_heat_request(heat_request=False)
+        await self._execute_pump_request(pump_request=False)
 
         # Set summer mode to 'auto' to pass control back to the boiler
         summer_entity = self._controller.config.summer_mode_entity
@@ -621,13 +627,20 @@ class UFHControllerDataUpdateCoordinator(
         # Update flush_request state for binary_sensor exposure
         self._controller.state.flush_request = actions.flush_request
 
-        # Update controller-level heat request from controller output
+        # Update controller-level pump and heat request from controller output
+        self._controller.state.pump_request = actions.pump_request
         self._controller.state.heat_request = actions.heat_request
 
         # Execute valve actions with zone-level isolation
         await self._execute_valve_actions_with_isolation(
             actions.valve_actions, force_update=force_update
         )
+
+        # Execute pump request before heat request (heat depends on pump)
+        if actions.pump_request is not None:
+            await self._execute_pump_request(
+                pump_request=actions.pump_request, force_update=force_update
+            )
 
         # Execute heat request and summer mode
         if actions.heat_request is not None:
@@ -949,6 +962,23 @@ class UFHControllerDataUpdateCoordinator(
                     await self._call_switch_service(valve_entity, turn_on=False)
                 runtime.state.valve_state = ValveState.OFF
 
+    async def _execute_pump_request(
+        self, *, pump_request: bool, force_update: bool = False
+    ) -> None:
+        """Execute pump request by calling switch service if configured."""
+        entity_id = self._controller.config.pump_request_entity
+        if entity_id is None:
+            return
+
+        if not force_update:
+            current_state = self.hass.states.get(entity_id)
+            if current_state is not None:
+                current_on = current_state.state == "on"
+                if current_on == pump_request:
+                    return  # Already in correct state
+
+        await self._call_switch_service(entity_id, turn_on=pump_request)
+
     async def _execute_heat_request(
         self, *, heat_request: bool, force_update: bool = False
     ) -> None:
@@ -1089,6 +1119,7 @@ class UFHControllerDataUpdateCoordinator(
                 "dhw_active": self._controller.state.dhw_active,
                 "flush_until": self._controller.state.flush_until,
                 "flush_request": self._controller.state.flush_request,
+                "pump_request": self._controller.state.pump_request,
                 "heat_request": self._controller.state.heat_request,
                 "outdoor_temp": self._controller.state.outdoor_temp,
                 "supply_target_temp": self._controller.state.supply_target_temp,

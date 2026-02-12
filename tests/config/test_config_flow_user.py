@@ -42,6 +42,7 @@ async def test_user_flow_create_entry(
     assert result["title"] == "My Heating"
     assert result["data"]["name"] == "My Heating"
     assert result["data"]["controller_id"] == "my-heating"
+    assert result["data"]["pump_request_entity"] is None
     assert result["data"]["heat_request_entity"] is None
     assert result["data"]["dhw_active_entity"] is None
     assert result["options"]["timing"] == DEFAULT_TIMING
@@ -60,6 +61,7 @@ async def test_user_flow_with_all_entities(
         result["flow_id"],
         user_input={
             "name": "Full Controller",
+            "pump_request_entity": "switch.pump_relay",
             "heat_request_entity": "switch.boiler_heat",
             "dhw_active_entity": "binary_sensor.dhw_active",
             "summer_mode_entity": "select.summer_mode",
@@ -67,6 +69,7 @@ async def test_user_flow_with_all_entities(
     )
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"]["pump_request_entity"] == "switch.pump_relay"
     assert result["data"]["heat_request_entity"] == "switch.boiler_heat"
     assert result["data"]["dhw_active_entity"] == "binary_sensor.dhw_active"
     assert result["data"]["summer_mode_entity"] == "select.summer_mode"

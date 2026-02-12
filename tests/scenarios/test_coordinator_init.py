@@ -47,6 +47,7 @@ class TestPendingEntitiesSetup:
             mock_config_entry_all_entities.runtime_data.coordinator._entities_pending
         )
         assert pending >= {
+            "switch.pump_request",
             "switch.heat_request",
             "select.summer_mode",
             "binary_sensor.dhw_active",

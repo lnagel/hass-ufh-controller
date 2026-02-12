@@ -652,3 +652,82 @@ async def test_temp_sensor_unknown_preserves_last_duty_cycle(
     assert runtime is not None
     # Current temperature should be None
     assert runtime.state.current is None
+
+
+# ============================================================================
+# Pump Request Switch Unavailability Tests
+# ============================================================================
+
+
+@pytest.fixture
+def mock_config_entry_with_pump_request() -> MockConfigEntry:
+    """Return a mock config entry with pump request entity configured."""
+    zone_data = _make_zone_data()
+    return MockConfigEntry(
+        domain=DOMAIN,
+        title="Test Controller",
+        data={
+            "name": "Test Controller",
+            "controller_id": MOCK_CONTROLLER_ID,
+            "pump_request_entity": "switch.pump_request",
+        },
+        options={"timing": DEFAULT_TIMING},
+        entry_id="test_entry_pump",
+        unique_id=f"{MOCK_CONTROLLER_ID}_pump",
+        subentries_data=[
+            {
+                "data": zone_data,
+                "subentry_id": "subentry_zone1",
+                "subentry_type": SUBENTRY_TYPE_ZONE,
+                "title": "Test Zone 1",
+                "unique_id": "zone1",
+            }
+        ],
+    )
+
+
+async def test_pump_request_switch_unavailable_no_error(
+    hass: HomeAssistant,
+    mock_config_entry_with_pump_request: MockConfigEntry,
+) -> None:
+    """Test no error when pump request switch is unavailable."""
+    hass.states.async_set("switch.pump_request", STATE_UNAVAILABLE)
+    hass.states.async_set("sensor.zone1_temp", "20.5")
+
+    mock_config_entry_with_pump_request.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry_with_pump_request.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = mock_config_entry_with_pump_request.runtime_data.coordinator
+    assert coordinator is not None
+
+
+async def test_pump_request_switch_unknown_no_error(
+    hass: HomeAssistant,
+    mock_config_entry_with_pump_request: MockConfigEntry,
+) -> None:
+    """Test no error when pump request switch is unknown."""
+    hass.states.async_set("switch.pump_request", STATE_UNKNOWN)
+    hass.states.async_set("sensor.zone1_temp", "20.5")
+
+    mock_config_entry_with_pump_request.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry_with_pump_request.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = mock_config_entry_with_pump_request.runtime_data.coordinator
+    assert coordinator is not None
+
+
+async def test_pump_request_switch_missing_no_error(
+    hass: HomeAssistant,
+    mock_config_entry_with_pump_request: MockConfigEntry,
+) -> None:
+    """Test no error when pump request switch entity doesn't exist."""
+    hass.states.async_set("sensor.zone1_temp", "20.5")
+
+    mock_config_entry_with_pump_request.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry_with_pump_request.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = mock_config_entry_with_pump_request.runtime_data.coordinator
+    assert coordinator is not None

@@ -103,6 +103,21 @@ async def test_zone_heat_binary_sensor_created(
     assert state.state == "off"
 
 
+async def test_controller_pump_request_binary_sensor_created(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Test controller pump request binary sensor is created on setup."""
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get("binary_sensor.test_controller_pump_request")
+    assert state is not None
+    # Default state should be off (no pump request during init)
+    assert state.state == "off"
+
+
 async def test_controller_heat_request_binary_sensor_created(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,

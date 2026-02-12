@@ -413,3 +413,57 @@ async def test_force_update_sends_heat_request_even_when_matching(
 
     # Service call made because state doesn't match (force_update=False but mismatch)
     assert ("turn_off", "switch.heat_request") in switch_calls
+
+
+async def test_force_update_sends_pump_request_even_when_matching(
+    hass: HomeAssistant,
+    mock_config_entry_with_pump_request: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """Test that force-update sends pump_request command even if state matches."""
+    freezer.move_to("2026-01-14 02:00:00+00:00")
+
+    mock_config_entry_with_pump_request.add_to_hass(hass)
+    # Zone doesn't need heat (temp above setpoint) - pump_request will be off
+    hass.states.async_set("sensor.zone1_temp", "25.0")
+    hass.states.async_set("switch.zone1_valve", "off")
+    # Pump request already off - matches expected state
+    hass.states.async_set("switch.pump_request", "off")
+
+    switch_calls: list[tuple[str, str]] = []
+
+    async def track_switch_call(call: ServiceCall) -> None:
+        switch_calls.append((call.service, call.data.get("entity_id", "")))
+
+    hass.services.async_register("switch", "turn_on", track_switch_call)
+    hass.services.async_register("switch", "turn_off", track_switch_call)
+
+    coordinator = UFHControllerDataUpdateCoordinator(
+        hass, mock_config_entry_with_pump_request
+    )
+
+    mock_recorder = MagicMock()
+    mock_recorder.async_add_executor_job = AsyncMock(return_value={})
+
+    with patch(
+        "homeassistant.components.recorder.get_instance",
+        return_value=mock_recorder,
+    ):
+        # First refresh: force-update sends command even though state matches
+        await coordinator.async_refresh()
+
+    # First cycle force-update triggers service call for pump_request
+    # (turn_off because no flow)
+    assert ("turn_off", "switch.pump_request") in switch_calls
+    switch_calls.clear()
+
+    # Second refresh in same observation period - no force-update
+    freezer.tick(60)
+    with patch(
+        "homeassistant.components.recorder.get_instance",
+        return_value=mock_recorder,
+    ):
+        await coordinator.async_refresh()
+
+    # No pump_request call - state matches and force-update already done
+    assert ("turn_off", "switch.pump_request") not in switch_calls

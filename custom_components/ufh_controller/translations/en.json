@@ -6,6 +6,7 @@
         "description": "Configure your underfloor heating controller.",
         "data": {
           "name": "Controller name",
+          "pump_request_entity": "Pump request switch",
           "heat_request_entity": "Heat request switch",
           "dhw_active_entity": "DHW active sensor",
           "summer_mode_entity": "Summer mode select"
@@ -29,6 +30,7 @@
       "control_entities": {
         "title": "Control Entities",
         "data": {
+          "pump_request_entity": "Pump request switch",
           "heat_request_entity": "Heat request switch",
           "dhw_active_entity": "DHW active sensor",
           "summer_mode_entity": "Summer mode select"
@@ -260,6 +262,9 @@
       },
       "window": {
         "name": "Window"
+      },
+      "pump_request": {
+        "name": "Pump Request"
       },
       "heat_request": {
         "name": "Heat Request"

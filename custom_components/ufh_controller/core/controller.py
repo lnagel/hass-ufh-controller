@@ -43,6 +43,7 @@ class ControllerState:
     mode: OperationMode = OperationMode.HEAT
     observation_start: datetime = field(default_factory=datetime.now)
     period_elapsed: float = 0.0  # Seconds elapsed in current observation period
+    pump_request: bool | None = None
     heat_request: bool | None = None
     flush_enabled: bool = False
     dhw_active: bool = False
@@ -60,6 +61,7 @@ class ControllerConfig:
 
     controller_id: str
     name: str
+    pump_request_entity: str | None = None
     heat_request_entity: str | None = None
     dhw_active_entity: str | None = None
     summer_mode_entity: str | None = None
@@ -79,6 +81,7 @@ class ControllerActions:
     """
 
     valve_actions: dict[str, ZoneAction] = field(default_factory=dict)
+    pump_request: bool | None = None
     heat_request: bool | None = None
     flush_request: bool = False
 
@@ -324,6 +327,7 @@ class HeatingController:
         }
         return ControllerActions(
             valve_actions=valve_actions,
+            pump_request=True,
             heat_request=True,
         )
 
@@ -343,6 +347,7 @@ class HeatingController:
         }
         return ControllerActions(
             valve_actions=valve_actions,
+            pump_request=False,
             heat_request=False,
         )
 
@@ -362,6 +367,7 @@ class HeatingController:
         }
         return ControllerActions(
             valve_actions=valve_actions,
+            pump_request=True,
             heat_request=False,
         )
 
@@ -397,8 +403,10 @@ class HeatingController:
                         ZoneAction.TURN_OFF if valve_on else ZoneAction.STAY_OFF
                     )
 
+        pump_request = any(rt.state.flow for rt in self._zones.values())
         return ControllerActions(
             valve_actions=valve_actions,
+            pump_request=pump_request,
             heat_request=False,
         )
 
@@ -443,19 +451,23 @@ class HeatingController:
                     flush_request=flush_request,
                 )
 
-        # Aggregate heat request from per-zone decisions
+        # Pump request: any zone with confirmed flow
+        pump_request = any(rt.state.flow for rt in self._zones.values())
+
+        # Aggregate heat request from per-zone decisions, gated on pump
         remaining_durations = {
             zone_id: rt.state.remaining_duration
             for zone_id, rt in self._zones.items()
             if rt.state.flow
         }
-        heat_request = any(
+        heat_request = pump_request and any(
             rd > self.config.timing.closing_warning_duration
             for rd in remaining_durations.values()
         )
 
         return ControllerActions(
             valve_actions=valve_actions,
+            pump_request=pump_request,
             heat_request=heat_request,
             flush_request=flush_request,
         )
@@ -476,16 +488,23 @@ class HeatingController:
         """
         mode = self._state.mode
         if mode == OperationMode.HEAT:
-            return self._evaluate_heat_mode(now)
-        if mode == OperationMode.FLUSH:
-            return self._evaluate_flush_mode()
-        if mode == OperationMode.CYCLE:
-            return self._evaluate_cycle_mode(now)
-        if mode == OperationMode.ALL_ON:
-            return self._evaluate_all_on_mode()
-        if mode == OperationMode.ALL_OFF:
-            return self._evaluate_all_off_mode()
-        return self._evaluate_off_mode()
+            actions = self._evaluate_heat_mode(now)
+        elif mode == OperationMode.FLUSH:
+            actions = self._evaluate_flush_mode()
+        elif mode == OperationMode.CYCLE:
+            actions = self._evaluate_cycle_mode(now)
+        elif mode == OperationMode.ALL_ON:
+            actions = self._evaluate_all_on_mode()
+        elif mode == OperationMode.ALL_OFF:
+            actions = self._evaluate_all_off_mode()
+        else:
+            actions = self._evaluate_off_mode()
+
+        # Safety net: heat request requires pump request
+        if not actions.pump_request and actions.heat_request:
+            actions.heat_request = False
+
+        return actions
 
     def get_summer_mode_value(self, *, heat_request: bool) -> str | None:
         """

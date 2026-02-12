@@ -158,6 +158,34 @@ def mock_config_entry() -> MockConfigEntry:
 
 
 @pytest.fixture
+def mock_config_entry_with_pump_request() -> MockConfigEntry:
+    """Return a mock config entry with pump request entity configured."""
+    return MockConfigEntry(
+        domain=DOMAIN,
+        title="Test Controller",
+        data={
+            "name": "Test Controller",
+            "controller_id": MOCK_CONTROLLER_ID,
+            "pump_request_entity": "switch.pump_request",
+        },
+        options={
+            "timing": DEFAULT_TIMING,
+        },
+        entry_id=f"{MOCK_CONTROLLER_ID}_pump_request",
+        unique_id=f"{MOCK_CONTROLLER_ID}_pump_request",
+        subentries_data=[
+            {
+                "data": MOCK_ZONE_DATA,
+                "subentry_id": "subentry_zone1",
+                "subentry_type": SUBENTRY_TYPE_ZONE,
+                "title": "Test Zone 1",
+                "unique_id": "zone1",
+            }
+        ],
+    )
+
+
+@pytest.fixture
 def mock_config_entry_with_heat_request() -> MockConfigEntry:
     """Return a mock config entry with heat request entity configured."""
     return MockConfigEntry(
@@ -253,6 +281,7 @@ def mock_config_entry_all_entities() -> MockConfigEntry:
         data={
             "name": "Test Controller Full",
             "controller_id": f"{MOCK_CONTROLLER_ID}_full",
+            "pump_request_entity": "switch.pump_request",
             "heat_request_entity": "switch.heat_request",
             "summer_mode_entity": "select.summer_mode",
             "dhw_active_entity": "binary_sensor.dhw_active",

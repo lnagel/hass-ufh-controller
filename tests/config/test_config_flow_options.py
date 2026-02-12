@@ -76,6 +76,7 @@ async def test_options_flow_update_control_entities(
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
         user_input={
+            "pump_request_entity": "switch.pump_relay",
             "heat_request_entity": "switch.heat_request",
             "summer_mode_entity": "select.boiler_mode",
         },
@@ -84,6 +85,7 @@ async def test_options_flow_update_control_entities(
     assert result["type"] is FlowResultType.CREATE_ENTRY
 
     # Verify the config entry data was updated
+    assert mock_config_entry.data["pump_request_entity"] == "switch.pump_relay"
     assert mock_config_entry.data["heat_request_entity"] == "switch.heat_request"
     assert mock_config_entry.data["summer_mode_entity"] == "select.boiler_mode"
 

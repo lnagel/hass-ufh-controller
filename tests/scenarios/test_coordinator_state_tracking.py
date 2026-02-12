@@ -22,6 +22,7 @@ from custom_components.ufh_controller.coordinator import (
     ("entity_id", "initial_state", "new_state"),
     [
         ("binary_sensor.dhw_active", "off", "on"),
+        ("switch.pump_request", "off", "on"),
         ("switch.heat_request", "off", "on"),
         ("select.summer_mode", "winter", "summer"),
         ("switch.zone1_valve", "off", "on"),
@@ -61,6 +62,7 @@ async def test_external_state_change_triggers_refresh(
 @pytest.mark.parametrize(
     ("entity_id", "expected_state"),
     [
+        ("switch.pump_request", "on"),
         ("switch.heat_request", "on"),
         ("switch.zone1_valve", "on"),
     ],

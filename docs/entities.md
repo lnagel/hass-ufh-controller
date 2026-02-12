@@ -14,6 +14,7 @@ All controller entities belong to a device named after the controller (user-defi
 | sensor | `sensor.{controller_id}_zones_window`  | "{name} Zones Window"  | Count of zones with recent window activity |
 | sensor | `sensor.{controller_id}_supply_target_temp`     | "{name} Supply Target Temperature"     | Calculated supply target from heating curve (only when `outdoor_temp_entity` configured) |
 | binary_sensor | `binary_sensor.{controller_id}_status` | "{name} Status" | Controller operational status (problem when degraded/fail-safe) |
+| binary_sensor | `binary_sensor.{controller_id}_pump_request` | "{name} Pump Request" | Pump is requested for water circulation through zones |
 | binary_sensor | `binary_sensor.{controller_id}_heat_request` | "{name} Heat Request" | Controller is requesting heat from the boiler |
 | binary_sensor | `binary_sensor.{controller_id}_flush_request` | "{name} Flush Request" | Flush is actively running (only when `dhw_active_entity` configured) |
 

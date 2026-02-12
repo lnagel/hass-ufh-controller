@@ -93,6 +93,13 @@ STATUS_SENSOR = UFHControllerBinarySensorEntityDescription(
     attrs_fn=_status_attrs,
 )
 
+PUMP_REQUEST_SENSOR = UFHControllerBinarySensorEntityDescription(
+    key="pump_request",
+    translation_key="pump_request",
+    device_class=BinarySensorDeviceClass.RUNNING,
+    value_fn=lambda data: bool(data.get("pump_request")),
+)
+
 HEAT_REQUEST_SENSOR = UFHControllerBinarySensorEntityDescription(
     key="heat_request",
     translation_key="heat_request",
@@ -119,7 +126,11 @@ async def async_setup_entry(
     # Add controller-level sensors
     controller_subentry_id = get_controller_subentry_id(entry)
     if controller_subentry_id is not None:
-        controller_descriptions = [STATUS_SENSOR, HEAT_REQUEST_SENSOR]
+        controller_descriptions = [
+            STATUS_SENSOR,
+            PUMP_REQUEST_SENSOR,
+            HEAT_REQUEST_SENSOR,
+        ]
 
         # Only create flush_request sensor if DHW entity is configured
         if entry.data.get("dhw_active_entity"):
