@@ -154,14 +154,13 @@ class TestBackCalculation:
         ],
     ) -> None:
         """
-        Duty=15%, valve ramp overhead causes under-delivery: integral stable.
+        Moderate demand, valve ramp overhead causes under-delivery: integral stable.
 
-        At 15% duty the valve is requested for ~1080s per 7200s period.
-        Valve ramp (180s to reach 85% open) means actual heat delivery is
-        less than requested.  The integral should not ratchet upward
-        indefinitely — it must converge to a stable value.
+        With well_insulated (0.56 W/(K·m²), 50 W/m²) at outdoor=17:
+        theoretical duty = 0.56*(21-17)/50*100 = 4.5%.  PID integral
+        accumulation drives actual duty higher.  The integral should not
+        ratchet upward indefinitely — it must converge to a stable value.
         """
-        # 1.5*(21-17)/40*100 = 15%
         room = ROOM_ARCHETYPES["well_insulated"]
         harness, _controller, zid = make_single_zone_system(
             room, outdoor_temp=17.0, initial_temp=20.0, setpoint=21.0
@@ -182,13 +181,13 @@ class TestBackCalculation:
         ],
     ) -> None:
         """
-        Duty=8%, valve runs for min_run_time (7.5%): near-match, stable.
+        Mild demand near threshold: near-match delivery, stable integral.
 
-        At 8% duty the requested duration (576s) is just above min_run_time
-        (540s).  The valve runs for min_run_time, delivering ~7.5%.
-        The 0.5% mismatch is small — integral should stay roughly stable.
+        With well_insulated (0.56 W/(K·m²), 50 W/m²) at outdoor=18.87:
+        theoretical duty = 0.56*(21-18.87)/50*100 = 2.4%.  PID integral
+        drives actual duty near the 7.5% threshold.  The small mismatch
+        between requested and delivered heat should not cause drift.
         """
-        # 1.5*(21-18.87)/40*100 ≈ 8%
         room = ROOM_ARCHETYPES["well_insulated"]
         harness, _controller, zid = make_single_zone_system(
             room, outdoor_temp=18.87, initial_temp=20.0, setpoint=21.0
@@ -209,15 +208,15 @@ class TestBackCalculation:
         ],
     ) -> None:
         """
-        Duty=5% (below threshold) for many periods: integral converges.
+        Sub-threshold demand for many periods: integral converges.
 
-        At 5% duty the requested duration (360s) is below min_run_time
-        (540s), so the valve never fires.  Without back-calculation the
-        integral will ratchet to 100%.  With proper anti-windup the
-        integral should converge to a steady value that reflects the
-        fact that no heat can be delivered below the threshold.
+        With well_insulated (0.56 W/(K·m²), 50 W/m²) at outdoor=19.67:
+        theoretical duty = 0.56*(21-19.67)/50*100 = 1.5%.  Even with
+        integral accumulation, duty stays below the 7.5% threshold so
+        the valve never fires.  Without back-calculation the integral
+        will ratchet to 100%.  With proper anti-windup the integral
+        should converge to a steady value.
         """
-        # 1.5*(21-19.67)/40*100 ≈ 5%
         room = ROOM_ARCHETYPES["well_insulated"]
         harness, _controller, zid = make_single_zone_system(
             room, outdoor_temp=19.67, initial_temp=20.0, setpoint=21.0

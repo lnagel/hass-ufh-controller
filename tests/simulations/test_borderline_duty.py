@@ -26,10 +26,14 @@ class TestBorderlineDuty:
 
     Steady-state formula: duty% = heat_loss * (setpoint - outdoor) / heating_power * 100
 
-    With well_insulated (heat_loss=1.5 W/(K·m²), power=40 W/m²):
-    - outdoor=18.5 → duty = 1.5*(21-18.5)/40*100 = 9.4%  (just above threshold)
-    - outdoor=19.4 → duty = 1.5*(21-19.4)/40*100 = 6.0%  (just below threshold)
-    - outdoor=19.0 → duty = 1.5*(21-19.0)/40*100 = 7.5%  (borderline)
+    With well_insulated (heat_loss=0.56 W/(K·m²), power=50 W/m²):
+    - outdoor=18.5 → duty = 0.56*(21-18.5)/50*100 = 2.8%  (below threshold)
+    - outdoor=19.4 → duty = 0.56*(21-19.4)/50*100 = 1.8%  (well below threshold)
+    - outdoor=19.0 → duty = 0.56*(21-19.0)/50*100 = 2.2%  (below threshold)
+
+    These theoretical steady-state values are all below the 7.5% threshold,
+    but PID integral accumulation drives the actual duty cycle higher than
+    the instantaneous proportional-only estimate.
 
     With default min_run_time=540s and observation_period=7200s:
     threshold ≈ 540/7200*100 = 7.5%
