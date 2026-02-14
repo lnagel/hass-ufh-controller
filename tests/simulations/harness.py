@@ -214,12 +214,14 @@ class SimulationHarness:
         # Phase 4: Status update
         controller.update_status(now=now, has_pending_entities=False)
 
-        # Skip evaluation during init/fail-safe
+        # Skip evaluation during init/fail-safe, but keep room physics running
         status = controller.status
         if status in (
             ControllerStatus.INITIALIZING,
             ControllerStatus.FAIL_SAFE,
         ):
+            for room in self.rooms.values():
+                room.step(dt, heating_on=False)
             self._log_step(elapsed, log)
             return
 

@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from .conftest import (
-    RoomParams,
+    ROOM_ARCHETYPES,
     assert_integral_bounded,
     assert_integral_stable,
     assert_no_rapid_cycling,
@@ -26,10 +26,10 @@ class TestBorderlineDuty:
 
     Steady-state formula: duty% = heat_loss * (setpoint - outdoor) / heating_power * 100
 
-    With well_insulated (heat_loss=30, power=800):
-    - outdoor=18.5 → duty = 30*(21-18.5)/800*100 = 9.4%  (just above threshold)
-    - outdoor=19.4 → duty = 30*(21-19.4)/800*100 = 6.0%  (just below threshold)
-    - outdoor=19.0 → duty = 30*(21-19.0)/800*100 = 7.5%  (borderline)
+    With well_insulated (heat_loss=1.5 W/(K·m²), power=40 W/m²):
+    - outdoor=18.5 → duty = 1.5*(21-18.5)/40*100 = 9.4%  (just above threshold)
+    - outdoor=19.4 → duty = 1.5*(21-19.4)/40*100 = 6.0%  (just below threshold)
+    - outdoor=19.0 → duty = 1.5*(21-19.0)/40*100 = 7.5%  (borderline)
 
     With default min_run_time=540s and observation_period=7200s:
     threshold ≈ 540/7200*100 = 7.5%
@@ -48,13 +48,10 @@ class TestBorderlineDuty:
         ],
     ) -> None:
         """Zone with ~9.4% duty should run each period, integral stable."""
-        room = RoomParams(
-            thermal_mass=50,
-            heat_loss_coeff=30,
-            heating_power=800,
-            outdoor_temp=18.5,
+        room = ROOM_ARCHETYPES["well_insulated"]
+        harness, _controller, zid = make_single_zone_system(
+            room, outdoor_temp=18.5, setpoint=21.0
         )
-        harness, _controller, zid = make_single_zone_system(room, setpoint=21.0)
 
         log = harness.run(24 * 3600)  # 24 hours
 
@@ -91,13 +88,10 @@ class TestBorderlineDuty:
         ],
     ) -> None:
         """Zone with ~6% duty: valve mostly off, integral doesn't ratchet."""
-        room = RoomParams(
-            thermal_mass=50,
-            heat_loss_coeff=30,
-            heating_power=800,
-            outdoor_temp=19.4,
+        room = ROOM_ARCHETYPES["well_insulated"]
+        harness, _controller, zid = make_single_zone_system(
+            room, outdoor_temp=19.4, setpoint=21.0
         )
-        harness, _controller, zid = make_single_zone_system(room, setpoint=21.0)
 
         log = harness.run(48 * 3600)  # 48 hours — many observation periods
 
@@ -122,13 +116,10 @@ class TestBorderlineDuty:
         ],
     ) -> None:
         """Zone at ~7.5% duty: borderline, stable without integral drift."""
-        room = RoomParams(
-            thermal_mass=50,
-            heat_loss_coeff=30,
-            heating_power=800,
-            outdoor_temp=19.0,
+        room = ROOM_ARCHETYPES["well_insulated"]
+        harness, _controller, zid = make_single_zone_system(
+            room, outdoor_temp=19.0, setpoint=21.0
         )
-        harness, _controller, zid = make_single_zone_system(room, setpoint=21.0)
 
         log = harness.run(24 * 3600)  # 24 hours
 

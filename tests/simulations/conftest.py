@@ -52,33 +52,45 @@ def mock_recorder() -> None:
 
 @dataclass(frozen=True)
 class RoomParams:
-    """Parameters describing a room archetype."""
+    """Per-m² building properties describing a room archetype."""
 
-    thermal_mass: float  # kJ/°C
-    heat_loss_coeff: float  # W/°C
-    heating_power: float  # W
-    outdoor_temp: float  # °C
+    thermal_mass: float  # kJ/(K·m²)
+    heat_loss_coeff: float  # W/(K·m²)
+    heating_power: float  # W/m²
 
 
 ROOM_ARCHETYPES: dict[str, RoomParams] = {
-    # Max temp = 5 + 800/30 = 31.7°C; duty at 21°C ≈ 60%
+    # Level 1: Passivhaus / current Nordic code (EN 12831, ISO 13790)
+    # H_total = 55.9 W/K for 100 m², τ ≈ 60 h
+    # Design load 23 W/m² at −20 °C; UFH 200–300 mm spacing, tile finish
     "well_insulated": RoomParams(
-        thermal_mass=50, heat_loss_coeff=30, heating_power=800, outdoor_temp=5
+        thermal_mass=120.0,  # kJ/(K·m²) — ISO 13790 Light–Medium
+        heat_loss_coeff=0.56,  # W/(K·m²) — EN 12831: 55.9 W/K ÷ 100 m²
+        heating_power=50.0,  # W/m² — EN 1264: 200 mm spacing, supply 30–35 °C
     ),
-    # Max temp = 0 + 1000/35 = 28.6°C; duty at 21°C ≈ 73.5%
+    # Level 2: 1980s–2000s renovation
+    # H_total = 164.8 W/K for 100 m², τ ≈ 28 h
+    # Design load 68 W/m² at −20 °C; UFH 150–200 mm spacing, tile finish
     "moderate": RoomParams(
-        thermal_mass=40, heat_loss_coeff=35, heating_power=1000, outdoor_temp=0
+        thermal_mass=165.0,  # kJ/(K·m²) — ISO 13790 Medium
+        heat_loss_coeff=1.65,  # W/(K·m²) — EN 12831: 164.8 W/K ÷ 100 m²
+        heating_power=75.0,  # W/m² — EN 1264: 150 mm spacing, supply 40–45 °C
     ),
-    # Max temp = -5 + 1500/50 = 25°C; duty at 21°C ≈ 86.7%
+    # Level 3: Pre-1960s uninsulated
+    # H_total = 418 W/K for 100 m², τ ≈ 13 h
+    # Design load 171 W/m² at −20 °C (exceeds UFH max ~100 W/m² per EN 1264)
+    # UFH 100 mm spacing, supply 42–50 °C; supplementary emitters needed
     "leaky": RoomParams(
-        thermal_mass=35, heat_loss_coeff=50, heating_power=1500, outdoor_temp=-5
+        thermal_mass=200.0,  # kJ/(K·m²) — ISO 13790 Medium–Heavy
+        heat_loss_coeff=4.18,  # W/(K·m²) — EN 12831: 418 W/K ÷ 100 m²
+        heating_power=100.0,  # W/m² — EN 1264 max for occupied zones
     ),
-    # Max temp = 5 + 800/70 = 16.4°C; UNREACHABLE at 21°C (by design)
+    # Level 3 envelope with undersized UFH — cannot reach typical setpoints
+    # T_max at outdoor 5 °C = 5 + 50/4.18 ≈ 17 °C (cannot reach 21 °C)
     "borderline": RoomParams(
-        thermal_mass=45,
-        heat_loss_coeff=70,
-        heating_power=800,
-        outdoor_temp=5,
+        thermal_mass=200.0,  # kJ/(K·m²) — same as leaky
+        heat_loss_coeff=4.18,  # W/(K·m²) — same as leaky
+        heating_power=50.0,  # W/m² — undersized UFH in poorly insulated building
     ),
 }
 
@@ -94,6 +106,7 @@ class ZoneSpec:
 
     zone_id: str
     room: RoomParams
+    outdoor_temp: float = 5.0
     setpoint: float = 21.0
     kp: float = 50.0
     ki: float = 0.001
@@ -113,6 +126,7 @@ def make_single_zone_system() -> Callable[
     def _factory(
         room: RoomParams,
         *,
+        outdoor_temp: float = 5.0,
         setpoint: float = 21.0,
         kp: float = 50.0,
         ki: float = 0.001,
@@ -121,7 +135,6 @@ def make_single_zone_system() -> Callable[
         initial_temp: float | None = None,
         temp_ema_time_constant: int = 0,
         dt: float = 60.0,
-        outdoor_temp: float | None = None,
         dhw_schedule: Callable[[float], bool] | None = None,
         window_schedules: dict[str, Callable[[float], bool]] | None = None,
     ) -> tuple[SimulationHarness, HeatingController, str]:
@@ -147,14 +160,11 @@ def make_single_zone_system() -> Callable[
         )
         controller = HeatingController(config, started_at=NOW)
 
-        effective_outdoor = (
-            outdoor_temp if outdoor_temp is not None else room.outdoor_temp
-        )
         room_model = RoomModel(
             thermal_mass=room.thermal_mass,
             heat_loss_coeff=room.heat_loss_coeff,
             heating_power=room.heating_power,
-            outdoor_temp=room.outdoor_temp,
+            outdoor_temp=outdoor_temp,
             initial_temp=initial_temp,
         )
 
@@ -162,7 +172,7 @@ def make_single_zone_system() -> Callable[
             controller,
             {zone_id: room_model},
             dt=dt,
-            outdoor_temp=effective_outdoor,
+            outdoor_temp=outdoor_temp,
             dhw_schedule=dhw_schedule,
             window_schedules=window_schedules or {},
         )
@@ -210,9 +220,9 @@ def make_multi_zone_system() -> Callable[
                 thermal_mass=spec.room.thermal_mass,
                 heat_loss_coeff=spec.room.heat_loss_coeff,
                 heating_power=spec.room.heating_power,
-                outdoor_temp=spec.room.outdoor_temp,
+                outdoor_temp=spec.outdoor_temp,
             )
-            outdoor_temps.append(spec.room.outdoor_temp)
+            outdoor_temps.append(spec.outdoor_temp)
 
         config = ControllerConfig(
             controller_id="sim_multi",

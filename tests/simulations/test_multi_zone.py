@@ -27,16 +27,19 @@ class TestMultiZone:
             ZoneSpec(
                 zone_id="z1",
                 room=ROOM_ARCHETYPES["well_insulated"],
+                outdoor_temp=5.0,
                 setpoint=21.0,
             ),
             ZoneSpec(
                 zone_id="z2",
                 room=ROOM_ARCHETYPES["moderate"],
+                outdoor_temp=0.0,
                 setpoint=21.0,
             ),
             ZoneSpec(
                 zone_id="z3",
                 room=ROOM_ARCHETYPES["well_insulated"],
+                outdoor_temp=5.0,
                 setpoint=22.0,
             ),
         ]
@@ -87,16 +90,19 @@ class TestMultiZone:
             ZoneSpec(
                 zone_id="z_sat",
                 room=ROOM_ARCHETYPES["borderline"],
+                outdoor_temp=5.0,
                 setpoint=28.0,  # Unreachable → saturated
             ),
             ZoneSpec(
                 zone_id="z_normal1",
                 room=ROOM_ARCHETYPES["well_insulated"],
+                outdoor_temp=5.0,
                 setpoint=21.0,
             ),
             ZoneSpec(
                 zone_id="z_normal2",
                 room=ROOM_ARCHETYPES["well_insulated"],
+                outdoor_temp=5.0,
                 setpoint=21.0,
             ),
         ]
@@ -125,11 +131,13 @@ class TestMultiZone:
             ZoneSpec(
                 zone_id="z1",
                 room=ROOM_ARCHETYPES["well_insulated"],
+                outdoor_temp=5.0,
                 setpoint=21.0,
             ),
             ZoneSpec(
                 zone_id="z2",
                 room=ROOM_ARCHETYPES["moderate"],
+                outdoor_temp=0.0,
                 setpoint=21.0,
             ),
         ]

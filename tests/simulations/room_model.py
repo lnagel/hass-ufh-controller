@@ -9,6 +9,10 @@ class RoomModel:
 
     Models a room as a single thermal mass exchanging heat with
     the outdoors and receiving heat from underfloor heating.
+
+    All thermal parameters are per unit floor area (W/m², kJ/(K·m²)).
+    Area cancels identically in numerator (heat flows) and denominator
+    (thermal capacity), so step() works directly with per-m² values.
     """
 
     def __init__(
@@ -23,9 +27,9 @@ class RoomModel:
         Initialize the room model.
 
         Args:
-            thermal_mass: Room thermal mass in kJ/°C.
-            heat_loss_coeff: Heat loss coefficient in W/°C.
-            heating_power: UFH heating power in W.
+            thermal_mass: Thermal mass in kJ/(K·m²).
+            heat_loss_coeff: Heat loss coefficient in W/(K·m²).
+            heating_power: UFH heating power in W/m².
             outdoor_temp: Outdoor temperature in °C.
             initial_temp: Initial room temperature (defaults to outdoor + 2°C).
 

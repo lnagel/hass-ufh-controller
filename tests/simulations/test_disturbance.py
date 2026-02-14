@@ -45,6 +45,7 @@ class TestDisturbanceRecovery:
 
         harness, _controller, zid = make_single_zone_system(
             room,
+            outdoor_temp=5.0,
             setpoint=21.0,
             window_schedules={"sim_zone": window_schedule},
         )
@@ -85,7 +86,9 @@ class TestDisturbanceRecovery:
     ) -> None:
         """Setpoint change 21->23 at hour 4: smooth approach, no oscillation."""
         room = ROOM_ARCHETYPES["well_insulated"]
-        harness, _controller, zid = make_single_zone_system(room, setpoint=21.0)
+        harness, _controller, zid = make_single_zone_system(
+            room, outdoor_temp=5.0, setpoint=21.0
+        )
 
         def raise_setpoint(h: SimulationHarness) -> None:
             """Raise the setpoint mid-simulation."""
@@ -117,7 +120,9 @@ class TestDisturbanceRecovery:
     ) -> None:
         """Outdoor temp 5->-5 at hour 6: adapts to new steady state."""
         room = ROOM_ARCHETYPES["well_insulated"]
-        harness, _controller, zid = make_single_zone_system(room, setpoint=21.0)
+        harness, _controller, zid = make_single_zone_system(
+            room, outdoor_temp=5.0, setpoint=21.0
+        )
 
         def drop_outdoor(h: SimulationHarness) -> None:
             """Simulate a cold front."""
@@ -136,7 +141,7 @@ class TestDisturbanceRecovery:
         entries_after = log.zone_entries_after(zid, 36 * 3600)
         duties = [e.duty_cycle for e in entries_after]
         avg_duty = sum(duties) / len(duties)
-        # With outdoor at -5°C: duty ≈ 30*(21-(-5))/800*100 = 97.5%
+        # With outdoor at -5°C: duty ≈ 1.5*(21-(-5))/40*100 = 97.5%
         assert avg_duty > 50.0, (
             f"Duty {avg_duty:.1f}% too low after outdoor drop to -5°C"
         )

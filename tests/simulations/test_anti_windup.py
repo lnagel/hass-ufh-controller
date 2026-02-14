@@ -8,7 +8,6 @@ import pytest
 
 from .conftest import (
     ROOM_ARCHETYPES,
-    RoomParams,
     assert_integral_bounded,
     assert_integral_stable,
 )
@@ -30,7 +29,9 @@ class TestAntiWindup:
     ) -> None:
         """Unreachable setpoint should clamp integral at max (100)."""
         room = ROOM_ARCHETYPES["borderline"]
-        harness, _controller, zid = make_single_zone_system(room, setpoint=21.0)
+        harness, _controller, zid = make_single_zone_system(
+            room, outdoor_temp=5.0, setpoint=21.0
+        )
 
         log = harness.run(24 * 3600)  # 24 hours
 
@@ -96,7 +97,9 @@ class TestAntiWindup:
     ) -> None:
         """Integral decreases from 100 when conditions improve."""
         room = ROOM_ARCHETYPES["borderline"]
-        harness, _controller, zid = make_single_zone_system(room, setpoint=21.0)
+        harness, _controller, zid = make_single_zone_system(
+            room, outdoor_temp=5.0, setpoint=21.0
+        )
 
         def warm_up_outdoor(h: SimulationHarness) -> None:
             """Warm outdoor significantly, reducing heating demand."""
@@ -158,14 +161,11 @@ class TestBackCalculation:
         less than requested.  The integral should not ratchet upward
         indefinitely — it must converge to a stable value.
         """
-        # 30*(21-17)/800*100 = 15%
-        room = RoomParams(
-            thermal_mass=50,
-            heat_loss_coeff=30,
-            heating_power=800,
-            outdoor_temp=17.0,
+        # 1.5*(21-17)/40*100 = 15%
+        room = ROOM_ARCHETYPES["well_insulated"]
+        harness, _controller, zid = make_single_zone_system(
+            room, outdoor_temp=17.0, setpoint=21.0
         )
-        harness, _controller, zid = make_single_zone_system(room, setpoint=21.0)
 
         log = harness.run(48 * 3600)  # 48 hours — many observation periods
 
@@ -188,14 +188,11 @@ class TestBackCalculation:
         (540s).  The valve runs for min_run_time, delivering ~7.5%.
         The 0.5% mismatch is small — integral should stay roughly stable.
         """
-        # 30*(21-18.87)/800*100 ≈ 8%
-        room = RoomParams(
-            thermal_mass=50,
-            heat_loss_coeff=30,
-            heating_power=800,
-            outdoor_temp=18.87,
+        # 1.5*(21-18.87)/40*100 ≈ 8%
+        room = ROOM_ARCHETYPES["well_insulated"]
+        harness, _controller, zid = make_single_zone_system(
+            room, outdoor_temp=18.87, setpoint=21.0
         )
-        harness, _controller, zid = make_single_zone_system(room, setpoint=21.0)
 
         log = harness.run(48 * 3600)  # 48 hours
 
@@ -220,14 +217,11 @@ class TestBackCalculation:
         integral should converge to a steady value that reflects the
         fact that no heat can be delivered below the threshold.
         """
-        # 30*(21-19.67)/800*100 ≈ 5%
-        room = RoomParams(
-            thermal_mass=50,
-            heat_loss_coeff=30,
-            heating_power=800,
-            outdoor_temp=19.67,
+        # 1.5*(21-19.67)/40*100 ≈ 5%
+        room = ROOM_ARCHETYPES["well_insulated"]
+        harness, _controller, zid = make_single_zone_system(
+            room, outdoor_temp=19.67, setpoint=21.0
         )
-        harness, _controller, zid = make_single_zone_system(room, setpoint=21.0)
 
         log = harness.run(48 * 3600)  # 48 hours — many observation periods
 
