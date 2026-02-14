@@ -30,7 +30,7 @@ class TestAntiWindup:
         """Unreachable setpoint should clamp integral at max (100)."""
         room = ROOM_ARCHETYPES["borderline"]
         harness, _controller, zid = make_single_zone_system(
-            room, outdoor_temp=5.0, setpoint=21.0
+            room, outdoor_temp=5.0, initial_temp=15.0, setpoint=21.0
         )
 
         log = harness.run(24 * 3600)  # 24 hours
@@ -54,7 +54,7 @@ class TestAntiWindup:
         """While room is cooling from above setpoint, integral stays at 0."""
         room = ROOM_ARCHETYPES["well_insulated"]
         harness, _controller, zid = make_single_zone_system(
-            room, setpoint=21.0, initial_temp=25.0
+            room, outdoor_temp=5.0, initial_temp=25.0, setpoint=21.0
         )
 
         log = harness.run(4 * 3600)  # 4 hours
@@ -98,7 +98,7 @@ class TestAntiWindup:
         """Integral decreases from 100 when conditions improve."""
         room = ROOM_ARCHETYPES["borderline"]
         harness, _controller, zid = make_single_zone_system(
-            room, outdoor_temp=5.0, setpoint=21.0
+            room, outdoor_temp=5.0, initial_temp=15.0, setpoint=21.0
         )
 
         def warm_up_outdoor(h: SimulationHarness) -> None:
@@ -164,7 +164,7 @@ class TestBackCalculation:
         # 1.5*(21-17)/40*100 = 15%
         room = ROOM_ARCHETYPES["well_insulated"]
         harness, _controller, zid = make_single_zone_system(
-            room, outdoor_temp=17.0, setpoint=21.0
+            room, outdoor_temp=17.0, initial_temp=20.0, setpoint=21.0
         )
 
         log = harness.run(48 * 3600)  # 48 hours — many observation periods
@@ -191,7 +191,7 @@ class TestBackCalculation:
         # 1.5*(21-18.87)/40*100 ≈ 8%
         room = ROOM_ARCHETYPES["well_insulated"]
         harness, _controller, zid = make_single_zone_system(
-            room, outdoor_temp=18.87, setpoint=21.0
+            room, outdoor_temp=18.87, initial_temp=20.0, setpoint=21.0
         )
 
         log = harness.run(48 * 3600)  # 48 hours
@@ -220,7 +220,7 @@ class TestBackCalculation:
         # 1.5*(21-19.67)/40*100 ≈ 5%
         room = ROOM_ARCHETYPES["well_insulated"]
         harness, _controller, zid = make_single_zone_system(
-            room, outdoor_temp=19.67, setpoint=21.0
+            room, outdoor_temp=19.67, initial_temp=20.0, setpoint=21.0
         )
 
         log = harness.run(48 * 3600)  # 48 hours — many observation periods

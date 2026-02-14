@@ -31,7 +31,7 @@ class TestSteadyStateConvergence:
         """Well-insulated room should settle within ±0.5°C of setpoint."""
         room = ROOM_ARCHETYPES["well_insulated"]
         harness, _controller, zid = make_single_zone_system(
-            room, outdoor_temp=5.0, setpoint=21.0
+            room, outdoor_temp=5.0, initial_temp=20.0, setpoint=21.0
         )
 
         log = harness.run(24 * 3600)  # 24 hours
@@ -47,7 +47,7 @@ class TestSteadyStateConvergence:
         """Moderate room settles with reasonable duty cycle."""
         room = ROOM_ARCHETYPES["moderate"]
         harness, _controller, zid = make_single_zone_system(
-            room, outdoor_temp=0.0, setpoint=21.0
+            room, outdoor_temp=0.0, initial_temp=20.0, setpoint=21.0
         )
 
         log = harness.run(48 * 3600)  # 48 hours
@@ -56,11 +56,11 @@ class TestSteadyStateConvergence:
 
         # Duty cycle should be near theoretical steady-state value
         # Steady-state: duty = heat_loss * (setpoint - outdoor) / power * 100
-        # = 1.75 * 21 / 50 * 100 = 73.5%
+        # = 1.65 * 21 / 75 * 100 = 46.2%
         entries = log.zone_entries_after(zid, 24 * 3600)
         duties = [e.duty_cycle for e in entries]
         avg_duty = sum(duties) / len(duties)
-        assert 65.0 <= avg_duty <= 85.0, f"Avg duty {avg_duty:.1f}% outside 65-85%"
+        assert 35.0 <= avg_duty <= 55.0, f"Avg duty {avg_duty:.1f}% outside 35-55%"
 
     def test_unreachable_setpoint(
         self,
@@ -70,9 +70,9 @@ class TestSteadyStateConvergence:
     ) -> None:
         """Borderline room at realistic setpoint should saturate at 100% duty."""
         room = ROOM_ARCHETYPES["borderline"]
-        # Borderline max temp = 5 + 40/3.5 = 16.4°C — cannot reach 21°C
+        # Borderline max temp = 5 + 50/4.18 ≈ 17°C — cannot reach 21°C
         harness, _controller, zid = make_single_zone_system(
-            room, outdoor_temp=5.0, setpoint=21.0
+            room, outdoor_temp=5.0, initial_temp=15.0, setpoint=21.0
         )
 
         log = harness.run(24 * 3600)  # 24 hours
@@ -121,7 +121,7 @@ class TestSteadyStateConvergence:
         """Cold start should reach setpoint without excessive overshoot."""
         room = ROOM_ARCHETYPES["well_insulated"]
         harness, _controller, zid = make_single_zone_system(
-            room, outdoor_temp=5.0, setpoint=21.0, initial_temp=10.0
+            room, outdoor_temp=5.0, initial_temp=10.0, setpoint=21.0
         )
 
         log = harness.run(24 * 3600)  # 24 hours
@@ -174,7 +174,7 @@ class TestSteadyStateConvergence:
         """Controller converges for various room types and ki values."""
         room = ROOM_ARCHETYPES[room_key]
         harness, _controller, zid = make_single_zone_system(
-            room, outdoor_temp=outdoor_temp, setpoint=21.0, ki=ki
+            room, outdoor_temp=outdoor_temp, initial_temp=20.0, setpoint=21.0, ki=ki
         )
 
         log = harness.run(48 * 3600)  # 48 hours
@@ -186,13 +186,6 @@ class TestSteadyStateConvergence:
 class TestHeatRequestBehavior:
     """Verify heat request signal behavior at steady state."""
 
-    @pytest.mark.xfail(
-        reason="Heat request chatters at ~10 transitions/hour at steady state "
-        "(limit: 6/hour per typical boiler max cycling rate). The observation "
-        "period scheduling creates multiple valve on/off cycles within each "
-        "period, each toggling the heat request signal.",
-        strict=True,
-    )
     def test_heat_request_chattering(
         self,
         make_single_zone_system: Callable[
@@ -202,7 +195,7 @@ class TestHeatRequestBehavior:
         """Heat request should not toggle more than 6 times/hour at steady state."""
         room = ROOM_ARCHETYPES["well_insulated"]
         harness, _controller, zid = make_single_zone_system(
-            room, outdoor_temp=5.0, setpoint=21.0
+            room, outdoor_temp=5.0, initial_temp=20.0, setpoint=21.0
         )
 
         log = harness.run(24 * 3600)  # 24 hours

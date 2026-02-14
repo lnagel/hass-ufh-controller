@@ -106,7 +106,8 @@ class ZoneSpec:
 
     zone_id: str
     room: RoomParams
-    outdoor_temp: float = 5.0
+    outdoor_temp: float
+    initial_temp: float
     setpoint: float = 21.0
     kp: float = 50.0
     ki: float = 0.001
@@ -126,13 +127,13 @@ def make_single_zone_system() -> Callable[
     def _factory(
         room: RoomParams,
         *,
-        outdoor_temp: float = 5.0,
+        outdoor_temp: float,
+        initial_temp: float,
         setpoint: float = 21.0,
         kp: float = 50.0,
         ki: float = 0.001,
         observation_period: int = 7200,
         min_run_time: int = 540,
-        initial_temp: float | None = None,
         temp_ema_time_constant: int = 0,
         dt: float = 60.0,
         dhw_schedule: Callable[[float], bool] | None = None,
@@ -221,6 +222,7 @@ def make_multi_zone_system() -> Callable[
                 heat_loss_coeff=spec.room.heat_loss_coeff,
                 heating_power=spec.room.heating_power,
                 outdoor_temp=spec.outdoor_temp,
+                initial_temp=spec.initial_temp,
             )
             outdoor_temps.append(spec.outdoor_temp)
 

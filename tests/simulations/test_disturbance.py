@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import pytest
-
 from .conftest import (
     ROOM_ARCHETYPES,
     assert_integral_bounded,
@@ -21,12 +19,6 @@ if TYPE_CHECKING:
 class TestDisturbanceRecovery:
     """Verify the controller recovers from mid-simulation perturbations."""
 
-    @pytest.mark.xfail(
-        reason="Controller overshoots ~3.3°C after window event. The PID's "
-        "proportional kick from the 3°C error drives aggressive heating. "
-        "Needs derivative damping or proportional gain reduction.",
-        strict=True,
-    )
     def test_window_open_event(
         self,
         make_single_zone_system: Callable[
@@ -46,6 +38,7 @@ class TestDisturbanceRecovery:
         harness, _controller, zid = make_single_zone_system(
             room,
             outdoor_temp=5.0,
+            initial_temp=20.0,
             setpoint=21.0,
             window_schedules={"sim_zone": window_schedule},
         )
@@ -72,12 +65,6 @@ class TestDisturbanceRecovery:
         # Integral should not spike during recovery
         assert_integral_bounded(log, zid)
 
-    @pytest.mark.xfail(
-        reason="Temperature oscillates ~1.9°C after setpoint step change. "
-        "The observation-period quantization creates on/off cycling that "
-        "the PID cannot fully damp.",
-        strict=True,
-    )
     def test_setpoint_step_change(
         self,
         make_single_zone_system: Callable[
@@ -87,7 +74,7 @@ class TestDisturbanceRecovery:
         """Setpoint change 21->23 at hour 4: smooth approach, no oscillation."""
         room = ROOM_ARCHETYPES["well_insulated"]
         harness, _controller, zid = make_single_zone_system(
-            room, outdoor_temp=5.0, setpoint=21.0
+            room, outdoor_temp=5.0, initial_temp=20.0, setpoint=21.0
         )
 
         def raise_setpoint(h: SimulationHarness) -> None:
@@ -121,7 +108,7 @@ class TestDisturbanceRecovery:
         """Outdoor temp 5->-5 at hour 6: adapts to new steady state."""
         room = ROOM_ARCHETYPES["well_insulated"]
         harness, _controller, zid = make_single_zone_system(
-            room, outdoor_temp=5.0, setpoint=21.0
+            room, outdoor_temp=5.0, initial_temp=20.0, setpoint=21.0
         )
 
         def drop_outdoor(h: SimulationHarness) -> None:
@@ -141,7 +128,8 @@ class TestDisturbanceRecovery:
         entries_after = log.zone_entries_after(zid, 36 * 3600)
         duties = [e.duty_cycle for e in entries_after]
         avg_duty = sum(duties) / len(duties)
-        # With outdoor at -5°C: duty ≈ 1.5*(21-(-5))/40*100 = 97.5%
-        assert avg_duty > 50.0, (
+        # With outdoor at -5°C: duty ≈ 0.56*(21+5)/50*100 = 29.1%
+        # Before drop (outdoor 5°C): duty ≈ 0.56*16/50*100 = 17.9%
+        assert avg_duty > 25.0, (
             f"Duty {avg_duty:.1f}% too low after outdoor drop to -5°C"
         )

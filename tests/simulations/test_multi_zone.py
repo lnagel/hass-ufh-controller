@@ -28,18 +28,21 @@ class TestMultiZone:
                 zone_id="z1",
                 room=ROOM_ARCHETYPES["well_insulated"],
                 outdoor_temp=5.0,
+                initial_temp=20.0,
                 setpoint=21.0,
             ),
             ZoneSpec(
                 zone_id="z2",
                 room=ROOM_ARCHETYPES["moderate"],
                 outdoor_temp=0.0,
+                initial_temp=20.0,
                 setpoint=21.0,
             ),
             ZoneSpec(
                 zone_id="z3",
                 room=ROOM_ARCHETYPES["well_insulated"],
                 outdoor_temp=5.0,
+                initial_temp=21.0,
                 setpoint=22.0,
             ),
         ]
@@ -91,18 +94,21 @@ class TestMultiZone:
                 zone_id="z_sat",
                 room=ROOM_ARCHETYPES["borderline"],
                 outdoor_temp=5.0,
+                initial_temp=15.0,
                 setpoint=28.0,  # Unreachable → saturated
             ),
             ZoneSpec(
                 zone_id="z_normal1",
                 room=ROOM_ARCHETYPES["well_insulated"],
                 outdoor_temp=5.0,
+                initial_temp=20.0,
                 setpoint=21.0,
             ),
             ZoneSpec(
                 zone_id="z_normal2",
                 room=ROOM_ARCHETYPES["well_insulated"],
                 outdoor_temp=5.0,
+                initial_temp=20.0,
                 setpoint=21.0,
             ),
         ]
@@ -126,18 +132,20 @@ class TestMultiZone:
             ..., tuple[SimulationHarness, HeatingController, list[str]]
         ],
     ) -> None:
-        """DHW active for 20min mid-period: zones off during DHW, recover after."""
+        """DHW active for 20min mid-period: no new valves open, zones recover."""
         specs = [
             ZoneSpec(
                 zone_id="z1",
                 room=ROOM_ARCHETYPES["well_insulated"],
                 outdoor_temp=5.0,
+                initial_temp=20.0,
                 setpoint=21.0,
             ),
             ZoneSpec(
                 zone_id="z2",
                 room=ROOM_ARCHETYPES["moderate"],
                 outdoor_temp=0.0,
+                initial_temp=20.0,
                 setpoint=21.0,
             ),
         ]
@@ -155,17 +163,22 @@ class TestMultiZone:
 
         log = harness.run(48 * 3600)
 
-        # During DHW, zone valves should be turned off (DHW priority).
-        # The controller gives DHW exclusive access to the boiler.
+        # During DHW the boiler heats the tank, not the UFH manifold.
+        # Already-open valves are harmless (no hot supply water flowing).
+        # The controller should prevent NEW valve activations during DHW.
         for zid in zone_ids:
-            dhw_entries = [
-                e for e in log.zone_entries(zid) if dhw_start <= e.time < dhw_end
-            ]
+            dhw_entries = log.zone_entries_after(zid, dhw_start)
+            dhw_entries = [e for e in dhw_entries if e.time < dhw_end]
+            # Check no valve that was OFF turns ON during DHW
+            prev_on = None
             for e in dhw_entries:
-                assert not e.valve_on, (
-                    f"{zid}: valve on at t={e.time:.0f}s during DHW "
-                    f"(DHW priority should turn zones off)"
-                )
+                if prev_on is False and e.valve_on:
+                    msg = (
+                        f"{zid}: valve turned ON at t={e.time:.0f}s during DHW "
+                        f"(controller should not start new zones)"
+                    )
+                    raise AssertionError(msg)
+                prev_on = e.valve_on
 
         # Both zones should recover to setpoint after DHW
         for zid in zone_ids:

@@ -21,7 +21,7 @@ class RoomModel:
         heat_loss_coeff: float,
         heating_power: float,
         outdoor_temp: float,
-        initial_temp: float | None = None,
+        initial_temp: float,
     ) -> None:
         """
         Initialize the room model.
@@ -31,14 +31,14 @@ class RoomModel:
             heat_loss_coeff: Heat loss coefficient in W/(K·m²).
             heating_power: UFH heating power in W/m².
             outdoor_temp: Outdoor temperature in °C.
-            initial_temp: Initial room temperature (defaults to outdoor + 2°C).
+            initial_temp: Initial room temperature in °C.
 
         """
         self.thermal_mass = thermal_mass
         self.heat_loss_coeff = heat_loss_coeff
         self.heating_power = heating_power
         self.outdoor_temp = outdoor_temp
-        self.temp = initial_temp if initial_temp is not None else outdoor_temp + 2.0
+        self.temp = initial_temp
 
     def step(self, dt: float, heating_on: bool) -> float:
         """

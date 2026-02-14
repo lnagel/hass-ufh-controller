@@ -50,7 +50,7 @@ class TestBorderlineDuty:
         """Zone with ~9.4% duty should run each period, integral stable."""
         room = ROOM_ARCHETYPES["well_insulated"]
         harness, _controller, zid = make_single_zone_system(
-            room, outdoor_temp=18.5, setpoint=21.0
+            room, outdoor_temp=18.5, initial_temp=20.0, setpoint=21.0
         )
 
         log = harness.run(24 * 3600)  # 24 hours
@@ -90,7 +90,7 @@ class TestBorderlineDuty:
         """Zone with ~6% duty: valve mostly off, integral doesn't ratchet."""
         room = ROOM_ARCHETYPES["well_insulated"]
         harness, _controller, zid = make_single_zone_system(
-            room, outdoor_temp=19.4, setpoint=21.0
+            room, outdoor_temp=19.4, initial_temp=20.0, setpoint=21.0
         )
 
         log = harness.run(48 * 3600)  # 48 hours — many observation periods
@@ -118,7 +118,7 @@ class TestBorderlineDuty:
         """Zone at ~7.5% duty: borderline, stable without integral drift."""
         room = ROOM_ARCHETYPES["well_insulated"]
         harness, _controller, zid = make_single_zone_system(
-            room, outdoor_temp=19.0, setpoint=21.0
+            room, outdoor_temp=19.0, initial_temp=20.0, setpoint=21.0
         )
 
         log = harness.run(24 * 3600)  # 24 hours
