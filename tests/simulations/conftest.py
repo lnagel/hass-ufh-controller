@@ -62,26 +62,26 @@ class RoomParams:
 ROOM_ARCHETYPES: dict[str, RoomParams] = {
     # Level 1: Passivhaus / current Nordic code (EN 12831, ISO 13790)
     # H_total = 55.9 W/K for 100 m², τ ≈ 60 h
-    # Design load 23 W/m² at −20 °C; UFH 200–300 mm spacing, tile finish
+    # Design load 23 W/m² at -20 °C; UFH 200-300 mm spacing, tile finish
     "well_insulated": RoomParams(
-        thermal_mass=120.0,  # kJ/(K·m²) — ISO 13790 Light–Medium
+        thermal_mass=120.0,  # kJ/(K·m²) — ISO 13790 Light-Medium
         heat_loss_coeff=0.56,  # W/(K·m²) — EN 12831: 55.9 W/K ÷ 100 m²
-        heating_power=50.0,  # W/m² — EN 1264: 200 mm spacing, supply 30–35 °C
+        heating_power=50.0,  # W/m² — EN 1264: 200 mm spacing, supply 30-35 °C
     ),
-    # Level 2: 1980s–2000s renovation
+    # Level 2: 1980s-2000s renovation
     # H_total = 164.8 W/K for 100 m², τ ≈ 28 h
-    # Design load 68 W/m² at −20 °C; UFH 150–200 mm spacing, tile finish
+    # Design load 68 W/m² at -20 °C; UFH 150-200 mm spacing, tile finish
     "moderate": RoomParams(
         thermal_mass=165.0,  # kJ/(K·m²) — ISO 13790 Medium
         heat_loss_coeff=1.65,  # W/(K·m²) — EN 12831: 164.8 W/K ÷ 100 m²
-        heating_power=75.0,  # W/m² — EN 1264: 150 mm spacing, supply 40–45 °C
+        heating_power=75.0,  # W/m² — EN 1264: 150 mm spacing, supply 40-45 °C
     ),
     # Level 3: Pre-1960s uninsulated
     # H_total = 418 W/K for 100 m², τ ≈ 13 h
-    # Design load 171 W/m² at −20 °C (exceeds UFH max ~100 W/m² per EN 1264)
-    # UFH 100 mm spacing, supply 42–50 °C; supplementary emitters needed
+    # Design load 171 W/m² at -20 °C (exceeds UFH max ~100 W/m² per EN 1264)
+    # UFH 100 mm spacing, supply 42-50 °C; supplementary emitters needed
     "leaky": RoomParams(
-        thermal_mass=200.0,  # kJ/(K·m²) — ISO 13790 Medium–Heavy
+        thermal_mass=200.0,  # kJ/(K·m²) — ISO 13790 Medium-Heavy
         heat_loss_coeff=4.18,  # W/(K·m²) — EN 12831: 418 W/K ÷ 100 m²
         heating_power=100.0,  # W/m² — EN 1264 max for occupied zones
     ),
