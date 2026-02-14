@@ -143,9 +143,10 @@ class TestSteadyStateConvergence:
                 "leaky",
                 -5.0,
                 marks=pytest.mark.xfail(
-                    reason="Leaky room (high power, low thermal mass) causes "
-                    "large temperature swings. Controller needs gain scheduling "
-                    "or adaptive tuning for fast-responding rooms.",
+                    reason="Permanent xfail: leaky room (high heat loss + high "
+                    "heating power, short time constant) is outside the UFH "
+                    "design envelope. Temperature swings are expected and "
+                    "should not be 'fixed' in the controller.",
                     strict=True,
                 ),
             ),
@@ -153,9 +154,9 @@ class TestSteadyStateConvergence:
                 "borderline",
                 5.0,
                 marks=pytest.mark.xfail(
-                    reason="Borderline room physically cannot reach 21°C "
-                    "(max temp 16.4°C). Controller correctly saturates at "
-                    "100% duty but cannot converge to setpoint.",
+                    reason="Permanent xfail: borderline room physically cannot "
+                    "reach 21 °C (max ~17 °C). Controller correctly saturates "
+                    "at 100% duty. This is a thermodynamic limit, not a bug.",
                     strict=True,
                 ),
             ),
