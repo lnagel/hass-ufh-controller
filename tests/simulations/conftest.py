@@ -62,11 +62,11 @@ class RoomParams:
 ROOM_ARCHETYPES: dict[str, RoomParams] = {
     # Level 1: Passivhaus / current Nordic code (EN 12831, ISO 13790)
     # H_total = 55.9 W/K for 100 m², τ ≈ 60 h
-    # Design load 23 W/m² at -20 °C; UFH 200-300 mm spacing, tile finish
+    # Design load 23 W/m² at -20 °C; UFH 300 mm spacing, tile finish
     "well_insulated": RoomParams(
         thermal_mass=120.0,  # kJ/(K·m²) — ISO 13790 Light-Medium
         heat_loss_coeff=0.56,  # W/(K·m²) — EN 12831: 55.9 W/K ÷ 100 m²
-        heating_power=50.0,  # W/m² — EN 1264: 200 mm spacing, supply 30-35 °C
+        heating_power=30.0,  # W/m² — EN 1264: 300 mm spacing, supply 30-35 °C
     ),
     # Level 2: 1980s-2000s renovation
     # H_total = 164.8 W/K for 100 m², τ ≈ 28 h

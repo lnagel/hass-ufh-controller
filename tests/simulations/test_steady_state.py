@@ -138,7 +138,12 @@ class TestSteadyStateConvergence:
         ("room_key", "outdoor_temp"),
         [
             ("well_insulated", 5.0),
+            ("well_insulated", -10.0),
+            ("well_insulated", -25.0),
+            ("well_insulated", -30.0),
             ("moderate", 0.0),
+            ("moderate", -15.0),
+            ("moderate", -22.0),
             pytest.param(
                 "leaky",
                 -5.0,

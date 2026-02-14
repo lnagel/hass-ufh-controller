@@ -156,8 +156,8 @@ class TestBackCalculation:
         """
         Moderate demand, valve ramp overhead causes under-delivery: integral stable.
 
-        With well_insulated (0.56 W/(K·m²), 50 W/m²) at outdoor=17:
-        theoretical duty = 0.56*(21-17)/50*100 = 4.5%.  PID integral
+        With well_insulated (0.56 W/(K·m²), 30 W/m²) at outdoor=17:
+        theoretical duty = 0.56*(21-17)/30*100 = 7.5%.  PID integral
         accumulation drives actual duty higher.  The integral should not
         ratchet upward indefinitely — it must converge to a stable value.
         """
@@ -183,8 +183,8 @@ class TestBackCalculation:
         """
         Mild demand near threshold: near-match delivery, stable integral.
 
-        With well_insulated (0.56 W/(K·m²), 50 W/m²) at outdoor=18.87:
-        theoretical duty = 0.56*(21-18.87)/50*100 = 2.4%.  PID integral
+        With well_insulated (0.56 W/(K·m²), 30 W/m²) at outdoor=18.87:
+        theoretical duty = 0.56*(21-18.87)/30*100 = 4.0%.  PID integral
         drives actual duty near the 7.5% threshold.  The small mismatch
         between requested and delivered heat should not cause drift.
         """
@@ -210,8 +210,8 @@ class TestBackCalculation:
         """
         Sub-threshold demand for many periods: integral converges.
 
-        With well_insulated (0.56 W/(K·m²), 50 W/m²) at outdoor=19.67:
-        theoretical duty = 0.56*(21-19.67)/50*100 = 1.5%.  Even with
+        With well_insulated (0.56 W/(K·m²), 30 W/m²) at outdoor=19.67:
+        theoretical duty = 0.56*(21-19.67)/30*100 = 2.5%.  Even with
         integral accumulation, duty stays below the 7.5% threshold so
         the valve never fires.  Without back-calculation the integral
         will ratchet to 100%.  With proper anti-windup the integral
