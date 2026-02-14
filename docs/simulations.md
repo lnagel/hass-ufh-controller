@@ -65,8 +65,8 @@ hours of simulated time.
   clamps at maximum; temperature reaches the physical limit
 - **Cold start** — starting from 10 °C, the room reaches setpoint *(currently
   xfail: integral windup causes ~2.7 °C overshoot)*
-- **Parameter sweep** — convergence verified across 4 room types × 3 Ki gain
-  values (12 combinations)
+- **Parameter sweep** — convergence verified across 4 archetypes at multiple
+  outdoor temperatures × 3 Ki gain values (covering 30–95% duty range)
 - **Heat request stability** — heat request signal does not chatter excessively
   (≤6 transitions/hour)
 
@@ -76,7 +76,8 @@ The controller quantizes valve run times: if the computed duty is below ~7.5%,
 the valve may skip a period entirely. These tests verify stable behaviour at
 the boundary.
 
-- **Just above threshold** — valve fires each period, integral stays stable
+- **Just above threshold** — back-calculation keeps integral stable despite
+  occasional short valve runs at period boundaries
 - **Just below threshold** — valve mostly off, integral remains bounded, room
   stays warm
 - **At threshold** — no integral drift or oscillation
@@ -118,15 +119,14 @@ observation period.
 
 ## Known Limitations (xfail Tests)
 
-Eight tests are marked `xfail(strict=True)` — they pass only by *failing*, which
+Seven tests are marked `xfail(strict=True)` — they pass only by *failing*, which
 documents genuine controller limitations without breaking CI.
 
 | Limitation | Affected tests | Root cause |
 |---|---|---|
 | Cold-start overshoot | 1 test | Integral windup during long rise from 10 °C |
-| Period-boundary short run | 1 test | Valve runs 300 s at observation period edge (min is 540 s) |
-| Leaky room oscillation | 3 tests (one per Ki) | High power + fast thermal response → temperature swings |
-| Borderline non-convergence | 3 tests (one per Ki) | Physically cannot reach setpoint; correctly saturates |
+| Leaky room oscillation | 3 tests (one per Ki) | Outside UFH design envelope; high power + fast thermal response |
+| Borderline non-convergence | 3 tests (one per Ki) | Thermodynamic limit, not a bug; correctly saturates |
 
 ## Running the Tests
 
@@ -139,7 +139,7 @@ uv run pytest
 ```
 
 The simulation tests are pure computation — no I/O, network, or Home Assistant
-dependencies. The full suite of 32 tests runs in about one second.
+dependencies. The full suite of 47 tests runs in about two seconds.
 
 ## File Layout
 
