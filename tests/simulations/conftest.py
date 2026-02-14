@@ -291,33 +291,6 @@ def assert_integral_bounded(
         )
 
 
-def assert_no_rapid_cycling(
-    log: SimulationLog,
-    zone_id: str,
-    *,
-    min_on_duration: float | None = None,
-    dt: float = 60.0,
-    after_hours: float = 0,
-) -> None:
-    """Assert no valve on-periods shorter than min_on_duration."""
-    if min_on_duration is None:
-        min_on_duration = dt * 2  # At least 2 steps
-
-    entries = log.zone_entries_after(zone_id, after_hours * 3600)
-    on_start: float | None = None
-
-    for e in entries:
-        if e.valve_on and on_start is None:
-            on_start = e.time
-        elif not e.valve_on and on_start is not None:
-            on_duration = e.time - on_start
-            assert on_duration >= min_on_duration, (
-                f"Valve on for only {on_duration:.0f}s "
-                f"(min {min_on_duration:.0f}s) at t={on_start:.0f}s"
-            )
-            on_start = None
-
-
 def assert_integral_stable(
     log: SimulationLog,
     zone_id: str,
