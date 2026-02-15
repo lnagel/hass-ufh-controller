@@ -12,6 +12,15 @@ While generic thermostats adapt radiator or TRV logic to UFH, this integration i
 
 ![Dashboard showing controller and zone entities](images/dashboard.png)
 
+## How It Compares
+
+| | Generic Thermostats | This Integration |
+|---|---|---|
+| **Zone coordination** | Each zone fires the heat source independently | Zones aggregate demand into a single heat request with valve pre-opening |
+| **Hot water priority** | Unaware of DHW or fights for priority | Blocks new heating during DHW, captures residual heat after |
+| **Quota fairness** | Time-based or none | Supply-temperature-weighted — zones aren't penalized for cold-start periods |
+| **UFH tuning** | Adapted from radiator/TRV logic | PID defaults, observation periods, and minimum run times designed for screed thermal mass |
+
 ## Is This For You?
 
 This integration is designed for **hydronic underfloor heating** systems with any heat source — boilers, heat pumps, or district heating. It works with any heat source controllable via Home Assistant. Users with [EMS-ESP](https://github.com/emsesp/EMS-ESP32) (Bosch, Buderus, Nefit, Junkers, Worcester) get the deepest integration, but it's not a requirement.
