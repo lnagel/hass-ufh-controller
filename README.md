@@ -55,7 +55,7 @@ Presets work with Home Assistant automations — switch to "Away" when everyone 
 
 Unlike integrations that give you a single thermostat entity per zone, this controller exposes **11 entities per zone** so you can see exactly what's happening and troubleshoot without guessing:
 
-**Per zone:** climate entity, duty cycle, PID error/proportional/integral/derivative, flow/heat/window binary sensors, and supply coefficient.
+**Per zone:** climate entity, duty cycle, remaining duration, PID error/proportional/integral/derivative, flow/heat/window binary sensors, and supply coefficient.
 
 ![Zone device page](images/zone-device.png)
 
