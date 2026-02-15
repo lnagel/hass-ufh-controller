@@ -10,7 +10,7 @@
 
 While generic thermostats adapt radiator or TRV logic to UFH, this integration is purpose-built for UFH's unique characteristics: high thermal mass, slow response times, and the need to coordinate multiple zones sharing a single heat source.
 
-<!-- TODO: Add screenshot of dashboard showing climate entities and diagnostic sensors -->
+![Dashboard showing controller and zone entities](images/dashboard.png)
 
 ## Is This For You?
 
@@ -34,7 +34,7 @@ The controller publishes a **supply target temperature** entity from its heating
 
 Everything is configured through the Home Assistant UI — no YAML editing, no manual reloads.
 
-<!-- TODO: Add screenshot of config flow wizard -->
+![Temperature control configuration](images/temperature-control.png)
 
 1. **Add the integration** from Settings > Devices & Services
 2. **Walk through the setup wizard** — configure timing, PID parameters, and heat source settings with sensible defaults
@@ -55,21 +55,13 @@ Presets work with Home Assistant automations — switch to "Away" when everyone 
 
 Unlike integrations that give you a single thermostat entity per zone, this controller exposes **11 entities per zone** so you can see exactly what's happening and troubleshoot without guessing:
 
-<!-- TODO: Add screenshot showing zone entities in HA -->
+**Per zone:** climate entity, duty cycle, PID error/proportional/integral/derivative, flow/heat/window binary sensors, and supply coefficient.
 
-**Per zone:**
-- Climate entity with current/target temperature and presets
-- Duty cycle — PID output percentage (how much heating the zone wants)
-- PID error, proportional, integral, derivative terms — full control loop transparency
-- Flow, heat, and window binary sensors — is water flowing? is it receiving heat? is a window open?
-- Supply coefficient — quota consumption rate relative to design conditions
+![Zone device page](images/zone-device.png)
 
-**Controller-level:**
-- Operation mode selector (Heat, Flush, Cycle, All On, All Off, Off)
-- Zones flowing / heating / window counters
-- Heat request, pump request, and flush request signals
-- Controller status with per-zone health in attributes
-- Supply target temperature from heating curve
+**Controller-level:** operation mode selector, zone counters (flowing/heating/window), heat request/pump request/flush request signals, controller status, and supply target temperature.
+
+![Controller device page](images/controller-device.png)
 
 ### PID Control Tuned for Underfloor Heating
 
