@@ -6,7 +6,7 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/lnagel/hass-ufh-controller/checks.yml?branch=main&style=flat-square&label=tests)](https://github.com/lnagel/hass-ufh-controller/actions)
 [![codecov](https://codecov.io/gh/lnagel/hass-ufh-controller/branch/main/graph/badge.svg)](https://codecov.io/gh/lnagel/hass-ufh-controller)
 
-**The only Home Assistant integration designed specifically for hydronic underfloor heating systems.**
+**A Home Assistant integration purpose-built for hydronic underfloor heating systems. Fully open source, no gated features.**
 
 While generic thermostats adapt radiator or TRV logic to UFH, this integration is purpose-built for UFH's unique characteristics: high thermal mass, slow response times, and the need to coordinate multiple zones sharing a single heat source.
 
@@ -140,7 +140,7 @@ See [Operation Modes](docs/operation_modes.md) for when to use each mode.
 
 This code controls heating for real homes. A bug can mean frozen pipes, burst plumbing, or wasted energy. The engineering reflects that:
 
-- **97.9% test coverage** with 100% line and branch coverage on all core control modules
+- **~97% test coverage** with 100% line and branch coverage on all core control modules
 - **14,000+ lines of tests** across unit, integration, scenario, and simulation suites
 - **Physics-based simulations** verify PID convergence, disturbance rejection, and anti-windup behavior under realistic thermal conditions
 - **State persistence** — all control variables survive HA restarts and crashes, with forward-compatible storage migration (V1 > V2 > V3)
