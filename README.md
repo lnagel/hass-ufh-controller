@@ -8,143 +8,188 @@
 
 **The only Home Assistant integration designed specifically for hydronic underfloor heating systems.**
 
-While other thermostats adapt radiator or TRV logic to UFH, this integration is built from the ground up to handle UFH's unique characteristics: high thermal mass, slow response times, and the need to coordinate multiple zones sharing a single heat source.
+While generic thermostats adapt radiator or TRV logic to UFH, this integration is purpose-built for UFH's unique characteristics: high thermal mass, slow response times, and the need to coordinate multiple zones sharing a single heat source.
 
-## Why This Exists
+<!-- TODO: Add screenshot of dashboard showing climate entities and diagnostic sensors -->
 
-The Home Assistant thermostat ecosystem has excellent options for TRVs ([Better Thermostat](https://github.com/KartoffelToby/better_thermostat)), general climate control ([Versatile Thermostat](https://github.com/jmcollin78/versatile_thermostat)), and precise PID control ([Smart Thermostat PID](https://github.com/ScratMan/smart-thermostat-pid)). But hydronic UFH has specific requirements that none address together:
+## Is This For You?
 
-| Requirement | Generic Solutions | This Integration |
-|-------------|-------------------|------------------|
-| **Multi-zone heat aggregation** | Each zone fires boiler independently | Zones coordinate through shared heat request |
-| **Boiler/heat pump signaling** | Basic on/off or none | Valve pre-opening, quota-aware requests |
-| **EMS-ESP boiler integration** | Manual automations required | Native summer mode, DHW detection |
-| **Heat accounting** | Not supported | Supply temperature weighted quota allocation |
-| **DHW priority handling** | Not supported | Blocks new heating during DHW, captures residual heat |
-| **Weather compensation** | Manual automations or none | Built-in heating curve from outdoor sensor |
-| **UFH thermal response** | Adapted from radiator/TRV logic | Native PID tuned for slow thermal mass |
+This integration is designed for **hydronic underfloor heating** systems with any heat source — boilers, heat pumps, or district heating. It works with any heat source controllable via Home Assistant. Users with [EMS-ESP](https://github.com/emsesp/EMS-ESP32) (Bosch, Buderus, Nefit, Junkers, Worcester) get the deepest integration, but it's not a requirement.
 
-## Key Differentiators
+**You need:**
+- Temperature sensor per zone (Zigbee, Z-Wave, WiFi — anything HA supports)
+- Controllable valve per zone (relay board, smart switch, etc.)
+- Home Assistant 2025.10 or newer
 
-### Purpose-Built for Hydronic UFH
+**Optional hardware for advanced features:**
+- Heat request switch or EMS-ESP for heat source coordination
+- DHW active sensor for hot water priority and residual heat capture
+- Outdoor temperature sensor for weather compensation
+- Window/door sensors for automatic pause during ventilation
+- Supply temperature sensor for heat accounting
 
-The control algorithm accounts for:
+The controller publishes a **supply target temperature** entity from its heating curve, which can drive external supply temperature control on heat pumps or mixing valves via automations.
 
-- **Slow thermal response** - PID tuning defaults optimized for concrete screed
-- **Valve scheduling** - 2-hour observation periods prevent rapid cycling
-- **Minimum run times** - Protects valves from wear while maintaining efficiency
-- **Sensor noise filtering** - EMA smoothing handles noisy wireless sensors (Zigbee, etc.)
+## Setup in Minutes, No YAML Required
 
-### Native Boiler Coordination
+Everything is configured through the Home Assistant UI — no YAML editing, no manual reloads.
 
-Multiple zones sharing one heat source need coordination. The controller:
+<!-- TODO: Add screenshot of config flow wizard -->
 
-- **Aggregates zone demands** into a single heat request signal
-- **Waits for valves to open** before firing the boiler (configurable delay)
-- **Manages quota intelligently** - stops requesting heat before a zone's time expires
-- **Supports summer mode** - automatically enables/disables the boiler's heating circuit
+1. **Add the integration** from Settings > Devices & Services
+2. **Walk through the setup wizard** — configure timing, PID parameters, and heat source settings with sensible defaults
+3. **Add zones** as subentries — pick a temperature sensor, a valve switch, and optionally set presets
+4. **Reconfigure anytime** through categorized options menus — no need to remove and re-add
 
-### Heat Accounting
+See the [Quickstart Guide](docs/quickstart.md) for a detailed walkthrough.
 
-Multi-zone systems need fair quota allocation. Simply tracking valve-open time penalizes zones that happen to be open when the boiler is cold—they use up quota while receiving less heating benefit.
+## What You Get
 
-- **Supply-temperature normalization** - Quota consumption adjusts to actual supply conditions
-- **Single sensor simplicity** - Only needs one manifold supply temperature sensor
-- **Automatic fallback** - Works with simple time-based tracking if no sensor configured
+### Per-Zone Climate Control with Presets
 
-See [Heat Accounting](docs/heat_accounting.md) for detailed documentation.
+Each zone gets a full climate entity with five configurable presets: **Home** (21 °C), **Away** (16 °C), **Eco** (19 °C), **Comfort** (22 °C), and **Boost** (25 °C). All temperatures are defaults — adjust them per zone to match your home.
+
+Presets work with Home Assistant automations — switch to "Away" when everyone leaves, "Comfort" in the evening, "Eco" overnight.
+
+### Full Diagnostic Visibility
+
+Unlike integrations that give you a single thermostat entity per zone, this controller exposes **11 entities per zone** so you can see exactly what's happening and troubleshoot without guessing:
+
+<!-- TODO: Add screenshot showing zone entities in HA -->
+
+**Per zone:**
+- Climate entity with current/target temperature and presets
+- Duty cycle — PID output percentage (how much heating the zone wants)
+- PID error, proportional, integral, derivative terms — full control loop transparency
+- Flow, heat, and window binary sensors — is water flowing? is it receiving heat? is a window open?
+- Supply coefficient — quota consumption rate relative to design conditions
+
+**Controller-level:**
+- Operation mode selector (Heat, Flush, Cycle, All On, All Off, Off)
+- Zones flowing / heating / window counters
+- Heat request, pump request, and flush request signals
+- Controller status with per-zone health in attributes
+- Supply target temperature from heating curve
+
+### PID Control Tuned for Underfloor Heating
+
+Generic thermostats use bang-bang (on/off) or PID tuned for radiators. UFH needs different handling — concrete screed has high thermal mass, so overshoot is expensive and undershoot takes hours to recover from.
+
+- **PID with anti-windup** — integral term clamps to prevent overshoot after long heating periods
+- **Quota-based scheduling** — 2-hour observation periods allocate valve time based on duty cycle, preventing rapid cycling
+- **Minimum run times** — valves won't open for less than 9 minutes (configurable), reducing actuator wear
+- **EMA temperature smoothing** — filters noisy wireless sensor readings with configurable time constant
+
+See [Control Algorithm](docs/control_algorithm.md) for the full technical details.
+
+### Multi-Zone Heat Source Coordination
+
+Multiple UFH zones sharing one heat source need coordination that per-zone thermostats can't provide:
+
+- **Aggregated heat request** — zones coordinate demand into a single heat request signal instead of fighting each other
+- **Valve pre-opening** — the controller waits for valves to physically open before requesting heat
+- **Quota-aware requests** — stops requesting heat before a zone's time expires, so the heat source isn't fired for 30 seconds of remaining quota
+- **Summer mode** — automatically disables the heating circuit when no zones need heat (EMS-ESP)
+- **Supply target temperature** — heating curve output published as an entity, usable for driving heat pump or mixing valve setpoints
+
+### Hot Water Priority
+
+When someone takes a shower, generic thermostats either fight the heat source for priority or don't know DHW is happening. This controller:
+
+- **Blocks new heating** during DHW — zones already flowing continue circulating, but new zones wait
+- **Captures residual heat** — after DHW finishes, hot water still in the system gets circulated through floors instead of wasted
+- **Configurable flush duration** — control how long post-DHW circulation runs
 
 ### Weather Compensation
 
-The controller supports outdoor temperature compensation via a configurable heating curve:
+Outdoor temperature compensation adjusts the supply target via a two-point heating curve:
 
-- **Heating curve** - Two-point interpolation adjusts supply target based on outdoor conditions
-- **Automatic adaptation** - Warmer weather lowers the supply target, reducing energy use
-- **Sensor fallback** - Reverts to fixed supply target if outdoor sensor becomes unavailable
+- **Warmer outside = lower supply target** — reduces energy use automatically
+- **Configurable curve points** — set warm/cold outdoor temperatures and their corresponding supply targets
+- **Sensor fallback** — reverts to a fixed supply target if the outdoor sensor becomes unavailable
 
-See [Heating Curve](docs/heating_curve.md) for detailed documentation.
+See [Heating Curve](docs/heating_curve.md) for details.
 
-### EMS-ESP Integration
+### Heat Accounting
 
-For users with Bosch, Buderus, Nefit, Junkers, or Worcester boilers running [EMS-ESP](https://github.com/emsesp/EMS-ESP32):
+Fair quota allocation across zones. Simply tracking valve-open time penalizes zones that happen to be open when the heat source is still warming up — they consume quota while receiving less heating benefit.
 
-- **Summer mode control** - Disables heating circuit when no zones need heat
-- **DHW priority detection** - Blocks new heating cycles during hot water, existing zones continue circulating
-- **Residual heat capture** - Flush circuits capture residual heat from the boiler after DHW ends
+- **Supply-temperature normalization** — quota consumption adjusts to actual supply conditions
+- **Single sensor** — only needs one manifold supply temperature sensor
+- **Automatic fallback** — works with simple time-based tracking if no sensor is configured
+
+See [Heat Accounting](docs/heat_accounting.md) for details.
 
 ### Zone Fault Isolation
 
-Sensor failures in one zone don't bring down your heating:
+A dead battery in one room's sensor shouldn't freeze the rest of your house:
 
-- **Independent zones** - Each zone evaluates and fails separately
-- **Graceful degradation** - Failed zones use last-known demand for 1 hour before fail-safe
-- **Safe initialization** - No valve actions until all zones have valid temperature readings
-- **Clear status reporting** - Controller and zone health visible as entities
-- **PID diagnostics** - Per-zone sensors for duty cycle, error, and PID terms
+- **Independent evaluation** — each zone fails and recovers on its own
+- **4-state degradation** — INITIALIZING, NORMAL, DEGRADED (uses last-known demand for 1 hour), FAIL_SAFE
+- **Safe initialization** — no valve actions until all zones have valid temperature readings (2-minute fast timeout)
+- **Clear status reporting** — controller and zone health visible as entities with detailed attributes
 
-### Production-Grade Engineering
+See [Fault Isolation](docs/fault_isolation.md) for details.
 
-- **State persistence** - All control variables survive Home Assistant restarts and crashes
-- **90%+ test coverage** - Enforced minimum with 100% target for core control logic
-- **Strict type checking** - Full type annotations verified by ty
-- **Automated CI** - Every PR runs tests, linting (ruff), formatting, and type checks
-- **HACS compliant** - Validated against hassfest and HACS requirements
+## Operation Modes
 
-## Requirements
+| Mode | Purpose |
+|------|---------|
+| **Heat** | Normal PID control with quota-based zone scheduling |
+| **Flush** | All valves open for circulation without heat request |
+| **Cycle** | Diagnostic rotation through zones on 8-hour schedule |
+| **All On** | All valves open with heating enabled |
+| **All Off** | All valves closed, heating disabled |
+| **Off** | Controller inactive, no actions taken |
 
-- Home Assistant 2025.10 or newer
-- A hydronic underfloor heating system with:
-  - Temperature sensor per zone
-  - Valve switch per zone
-  - (Optional) Boiler heat request switch or summer mode control
-  - (Optional) DHW active sensor for residual heat capture
-  - (Optional) Outdoor temperature sensor for weather compensation
-  - (Optional) Window/door sensors (pauses PID integration, prevents integral windup)
-  - (Optional) Supply temperature sensor for heat accounting
+See [Operation Modes](docs/operation_modes.md) for when to use each mode.
+
+## Built for Reliability
+
+This code controls heating for real homes. A bug can mean frozen pipes, burst plumbing, or wasted energy. The engineering reflects that:
+
+- **97.9% test coverage** with 100% line and branch coverage on all core control modules
+- **14,000+ lines of tests** across unit, integration, scenario, and simulation suites
+- **Physics-based simulations** verify PID convergence, disturbance rejection, and anti-windup behavior under realistic thermal conditions
+- **State persistence** — all control variables survive HA restarts and crashes, with forward-compatible storage migration (V1 > V2 > V3)
+- **Automated CI** — every PR runs tests, ruff linting (all rules), ruff formatting, ty type checking, hassfest, and HACS validation
+- **Structured releases** — pre-release cycle (dev.1 > dev.2 > ... > stable) for each version
 
 ## Installation
 
 ### HACS (Recommended)
 
 1. Open HACS in Home Assistant
-2. Click the three dots menu → **Custom repositories**
+2. Click the three dots menu > **Custom repositories**
 3. Add `https://github.com/lnagel/hass-ufh-controller` with category **Integration**
 4. Search for "Underfloor Heating Controller" and install
 5. Restart Home Assistant
 
 ### Manual Installation
 
-1. Download the latest release from [GitHub](https://github.com/lnagel/hass-ufh-controller/releases)
+1. Download the latest release from [GitHub Releases](https://github.com/lnagel/hass-ufh-controller/releases)
 2. Extract and copy `custom_components/ufh_controller` to your `config/custom_components` directory
 3. Restart Home Assistant
 
-## Quick Start
-
-1. **Install**: See [Installation](#installation) above
-2. **Follow the guide**: The [Quickstart Guide](docs/quickstart.md) walks you through controller setup, adding your first zone, and verifying everything works
-
-## Operation Modes
-
-| Mode | Purpose |
-|------|---------|
-| **Heat** | Normal PID control with zone scheduling |
-| **Flush** | All valves open for circulation (no boiler firing) |
-| **Cycle** | Diagnostic 8-hour rotation through zones |
-| **All On** | Maximum heating - all valves open |
-| **All Off** | All valves closed |
-| **Off** | Controller inactive |
-
 ## Documentation
 
-- **[Quickstart Guide](docs/quickstart.md)** - Get up and running with your first zone
-- **[Full Documentation](docs/index.md)** - Architecture, algorithms, configuration reference
-- **[Control Algorithm](docs/control_algorithm.md)** - PID controller and scheduling details
-- **[Fault Isolation](docs/fault_isolation.md)** - How zone failures are handled
-- **[Heat Accounting](docs/heat_accounting.md)** - Fair quota allocation with supply temperature weighting
-- **[Heating Curve](docs/heating_curve.md)** - Outdoor temperature compensation via heating curve
-- **[Configuration](docs/configuration.md)** - All parameters explained
-- **[Tasmota Relay Configuration](docs/tasmota.md)** - Setting up Tasmota-controlled relay boards
+- **[Quickstart Guide](docs/quickstart.md)** — Get up and running with your first zone
+- **[Full Documentation Index](docs/index.md)** — All documentation in one place
+- **[Configuration Reference](docs/configuration.md)** — Every parameter explained
+- **[Control Algorithm](docs/control_algorithm.md)** — PID controller and scheduling logic
+- **[Entities](docs/entities.md)** — All controller and zone entities
+- **[Architecture](docs/architecture.md)** — Layered design and data flow
+- **[Fault Isolation](docs/fault_isolation.md)** — Zone failure handling and recovery
+- **[Heat Accounting](docs/heat_accounting.md)** — Supply-temperature-weighted quota allocation
+- **[Heating Curve](docs/heating_curve.md)** — Outdoor temperature compensation
+- **[Operation Modes](docs/operation_modes.md)** — When to use each mode
+- **[Simulation Tests](docs/simulations.md)** — Physics-based validation of the control algorithm
+- **[Tasmota Relay Configuration](docs/tasmota.md)** — Setting up Tasmota-controlled relay boards
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, testing requirements, and contribution guidelines.
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
+MIT License — see [LICENSE](LICENSE) for details.
