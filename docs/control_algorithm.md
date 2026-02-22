@@ -72,8 +72,9 @@ The zone evaluation follows a priority-based decision tree:
 3. **Quota-based scheduling:** For zones that haven't met their quota:
    - If valve is already on: stay on (commands are re-sent to prevent relay timeout)
    - If estimated wall clock runtime is less than `min_run_time`: stay off (not worth a short run).
-     When a supply coefficient is available, remaining quota is converted to estimated wall clock time:
-     `estimated_runtime = remaining_quota / (supply_coefficient / 100)`.
+     When a supply coefficient is available, remaining quota is converted to estimated wall clock time
+     (capped at remaining quota so coefficients above 100% never shorten the estimate):
+     `estimated_runtime = max(remaining_quota, remaining_quota / (supply_coefficient / 100))`.
      Without a supply sensor, remaining quota is compared directly.
    - If DHW is active and this is a regular circuit currently off: stay off (DHW priority)
    - Otherwise: turn on
