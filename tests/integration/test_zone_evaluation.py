@@ -461,8 +461,10 @@ class TestEvaluateZoneMinRunTimeSupplyAdjustment:
         [
             # 50%: 300 remaining / 0.50 = 600s > 540 → on
             (700.0, 50.0, ZoneAction.TURN_ON),
-            # 200%: 600 remaining / 2.0 = 300s < 540 → off
-            (400.0, 200.0, ZoneAction.STAY_OFF),
+            # 200%: 600 remaining, capped at remaining_quota (600) > 540 → on
+            (400.0, 200.0, ZoneAction.TURN_ON),
+            # 200%: 400 remaining, capped at remaining_quota (400) < 540 → off
+            (600.0, 200.0, ZoneAction.STAY_OFF),
             # No sensor: 300 remaining compared directly < 540 → off
             (700.0, None, ZoneAction.STAY_OFF),
             # 0%: fallback to direct, 300 < 540 → off

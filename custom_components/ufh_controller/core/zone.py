@@ -539,7 +539,10 @@ def evaluate_zone(  # noqa: PLR0911
 
         # Convert remaining quota to estimated wall clock time via supply coefficient
         if zone.supply_coefficient is not None and zone.supply_coefficient > 0:
-            estimated_runtime = remaining_quota / (zone.supply_coefficient / 100.0)
+            estimated_runtime = max(
+                remaining_quota,
+                remaining_quota / (zone.supply_coefficient / 100.0),
+            )
         else:
             estimated_runtime = remaining_quota
 
