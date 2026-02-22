@@ -42,6 +42,24 @@ means the zone receives more benefit, reflected in a coefficient above 100%.
 
 The coefficient is capped at 200% to prevent runaway accumulation.
 
+### Minimum Run Time Adjustment
+
+The supply coefficient also affects the minimum run time check that prevents short valve cycles. When deciding
+whether to open a valve, the controller estimates the wall clock time the valve would remain open by dividing
+the remaining quota by the supply coefficient ratio:
+
+```
+estimated_runtime = remaining_quota / (supply_coefficient / 100)
+```
+
+At 50% supply coefficient, 300 seconds of remaining quota translates to an estimated 600 seconds of wall clock
+time — enough to justify opening the valve even though the raw quota is below the minimum run time threshold.
+Conversely, at 200% supply coefficient, 600 seconds of quota would only last 300 seconds of wall clock time,
+preventing a cycle that would be too brief.
+
+This adjustment does **not** affect the closing warning duration, which remains in scheduled heating duration
+time for stable boiler shutdown coordination.
+
 ### Used Duration Accumulation
 
 Each update cycle, `used_duration` accumulates when the zone is receiving heat:
