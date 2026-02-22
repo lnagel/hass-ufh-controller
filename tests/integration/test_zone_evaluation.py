@@ -444,14 +444,7 @@ class TestEvaluateZoneQuotaScheduling:
 
 
 class TestEvaluateZoneMinRunTimeSupplyAdjustment:
-    """
-    Test min_run_time check adjusted for supply coefficient.
-
-    When supply coefficient is available, the remaining quota is converted to
-    estimated wall clock time before comparing against min_run_time.
-
-    Wall clock estimate = remaining_quota / (supply_coefficient / 100)
-    """
+    """Test min_run_time check adjusted to wall clock time via supply coefficient."""
 
     @pytest.fixture
     def timing(self) -> TimingConfig:
@@ -463,132 +456,42 @@ class TestEvaluateZoneMinRunTimeSupplyAdjustment:
         """Create default controller state."""
         return ControllerState(started_at=NOW)
 
-    def test_low_supply_coefficient_extends_estimated_runtime(
-        self, timing: TimingConfig, controller: ControllerState
+    @pytest.mark.parametrize(
+        ("used_duration", "supply_coefficient", "expected"),
+        [
+            # 50%: 300 remaining / 0.50 = 600s > 540 → on
+            (700.0, 50.0, ZoneAction.TURN_ON),
+            # 200%: 600 remaining / 2.0 = 300s < 540 → off
+            (400.0, 200.0, ZoneAction.STAY_OFF),
+            # No sensor: 300 remaining compared directly < 540 → off
+            (700.0, None, ZoneAction.STAY_OFF),
+            # 0%: fallback to direct, 300 < 540 → off
+            (700.0, 0.0, ZoneAction.STAY_OFF),
+            # 50%: 270 remaining / 0.50 = 540s, not strictly < → on
+            (730.0, 50.0, ZoneAction.TURN_ON),
+            # 50%: 269 remaining / 0.50 = 538s < 540 → off
+            (731.0, 50.0, ZoneAction.STAY_OFF),
+            # 100%: identity, 300 / 1.0 = 300s < 540 → off
+            (700.0, 100.0, ZoneAction.STAY_OFF),
+        ],
+    )
+    def test_min_run_time_with_supply_adjustment(
+        self,
+        timing: TimingConfig,
+        controller: ControllerState,
+        used_duration: float,
+        supply_coefficient: float | None,
+        expected: ZoneAction,
     ) -> None:
-        """
-        Low supply coefficient means quota depletes slowly, wall clock time is longer.
-
-        remaining_quota=300s, supply_coefficient=50%
-        estimated_runtime = 300 / 0.50 = 600s > 540 min_run_time → TURN_ON
-        Without adjustment, 300 < 540 → would stay off.
-        """
+        """Remaining quota is converted to wall clock time via supply coefficient."""
         zone = ZoneState(
             zone_id="test",
             valve_state=ValveState.OFF,
             requested_duration=1000.0,
-            used_duration=700.0,  # 300 remaining quota
-            supply_coefficient=50.0,
+            used_duration=used_duration,
+            supply_coefficient=supply_coefficient,
         )
-        result = evaluate_zone(zone, controller, timing)
-        assert result == ZoneAction.TURN_ON
-
-    def test_high_supply_coefficient_shortens_estimated_runtime(
-        self, timing: TimingConfig, controller: ControllerState
-    ) -> None:
-        """
-        High supply coefficient means quota depletes fast, wall clock time is shorter.
-
-        remaining_quota=600s, supply_coefficient=200%
-        estimated_runtime = 600 / 2.0 = 300s < 540 min_run_time → STAY_OFF
-        Without adjustment, 600 > 540 → would turn on.
-        """
-        zone = ZoneState(
-            zone_id="test",
-            valve_state=ValveState.OFF,
-            requested_duration=1000.0,
-            used_duration=400.0,  # 600 remaining quota
-            supply_coefficient=200.0,
-        )
-        result = evaluate_zone(zone, controller, timing)
-        assert result == ZoneAction.STAY_OFF
-
-    def test_no_supply_coefficient_falls_back_to_direct_comparison(
-        self, timing: TimingConfig, controller: ControllerState
-    ) -> None:
-        """Without supply sensor, remaining quota is compared directly (unchanged)."""
-        zone = ZoneState(
-            zone_id="test",
-            valve_state=ValveState.OFF,
-            requested_duration=1000.0,
-            used_duration=700.0,  # 300 remaining < 540
-            supply_coefficient=None,
-        )
-        result = evaluate_zone(zone, controller, timing)
-        assert result == ZoneAction.STAY_OFF
-
-    def test_zero_supply_coefficient_falls_back_to_direct_comparison(
-        self, timing: TimingConfig, controller: ControllerState
-    ) -> None:
-        """Zero supply coefficient falls back to direct comparison."""
-        zone = ZoneState(
-            zone_id="test",
-            valve_state=ValveState.OFF,
-            requested_duration=1000.0,
-            used_duration=700.0,  # 300 remaining < 540
-            supply_coefficient=0.0,
-        )
-        result = evaluate_zone(zone, controller, timing)
-        assert result == ZoneAction.STAY_OFF
-
-    def test_exactly_at_threshold_after_adjustment(
-        self, timing: TimingConfig, controller: ControllerState
-    ) -> None:
-        """
-        Estimated runtime exactly at min_run_time allows turn on.
-
-        remaining_quota=270s, supply_coefficient=50%
-        estimated_runtime = 270 / 0.50 = 540s == 540 min_run_time → TURN_ON
-        (not strictly less than, so valve can open)
-        """
-        zone = ZoneState(
-            zone_id="test",
-            valve_state=ValveState.OFF,
-            requested_duration=1000.0,
-            used_duration=730.0,  # 270 remaining quota
-            supply_coefficient=50.0,
-        )
-        result = evaluate_zone(zone, controller, timing)
-        assert result == ZoneAction.TURN_ON
-
-    def test_just_below_threshold_after_adjustment(
-        self, timing: TimingConfig, controller: ControllerState
-    ) -> None:
-        """
-        Estimated runtime just below min_run_time prevents turn on.
-
-        remaining_quota=269s, supply_coefficient=50%
-        estimated_runtime = 269 / 0.50 = 538s < 540 min_run_time → STAY_OFF
-        """
-        zone = ZoneState(
-            zone_id="test",
-            valve_state=ValveState.OFF,
-            requested_duration=1000.0,
-            used_duration=731.0,  # 269 remaining quota
-            supply_coefficient=50.0,
-        )
-        result = evaluate_zone(zone, controller, timing)
-        assert result == ZoneAction.STAY_OFF
-
-    def test_supply_100_percent_same_as_no_adjustment(
-        self, timing: TimingConfig, controller: ControllerState
-    ) -> None:
-        """
-        At 100% supply coefficient, adjustment is identity (no change).
-
-        remaining_quota=300s, supply_coefficient=100%
-        estimated_runtime = 300 / 1.0 = 300s < 540 → STAY_OFF
-        Same result as without supply coefficient.
-        """
-        zone = ZoneState(
-            zone_id="test",
-            valve_state=ValveState.OFF,
-            requested_duration=1000.0,
-            used_duration=700.0,  # 300 remaining
-            supply_coefficient=100.0,
-        )
-        result = evaluate_zone(zone, controller, timing)
-        assert result == ZoneAction.STAY_OFF
+        assert evaluate_zone(zone, controller, timing) == expected
 
 
 class TestEvaluateZoneDHWBlocking:

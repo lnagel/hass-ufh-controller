@@ -537,17 +537,13 @@ def evaluate_zone(  # noqa: PLR0911
 
         remaining_quota = zone.requested_duration - zone.used_duration
 
-        # Estimate wall clock time for the remaining quota.
-        # When supply coefficient is available, quota depletes at
-        # (supply_coefficient / 100) rate, so wall clock time is longer
-        # when supply is low and shorter when supply is high.
+        # Convert remaining quota to estimated wall clock time via supply coefficient
         if zone.supply_coefficient is not None and zone.supply_coefficient > 0:
             estimated_runtime = remaining_quota / (zone.supply_coefficient / 100.0)
         else:
             estimated_runtime = remaining_quota
 
         if estimated_runtime < timing.min_run_time:
-            # Not enough wall clock time to justify turning on
             return ZoneAction.STAY_OFF if valve_off else ZoneAction.TURN_OFF
 
         if controller.dhw_active and zone.circuit_type == CircuitType.REGULAR:
