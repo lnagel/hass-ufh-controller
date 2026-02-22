@@ -455,11 +455,15 @@ class HeatingController:
                 )
 
         # Phase 4: Apply flow constraint to ALL zones together
-        if self.config.optimal_flow_rate_max is not None:
+        if (
+            self.config.optimal_flow_rate_max is not None
+            or self.config.optimal_flow_rate_min is not None
+        ):
             valve_actions = apply_flow_constraint(
                 desired_actions=valve_actions,
                 zones=self._zones,
-                max_flow_rate=self.config.optimal_flow_rate_max,
+                optimal_flow_rate_min=self.config.optimal_flow_rate_min,
+                optimal_flow_rate_max=self.config.optimal_flow_rate_max,
             )
 
         # Pump request: any zone with confirmed flow
