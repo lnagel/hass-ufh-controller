@@ -313,6 +313,24 @@ def assert_integral_stable(
     )
 
 
+def assert_integral_converged(
+    log: SimulationLog,
+    zone_id: str,
+    *,
+    max_value: float,
+    after_hours: float = 24,
+) -> None:
+    """Assert integral average stays below a threshold after settling."""
+    entries = log.zone_entries_after(zone_id, after_hours * 3600)
+    assert entries, f"No entries for {zone_id} after {after_hours}h"
+    integrals = [e.integral for e in entries]
+    avg = sum(integrals) / len(integrals)
+    assert avg <= max_value, (
+        f"Avg integral {avg:.2f} exceeds max {max_value:.2f} after {after_hours}h "
+        f"(min={min(integrals):.2f}, max={max(integrals):.2f})"
+    )
+
+
 def assert_heat_request_stable(
     log: SimulationLog,
     zone_id: str,
