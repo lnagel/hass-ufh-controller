@@ -443,6 +443,59 @@ class TestEvaluateZoneQuotaScheduling:
         assert result == ZoneAction.TURN_OFF
 
 
+class TestEvaluateZoneMinRunTimeSupplyAdjustment:
+    """Test min_run_time check adjusted to wall clock time via supply coefficient."""
+
+    @pytest.fixture
+    def timing(self) -> TimingConfig:
+        """Create timing config with 540s min run time."""
+        return TimingConfig(min_run_time=540)
+
+    @pytest.fixture
+    def controller(self) -> ControllerState:
+        """Create default controller state."""
+        return ControllerState(started_at=NOW)
+
+    @pytest.mark.parametrize(
+        ("used_duration", "supply_coefficient", "expected"),
+        [
+            # 50%: 300 remaining / 0.50 = 600s > 540 → on
+            (700.0, 50.0, ZoneAction.TURN_ON),
+            # 200%: 600 remaining, capped at remaining_quota (600) > 540 → on
+            (400.0, 200.0, ZoneAction.TURN_ON),
+            # 200%: 400 remaining, capped at remaining_quota (400) < 540 → off
+            (600.0, 200.0, ZoneAction.STAY_OFF),
+            # No sensor: 300 remaining compared directly < 540 → off
+            (700.0, None, ZoneAction.STAY_OFF),
+            # 0%: fallback to direct, 300 < 540 → off
+            (700.0, 0.0, ZoneAction.STAY_OFF),
+            # 50%: 270 remaining / 0.50 = 540s, not strictly < → on
+            (730.0, 50.0, ZoneAction.TURN_ON),
+            # 50%: 269 remaining / 0.50 = 538s < 540 → off
+            (731.0, 50.0, ZoneAction.STAY_OFF),
+            # 100%: identity, 300 / 1.0 = 300s < 540 → off
+            (700.0, 100.0, ZoneAction.STAY_OFF),
+        ],
+    )
+    def test_min_run_time_with_supply_adjustment(
+        self,
+        timing: TimingConfig,
+        controller: ControllerState,
+        used_duration: float,
+        supply_coefficient: float | None,
+        expected: ZoneAction,
+    ) -> None:
+        """Remaining quota is converted to wall clock time via supply coefficient."""
+        zone = ZoneState(
+            zone_id="test",
+            valve_state=ValveState.OFF,
+            requested_duration=1000.0,
+            used_duration=used_duration,
+            supply_coefficient=supply_coefficient,
+        )
+        assert evaluate_zone(zone, controller, timing) == expected
+
+
 class TestEvaluateZoneDHWBlocking:
     """Test DHW blocking for regular circuits."""
 
