@@ -1,9 +1,9 @@
 # Underfloor Heating Controller
 
-[![GitHub Release](https://img.shields.io/github/v/release/lnagel/hass-ufh-controller?style=flat-square)](https://github.com/lnagel/hass-ufh-controller/releases)
-[![License](https://img.shields.io/github/license/lnagel/hass-ufh-controller?style=flat-square)](https://github.com/lnagel/hass-ufh-controller/blob/main/LICENSE)
-[![HACS](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=flat-square)](https://my.home-assistant.io/redirect/hacs_repository/?owner=lnagel&repository=hass-ufh-controller&category=integration)
-[![CI](https://img.shields.io/github/actions/workflow/status/lnagel/hass-ufh-controller/checks.yml?branch=main&style=flat-square&label=tests)](https://github.com/lnagel/hass-ufh-controller/actions)
+[![GitHub Release](https://img.shields.io/github/v/release/lnagel/hass-ufh-controller)](https://github.com/lnagel/hass-ufh-controller/releases)
+[![License](https://img.shields.io/github/license/lnagel/hass-ufh-controller)](https://github.com/lnagel/hass-ufh-controller/blob/main/LICENSE)
+[![HACS](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=lnagel&repository=hass-ufh-controller&category=integration)
+[![CI](https://img.shields.io/github/actions/workflow/status/lnagel/hass-ufh-controller/checks.yml?branch=main&label=tests)](https://github.com/lnagel/hass-ufh-controller/actions)
 [![codecov](https://codecov.io/gh/lnagel/hass-ufh-controller/branch/main/graph/badge.svg)](https://codecov.io/gh/lnagel/hass-ufh-controller)
 
 **A Home Assistant integration purpose-built for hydronic underfloor heating systems. Fully open source, no gated features.**
