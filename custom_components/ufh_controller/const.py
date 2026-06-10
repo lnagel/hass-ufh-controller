@@ -215,7 +215,6 @@ DEFAULT_HEAT_SUPPLY_COEFFICIENT_THRESHOLD = 10.0  # 10% min supply coefficient f
 # Flow monitoring defaults
 DEFAULT_SUPPLY_TARGET_TEMP = 40.0
 DEFAULT_SUPPLY_COEFFICIENT_CAP = 200.0  # Maximum supply coefficient percentage
-
 # Heating curve defaults (outdoor temp compensation)
 DEFAULT_OUTDOOR_TEMP_WARM = 15.0  # Outdoor temp at warm design point (°C)
 DEFAULT_OUTDOOR_TEMP_COLD = -10.0  # Outdoor temp at cold design point (°C)
@@ -252,6 +251,10 @@ UI_TEMP_EMA_TIME_CONSTANT = {"min": 0, "max": 1800, "step": 60}  # 0-30 minutes
 
 # UI validation constraints for preset temperatures
 UI_PRESET_TEMPERATURE = {"min": 5.0, "max": 35.0, "step": 0.5}
+
+# Flow rate defaults and UI constraints (litres per minute)
+UI_NOMINAL_FLOW_RATE = {"min": 0.1, "max": 20.0, "step": 0.1}
+UI_OPTIMAL_FLOW_RATE = {"min": 0.1, "max": 100.0, "step": 0.1}
 
 # Icons
 ICON_PID_ERROR_THRESHOLD = 0.1

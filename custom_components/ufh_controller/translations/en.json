@@ -24,7 +24,8 @@
         "menu_options": {
           "control_entities": "Control Entities",
           "timing": "Timing Parameters",
-          "heat_accounting": "Heat Accounting"
+          "heat_accounting": "Heat Accounting",
+          "flow_scheduling": "Flow Scheduling"
         }
       },
       "control_entities": {
@@ -70,6 +71,18 @@
           "supply_temp_cold": "Target supply temperature at the cold design point (e.g., 45°C for UFH)."
         }
       },
+      "flow_scheduling": {
+        "title": "Flow Scheduling",
+        "description": "Configure flow rate bounds for zone scheduling. When set, the controller constrains how many zones can be ON simultaneously to keep aggregate flow within these bounds.",
+        "data": {
+          "optimal_flow_rate_min": "Minimum flow rate",
+          "optimal_flow_rate_max": "Maximum flow rate"
+        },
+        "data_description": {
+          "optimal_flow_rate_min": "Suppress boiler heat request when aggregate flow from requesting zones is below this value (latent heat mode). Leave empty to disable.",
+          "optimal_flow_rate_max": "Maximum aggregate flow rate. Zones are scheduled to keep total flow at or below this limit. Leave empty to disable flow constraint."
+        }
+      },
       "zone_entities": {
         "title": "Zone Entities",
         "description": "Configure zone hardware mappings.",
@@ -78,7 +91,11 @@
           "temp_sensor": "Temperature sensor",
           "valve_switch": "Valve switch",
           "circuit_type": "Circuit type",
-          "window_sensors": "Window sensors"
+          "window_sensors": "Window sensors",
+          "nominal_flow_rate": "Nominal flow rate"
+        },
+        "data_description": {
+          "nominal_flow_rate": "Water flow rate when this zone's valve is open (L/min). Used for flow-rate-aware scheduling. Leave empty if unknown."
         }
       },
       "temperature_control": {
@@ -157,7 +174,11 @@
             "temp_ema_time_constant": "Temperature smoothing time constant",
             "kp": "PID proportional gain (Kp)",
             "ki": "PID integral gain (Ki)",
-            "kd": "PID derivative gain (Kd)"
+            "kd": "PID derivative gain (Kd)",
+            "nominal_flow_rate": "Nominal flow rate"
+          },
+          "data_description": {
+            "nominal_flow_rate": "Water flow rate when this zone's valve is open (L/min). Used for flow-rate-aware scheduling. Leave empty if unknown."
           }
         },
         "reconfigure": {
@@ -176,7 +197,11 @@
             "temp_sensor": "Temperature sensor",
             "valve_switch": "Valve switch",
             "circuit_type": "Circuit type",
-            "window_sensors": "Window sensors"
+            "window_sensors": "Window sensors",
+            "nominal_flow_rate": "Nominal flow rate"
+          },
+          "data_description": {
+            "nominal_flow_rate": "Water flow rate when this zone's valve is open (L/min). Used for flow-rate-aware scheduling. Leave empty if unknown."
           }
         },
         "temperature_control": {
