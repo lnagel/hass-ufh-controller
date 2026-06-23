@@ -23,6 +23,8 @@ The PID controller calculates a duty cycle (0-100%) from the temperature error (
 
 **Anti-windup protection:** The integral term is clamped between configurable limits (default 0-100%) to prevent unbounded accumulation when the system cannot reach setpoint.
 
+**Back-calculation anti-windup:** At each observation period boundary, the controller compares actual delivery (`used_duration`) against the commanded output recorded at the last convergence point. Convergence points are bumped forward at valve open, valve close, and period start — tracking *when* the last decision was made and *what was requested* at that point. If the valve delivered less than commanded — typically because the duty cycle was too small for the minimum run time — a correction is applied: `integral += Kt × (u_actual − u_commanded) × period`, where `Kt = Ki/Kp`. This gradually adjusts the integral to reflect what was actually delivered, preventing excessive overshoot when demand later increases above the delivery threshold.
+
 **Output clamping:** The final duty cycle is clamped to 0-100%.
 
 ### PID Integration Pausing

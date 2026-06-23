@@ -18,6 +18,7 @@ from custom_components.ufh_controller.core.controller import (
     HeatingController,
     ZoneConfig,
 )
+from custom_components.ufh_controller.core.pid import PIDState
 from custom_components.ufh_controller.core.zone import (
     CircuitType,
     ZoneAction,
@@ -1024,3 +1025,125 @@ class TestHandleObservationPeriodTransition:
 
         assert controller.state.observation_start == NOW
         assert controller.state.period_elapsed == pytest.approx(1800.0)
+
+    def test_back_calculation_applied_on_period_transition(
+        self, basic_config: ControllerConfig
+    ) -> None:
+        """Verify correction + convergence point + reset happen in order."""
+        controller = HeatingController(basic_config, started_at=NOW)
+
+        # Set up PID state before first transition
+        for zone_id in controller.zone_ids:
+            rt = controller.get_zone_runtime(zone_id)
+            rt.pid.set_state(
+                PIDState(
+                    error=0.5,
+                    proportional=25.0,
+                    integral=30.0,
+                    derivative=0.0,
+                    duty_cycle=50.0,
+                )
+            )
+            # requested_duration = 50% of 7200 = 3600
+            rt.update_requested_duration(7200)
+
+        # First period transition — marks convergence point
+        controller.handle_observation_period_transition(NOW)
+
+        # During the period: zone only delivered 360s = 5% actual
+        for zone_id in controller.zone_ids:
+            rt = controller.get_zone_runtime(zone_id)
+            rt.state.used_duration = 360.0
+
+        # Trigger second period transition
+        next_period = NOW + timedelta(seconds=7200)
+        result = controller.handle_observation_period_transition(next_period)
+
+        assert result is True
+        for zone_id in controller.zone_ids:
+            rt = controller.get_zone_runtime(zone_id)
+            # Kt = 0.001/50 = 0.00002
+            # correction = 0.00002 * (5 - 50) * 7200 = -6.48
+            # new_integral = 30 - 6.48 = 23.52
+            assert rt.pid.state is not None
+            assert rt.pid.state.integral == pytest.approx(23.52)
+            # used_duration reset after correction
+            assert rt.state.used_duration == 0.0
+            # Convergence point re-marked at new period start
+            assert rt.state.last_action_at == next_period
+            assert rt.state.last_requested_duration == pytest.approx(3600.0)
+
+    def test_first_period_skips_back_calculation(
+        self, basic_config: ControllerConfig
+    ) -> None:
+        """No correction on initial period, but convergence point is marked."""
+        controller = HeatingController(basic_config, started_at=NOW)
+
+        # Set up PID state with used_duration before first transition
+        for zone_id in controller.zone_ids:
+            rt = controller.get_zone_runtime(zone_id)
+            rt.pid.set_state(
+                PIDState(
+                    error=0.5,
+                    proportional=25.0,
+                    integral=30.0,
+                    derivative=0.0,
+                    duty_cycle=50.0,
+                )
+            )
+            rt.state.used_duration = 360.0
+            # requested_duration = 50% of 7200 = 3600
+            rt.update_requested_duration(7200)
+
+        # First transition - should NOT apply correction but SHOULD mark point
+        result = controller.handle_observation_period_transition(NOW)
+
+        assert result is True
+        for zone_id in controller.zone_ids:
+            rt = controller.get_zone_runtime(zone_id)
+            assert rt.pid.state is not None
+            # Integral unchanged - no correction on first period
+            assert rt.pid.state.integral == 30.0
+            # used_duration still reset
+            assert rt.state.used_duration == 0.0
+            # Convergence point marked for next period
+            assert rt.state.last_action_at == NOW
+            assert rt.state.last_requested_duration == pytest.approx(3600.0)
+
+
+class TestMarkValveConvergencePoints:
+    """Test mark_valve_convergence_points method."""
+
+    def test_marks_turn_on_and_turn_off(self, basic_config: ControllerConfig) -> None:
+        """Convergence points marked for TURN_ON and TURN_OFF actions."""
+        controller = HeatingController(basic_config, started_at=NOW)
+
+        # Set requested_duration so mark captures a meaningful value
+        for zone_id in controller.zone_ids:
+            rt = controller.get_zone_runtime(zone_id)
+            rt.state.requested_duration = 1800.0
+
+        actions = {
+            "living_room": ZoneAction.TURN_ON,
+            "bedroom": ZoneAction.TURN_OFF,
+        }
+        controller.mark_valve_convergence_points(actions, NOW)
+
+        for zone_id in controller.zone_ids:
+            rt = controller.get_zone_runtime(zone_id)
+            assert rt.state.last_action_at == NOW
+            assert rt.state.last_requested_duration == 1800.0
+
+    def test_skips_stay_on_and_stay_off(self, basic_config: ControllerConfig) -> None:
+        """No convergence point for STAY_ON/STAY_OFF (too frequent)."""
+        controller = HeatingController(basic_config, started_at=NOW)
+
+        actions = {
+            "living_room": ZoneAction.STAY_ON,
+            "bedroom": ZoneAction.STAY_OFF,
+        }
+        controller.mark_valve_convergence_points(actions, NOW)
+
+        for zone_id in controller.zone_ids:
+            rt = controller.get_zone_runtime(zone_id)
+            assert rt.state.last_action_at is None

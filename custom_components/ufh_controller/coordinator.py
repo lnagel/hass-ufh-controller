@@ -480,6 +480,15 @@ class UFHControllerDataUpdateCoordinator(
         if "used_duration" in zone_state:
             runtime.state.used_duration = zone_state["used_duration"]
 
+        if ts := zone_state.get("last_action_at"):
+            with contextlib.suppress(ValueError, TypeError):
+                runtime.state.last_action_at = datetime.fromisoformat(ts)
+
+        if "last_requested_duration" in zone_state:
+            runtime.state.last_requested_duration = zone_state[
+                "last_requested_duration"
+            ]
+
     def _build_storage_state(self) -> dict[str, Any]:
         """Build state dictionary for persistent storage."""
         data: dict[str, Any] = {
@@ -630,6 +639,9 @@ class UFHControllerDataUpdateCoordinator(
         # Update controller-level pump and heat request from controller output
         self._controller.state.pump_request = actions.pump_request
         self._controller.state.heat_request = actions.heat_request
+
+        # Mark convergence points for anti-windup tracking (controller logic)
+        self._controller.mark_valve_convergence_points(actions.valve_actions, now)
 
         # Execute valve actions with zone-level isolation
         await self._execute_valve_actions_with_isolation(
@@ -1155,6 +1167,12 @@ class UFHControllerDataUpdateCoordinator(
                 "supply_coefficient": state.supply_coefficient,
                 "used_duration": state.used_duration,
                 "remaining_duration": state.remaining_duration,
+                "last_action_at": (
+                    state.last_action_at.isoformat()
+                    if state.last_action_at is not None
+                    else None
+                ),
+                "last_requested_duration": state.last_requested_duration,
             }
 
         return result

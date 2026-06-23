@@ -292,3 +292,167 @@ class TestPIDState:
             error=1.0, proportional=50.0, integral=10.0, derivative=0.0, duty_cycle=60.0
         )
         assert state1 == state2
+
+
+class TestApplySaturationCorrection:
+    """Test cases for PIDController.apply_saturation_correction."""
+
+    def test_reduces_integral(self) -> None:
+        """Verify exact correction math with known Kt."""
+        pid = PIDController(kp=50.0, ki=0.001, kd=0.0)
+        # Kt = ki/kp = 0.001/50 = 0.00002
+        pid.set_state(
+            PIDState(
+                error=1.0,
+                proportional=50.0,
+                integral=30.0,
+                derivative=0.0,
+                duty_cycle=50.0,
+            )
+        )
+        # u_actual=5%, u_commanded=50%, dt=7200
+        # correction = 0.00002 * (5 - 50) * 7200 = 0.00002 * -45 * 7200 = -6.48
+        pid.apply_saturation_correction(u_actual=5.0, u_commanded=50.0, dt=7200.0)
+        assert pid.state is not None
+        assert pid.state.integral == pytest.approx(23.52)
+
+    def test_no_state_noop(self) -> None:
+        """No crash when state is None."""
+        pid = PIDController(kp=50.0, ki=0.001, kd=0.0)
+        assert pid.state is None
+        pid.apply_saturation_correction(u_actual=5.0, u_commanded=50.0, dt=7200.0)
+        assert pid.state is None
+
+    def test_zero_dt_noop(self) -> None:
+        """No change for zero dt."""
+        pid = PIDController(kp=50.0, ki=0.001, kd=0.0)
+        pid.set_state(
+            PIDState(
+                error=1.0,
+                proportional=50.0,
+                integral=30.0,
+                derivative=0.0,
+                duty_cycle=50.0,
+            )
+        )
+        pid.apply_saturation_correction(u_actual=5.0, u_commanded=50.0, dt=0.0)
+        assert pid.state is not None
+        assert pid.state.integral == 30.0
+
+    def test_negative_dt_noop(self) -> None:
+        """No change for negative dt."""
+        pid = PIDController(kp=50.0, ki=0.001, kd=0.0)
+        pid.set_state(
+            PIDState(
+                error=1.0,
+                proportional=50.0,
+                integral=30.0,
+                derivative=0.0,
+                duty_cycle=50.0,
+            )
+        )
+        pid.apply_saturation_correction(u_actual=5.0, u_commanded=50.0, dt=-100.0)
+        assert pid.state is not None
+        assert pid.state.integral == 30.0
+
+    def test_clamps_integral_at_minimum(self) -> None:
+        """Integral respects bounds after correction."""
+        pid = PIDController(kp=50.0, ki=0.001, kd=0.0, integral_min=0.0)
+        pid.set_state(
+            PIDState(
+                error=1.0,
+                proportional=50.0,
+                integral=2.0,
+                derivative=0.0,
+                duty_cycle=50.0,
+            )
+        )
+        # Large negative correction should clamp at integral_min=0
+        pid.apply_saturation_correction(u_actual=0.0, u_commanded=100.0, dt=7200.0)
+        assert pid.state is not None
+        assert pid.state.integral == 0.0
+
+    def test_clamps_integral_at_maximum(self) -> None:
+        """Integral respects upper bound after correction."""
+        pid = PIDController(kp=50.0, ki=0.001, kd=0.0, integral_max=50.0)
+        pid.set_state(
+            PIDState(
+                error=1.0,
+                proportional=50.0,
+                integral=48.0,
+                derivative=0.0,
+                duty_cycle=50.0,
+            )
+        )
+        # Large positive correction should clamp at integral_max=50
+        pid.apply_saturation_correction(u_actual=100.0, u_commanded=0.0, dt=7200.0)
+        assert pid.state is not None
+        assert pid.state.integral == 50.0
+
+    def test_zero_kp_noop(self) -> None:
+        """No correction when kp=0."""
+        pid = PIDController(kp=0.0, ki=0.001, kd=0.0)
+        pid.set_state(
+            PIDState(
+                error=1.0,
+                proportional=0.0,
+                integral=30.0,
+                derivative=0.0,
+                duty_cycle=30.0,
+            )
+        )
+        pid.apply_saturation_correction(u_actual=5.0, u_commanded=30.0, dt=7200.0)
+        assert pid.state is not None
+        assert pid.state.integral == 30.0
+
+    def test_preserves_other_state_fields(self) -> None:
+        """Error, proportional, derivative, duty_cycle unchanged."""
+        pid = PIDController(kp=50.0, ki=0.001, kd=0.0)
+        pid.set_state(
+            PIDState(
+                error=1.5,
+                proportional=75.0,
+                integral=30.0,
+                derivative=0.5,
+                duty_cycle=80.0,
+            )
+        )
+        pid.apply_saturation_correction(u_actual=5.0, u_commanded=80.0, dt=7200.0)
+        assert pid.state is not None
+        assert pid.state.error == 1.5
+        assert pid.state.proportional == 75.0
+        assert pid.state.derivative == 0.5
+        assert pid.state.duty_cycle == 80.0
+
+    def test_no_correction_when_actual_equals_commanded(self) -> None:
+        """No saturation = no change."""
+        pid = PIDController(kp=50.0, ki=0.001, kd=0.0)
+        original_state = PIDState(
+            error=1.0,
+            proportional=50.0,
+            integral=30.0,
+            derivative=0.0,
+            duty_cycle=50.0,
+        )
+        pid.set_state(original_state)
+        pid.apply_saturation_correction(u_actual=50.0, u_commanded=50.0, dt=7200.0)
+        # State object should be the same (no new PIDState created)
+        assert pid.state is original_state
+
+    def test_positive_correction_when_over_delivered(self) -> None:
+        """Integral increases when u_actual > u_commanded."""
+        pid = PIDController(kp=50.0, ki=0.001, kd=0.0, integral_max=100.0)
+        pid.set_state(
+            PIDState(
+                error=1.0,
+                proportional=50.0,
+                integral=30.0,
+                derivative=0.0,
+                duty_cycle=20.0,
+            )
+        )
+        # u_actual=60% > u_commanded=20%, positive correction
+        # correction = 0.00002 * (60 - 20) * 7200 = 0.00002 * 40 * 7200 = 5.76
+        pid.apply_saturation_correction(u_actual=60.0, u_commanded=20.0, dt=7200.0)
+        assert pid.state is not None
+        assert pid.state.integral == pytest.approx(35.76)

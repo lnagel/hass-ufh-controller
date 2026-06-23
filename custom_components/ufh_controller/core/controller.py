@@ -506,6 +506,26 @@ class HeatingController:
 
         return actions
 
+    def mark_valve_convergence_points(
+        self, actions: dict[str, ZoneAction], now: datetime
+    ) -> None:
+        """
+        Mark convergence points for zones with valve state transitions.
+
+        Called after evaluate() to record PWM decision points for
+        back-calculation anti-windup. Only TURN_ON and TURN_OFF are
+        meaningful convergence points — STAY_ON/STAY_OFF happen every
+        cycle and would make the reference too fresh.
+
+        Args:
+            actions: Valve actions from evaluate().
+            now: Current time.
+
+        """
+        for zone_id, action in actions.items():
+            if action in (ZoneAction.TURN_ON, ZoneAction.TURN_OFF):
+                self._zones[zone_id].mark_convergence_point(now)
+
     def get_summer_mode_value(self, *, heat_request: bool) -> str | None:
         """
         Determine the summer mode value for the boiler.
@@ -591,8 +611,14 @@ class HeatingController:
         )
 
         if new_period:
+            is_first_period = self._state.last_force_update is None
+            if not is_first_period:
+                observation_period = timing.observation_period
+                for runtime in self._zones.values():
+                    runtime.apply_period_end_back_calculation(observation_period)
             for runtime in self._zones.values():
                 runtime.reset_used_duration()
+                runtime.mark_convergence_point(now)
             self._state.last_force_update = now
 
         return new_period
