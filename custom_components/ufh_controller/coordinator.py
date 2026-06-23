@@ -9,6 +9,9 @@ from typing import TYPE_CHECKING, Any
 from .config_flow import (
     CONF_DHW_ACTIVE_ENTITY,
     CONF_HEAT_REQUEST_ENTITY,
+    CONF_NOMINAL_FLOW_RATE,
+    CONF_OPTIMAL_FLOW_RATE_MAX,
+    CONF_OPTIMAL_FLOW_RATE_MIN,
     CONF_OUTDOOR_TEMP_ENTITY,
     CONF_PUMP_REQUEST_ENTITY,
     CONF_SUMMER_MODE_ENTITY,
@@ -193,11 +196,13 @@ class UFHControllerDataUpdateCoordinator(
         """Build HeatingController from config entry."""
         data = entry.data
 
-        # Get timing from controller subentry, fall back to options for migration
+        # Get timing and flow scheduling from controller subentry
         timing_opts: dict[str, Any] = {}
+        flow_scheduling: dict[str, Any] = {}
         for subentry in entry.subentries.values():
             if subentry.subentry_type == SUBENTRY_TYPE_CONTROLLER:
                 timing_opts = subentry.data.get("timing", {})
+                flow_scheduling = subentry.data.get("flow_scheduling", {})
                 break
 
         timing = TimingConfig(
@@ -263,6 +268,7 @@ class UFHControllerDataUpdateCoordinator(
                     temp_ema_time_constant=zone_data.get(
                         "temp_ema_time_constant", DEFAULT_TEMP_EMA_TIME_CONSTANT
                     ),
+                    nominal_flow_rate=zone_data.get(CONF_NOMINAL_FLOW_RATE),
                 )
             )
 
@@ -286,6 +292,8 @@ class UFHControllerDataUpdateCoordinator(
             summer_mode_entity=data.get(CONF_SUMMER_MODE_ENTITY),
             supply_temp_entity=data.get(CONF_SUPPLY_TEMP_ENTITY),
             outdoor_temp_entity=data.get(CONF_OUTDOOR_TEMP_ENTITY),
+            optimal_flow_rate_min=flow_scheduling.get(CONF_OPTIMAL_FLOW_RATE_MIN),
+            optimal_flow_rate_max=flow_scheduling.get(CONF_OPTIMAL_FLOW_RATE_MAX),
             heating_curve=heating_curve,
             timing=timing,
             zones=zones,
@@ -480,6 +488,15 @@ class UFHControllerDataUpdateCoordinator(
         if "used_duration" in zone_state:
             runtime.state.used_duration = zone_state["used_duration"]
 
+        if ts := zone_state.get("last_action_at"):
+            with contextlib.suppress(ValueError, TypeError):
+                runtime.state.last_action_at = datetime.fromisoformat(ts)
+
+        if "last_requested_duration" in zone_state:
+            runtime.state.last_requested_duration = zone_state[
+                "last_requested_duration"
+            ]
+
     def _build_storage_state(self) -> dict[str, Any]:
         """Build state dictionary for persistent storage."""
         data: dict[str, Any] = {
@@ -630,6 +647,9 @@ class UFHControllerDataUpdateCoordinator(
         # Update controller-level pump and heat request from controller output
         self._controller.state.pump_request = actions.pump_request
         self._controller.state.heat_request = actions.heat_request
+
+        # Mark convergence points for anti-windup tracking (controller logic)
+        self._controller.mark_valve_convergence_points(actions.valve_actions, now)
 
         # Execute valve actions with zone-level isolation
         await self._execute_valve_actions_with_isolation(
@@ -1155,6 +1175,12 @@ class UFHControllerDataUpdateCoordinator(
                 "supply_coefficient": state.supply_coefficient,
                 "used_duration": state.used_duration,
                 "remaining_duration": state.remaining_duration,
+                "last_action_at": (
+                    state.last_action_at.isoformat()
+                    if state.last_action_at is not None
+                    else None
+                ),
+                "last_requested_duration": state.last_requested_duration,
             }
 
         return result

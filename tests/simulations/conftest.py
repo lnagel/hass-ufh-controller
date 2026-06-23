@@ -111,6 +111,7 @@ class ZoneSpec:
     setpoint: float = 21.0
     kp: float = 50.0
     ki: float = 0.001
+    nominal_flow_rate: float | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -200,6 +201,8 @@ def make_multi_zone_system() -> Callable[
         min_run_time: int = 540,
         dt: float = 60.0,
         dhw_schedule: Callable[[float], bool] | None = None,
+        optimal_flow_rate_min: float | None = None,
+        optimal_flow_rate_max: float | None = None,
     ) -> tuple[SimulationHarness, HeatingController, list[str]]:
         zone_configs = []
         rooms: dict[str, RoomModel] = {}
@@ -215,6 +218,7 @@ def make_multi_zone_system() -> Callable[
                 kp=spec.kp,
                 ki=spec.ki,
                 temp_ema_time_constant=0,
+                nominal_flow_rate=spec.nominal_flow_rate,
             )
             zone_configs.append(zc)
             rooms[spec.zone_id] = RoomModel(
@@ -234,6 +238,8 @@ def make_multi_zone_system() -> Callable[
                 min_run_time=min_run_time,
             ),
             zones=zone_configs,
+            optimal_flow_rate_min=optimal_flow_rate_min,
+            optimal_flow_rate_max=optimal_flow_rate_max,
         )
         controller = HeatingController(config, started_at=NOW)
 
@@ -310,6 +316,24 @@ def assert_integral_stable(
     assert integral_range <= max_drift, (
         f"Integral range {integral_range:.2f} exceeds max drift {max_drift:.2f} "
         f"after {after_hours}h (min={min(integrals):.2f}, max={max(integrals):.2f})"
+    )
+
+
+def assert_integral_converged(
+    log: SimulationLog,
+    zone_id: str,
+    *,
+    max_value: float,
+    after_hours: float = 24,
+) -> None:
+    """Assert integral average stays below a threshold after settling."""
+    entries = log.zone_entries_after(zone_id, after_hours * 3600)
+    assert entries, f"No entries for {zone_id} after {after_hours}h"
+    integrals = [e.integral for e in entries]
+    avg = sum(integrals) / len(integrals)
+    assert avg <= max_value, (
+        f"Avg integral {avg:.2f} exceeds max {max_value:.2f} after {after_hours}h "
+        f"(min={min(integrals):.2f}, max={max(integrals):.2f})"
     )
 
 

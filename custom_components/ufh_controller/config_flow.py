@@ -32,6 +32,8 @@ from .const import (
     SUBENTRY_TYPE_CONTROLLER,
     SUBENTRY_TYPE_ZONE,
     UI_HEATING_CURVE_SUPPLY,
+    UI_NOMINAL_FLOW_RATE,
+    UI_OPTIMAL_FLOW_RATE,
     UI_OUTDOOR_TEMP,
     UI_PRESET_TEMPERATURE,
     UI_SETPOINT_DEFAULT,
@@ -64,6 +66,9 @@ CONF_OUTDOOR_TEMP_WARM = "outdoor_temp_warm"
 CONF_OUTDOOR_TEMP_COLD = "outdoor_temp_cold"
 CONF_SUPPLY_TEMP_WARM = "supply_temp_warm"
 CONF_SUPPLY_TEMP_COLD = "supply_temp_cold"
+CONF_NOMINAL_FLOW_RATE = "nominal_flow_rate"
+CONF_OPTIMAL_FLOW_RATE_MIN = "optimal_flow_rate_min"
+CONF_OPTIMAL_FLOW_RATE_MAX = "optimal_flow_rate_max"
 
 
 def get_timing_schema(timing: TimingDefaults | None = None) -> vol.Schema:
@@ -292,6 +297,18 @@ def get_zone_schema(
                     mode=selector.NumberSelectorMode.BOX,
                 )
             ),
+            vol.Optional(
+                CONF_NOMINAL_FLOW_RATE,
+                description={"suggested_value": defaults.get(CONF_NOMINAL_FLOW_RATE)},
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=UI_NOMINAL_FLOW_RATE["min"],
+                    max=UI_NOMINAL_FLOW_RATE["max"],
+                    step=UI_NOMINAL_FLOW_RATE["step"],
+                    unit_of_measurement="L/min",
+                    mode=selector.NumberSelectorMode.BOX,
+                )
+            ),
         }
     )
 
@@ -332,6 +349,18 @@ def get_zone_entities_schema(
                 "window_sensors", default=defaults.get("window_sensors", [])
             ): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="binary_sensor", multiple=True)
+            ),
+            vol.Optional(
+                CONF_NOMINAL_FLOW_RATE,
+                description={"suggested_value": defaults.get(CONF_NOMINAL_FLOW_RATE)},
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=UI_NOMINAL_FLOW_RATE["min"],
+                    max=UI_NOMINAL_FLOW_RATE["max"],
+                    step=UI_NOMINAL_FLOW_RATE["step"],
+                    unit_of_measurement="L/min",
+                    mode=selector.NumberSelectorMode.BOX,
+                )
             ),
         }
     )
@@ -521,7 +550,7 @@ def build_presets_from_input(user_input: dict[str, Any]) -> dict[str, float]:
 def build_zone_data(user_input: dict[str, Any]) -> dict[str, Any]:
     """Build zone data from user input."""
     zone_id = user_input.get("zone_id") or slugify(user_input["name"])
-    return {
+    data: dict[str, Any] = {
         "id": zone_id,
         "name": user_input["name"],
         "circuit_type": user_input.get("circuit_type", CircuitType.REGULAR),
@@ -546,6 +575,12 @@ def build_zone_data(user_input: dict[str, Any]) -> dict[str, Any]:
         ),
         "presets": dict(DEFAULT_PRESETS),
     }
+    if (
+        CONF_NOMINAL_FLOW_RATE in user_input
+        and user_input[CONF_NOMINAL_FLOW_RATE] is not None
+    ):
+        data[CONF_NOMINAL_FLOW_RATE] = user_input[CONF_NOMINAL_FLOW_RATE]
+    return data
 
 
 class UFHControllerFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
@@ -641,7 +676,12 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
         """Show menu with configuration options."""
         return self.async_show_menu(
             step_id="init",
-            menu_options=["control_entities", "timing", "heat_accounting"],
+            menu_options=[
+                "control_entities",
+                "timing",
+                "heat_accounting",
+                "flow_scheduling",
+            ],
         )
 
     async def async_step_control_entities(
@@ -886,6 +926,91 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
             ),
         )
 
+    async def async_step_flow_scheduling(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> config_entries.ConfigFlowResult:
+        """Configure flow scheduling parameters (optimal flow rate bounds)."""
+        # Get flow scheduling from controller subentry if it exists
+        flow_scheduling: dict[str, Any] = {}
+        for subentry in self.config_entry.subentries.values():
+            if subentry.subentry_type == SUBENTRY_TYPE_CONTROLLER:
+                stored = subentry.data.get("flow_scheduling")
+                if stored is not None:
+                    flow_scheduling = stored
+                break
+
+        if user_input is not None:
+            new_flow: dict[str, float] = {}
+            if (
+                CONF_OPTIMAL_FLOW_RATE_MIN in user_input
+                and user_input[CONF_OPTIMAL_FLOW_RATE_MIN] is not None
+            ):
+                new_flow[CONF_OPTIMAL_FLOW_RATE_MIN] = user_input[
+                    CONF_OPTIMAL_FLOW_RATE_MIN
+                ]
+            if (
+                CONF_OPTIMAL_FLOW_RATE_MAX in user_input
+                and user_input[CONF_OPTIMAL_FLOW_RATE_MAX] is not None
+            ):
+                new_flow[CONF_OPTIMAL_FLOW_RATE_MAX] = user_input[
+                    CONF_OPTIMAL_FLOW_RATE_MAX
+                ]
+
+            # Update the controller subentry with new flow scheduling
+            for subentry in self.config_entry.subentries.values():
+                if subentry.subentry_type == SUBENTRY_TYPE_CONTROLLER:
+                    existing_data = dict(subentry.data)
+                    existing_data["flow_scheduling"] = new_flow
+                    self.hass.config_entries.async_update_subentry(
+                        self.config_entry,
+                        subentry,
+                        data=existing_data,
+                    )
+                    break
+
+            return self.async_create_entry(title="", data={})
+
+        return self.async_show_form(
+            step_id="flow_scheduling",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(
+                        CONF_OPTIMAL_FLOW_RATE_MIN,
+                        description={
+                            "suggested_value": flow_scheduling.get(
+                                CONF_OPTIMAL_FLOW_RATE_MIN
+                            )
+                        },
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=UI_OPTIMAL_FLOW_RATE["min"],
+                            max=UI_OPTIMAL_FLOW_RATE["max"],
+                            step=UI_OPTIMAL_FLOW_RATE["step"],
+                            unit_of_measurement="L/min",
+                            mode=selector.NumberSelectorMode.BOX,
+                        )
+                    ),
+                    vol.Optional(
+                        CONF_OPTIMAL_FLOW_RATE_MAX,
+                        description={
+                            "suggested_value": flow_scheduling.get(
+                                CONF_OPTIMAL_FLOW_RATE_MAX
+                            )
+                        },
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=UI_OPTIMAL_FLOW_RATE["min"],
+                            max=UI_OPTIMAL_FLOW_RATE["max"],
+                            step=UI_OPTIMAL_FLOW_RATE["step"],
+                            unit_of_measurement="L/min",
+                            mode=selector.NumberSelectorMode.BOX,
+                        )
+                    ),
+                }
+            ),
+        )
+
 
 class ZoneSubentryFlowHandler(ConfigSubentryFlow):
     """Handle subentry flow for adding and modifying zones."""
@@ -952,6 +1077,14 @@ class ZoneSubentryFlowHandler(ConfigSubentryFlow):
                 "circuit_type": user_input.get("circuit_type", CircuitType.REGULAR),
                 "window_sensors": user_input.get("window_sensors", []),
             }
+            # Handle optional flow rate (store if provided, remove if cleared)
+            if (
+                CONF_NOMINAL_FLOW_RATE in user_input
+                and user_input[CONF_NOMINAL_FLOW_RATE] is not None
+            ):
+                new_data[CONF_NOMINAL_FLOW_RATE] = user_input[CONF_NOMINAL_FLOW_RATE]
+            else:
+                new_data.pop(CONF_NOMINAL_FLOW_RATE, None)
             LOGGER.debug("Updating zone entities: %s", new_data["id"])
             return self.async_update_and_abort(
                 self._get_entry(),

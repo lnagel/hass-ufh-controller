@@ -108,3 +108,37 @@ class PIDController:
 
         """
         self._state = state
+
+    def apply_saturation_correction(
+        self, u_actual: float, u_commanded: float, dt: float
+    ) -> None:
+        """
+        Apply back-calculation anti-windup correction to the integral term.
+
+        When the actual output delivered differs from the commanded output,
+        this corrects the integral to prevent windup. Uses tracking gain
+        Kt = ki/kp (Åström & Hägglund: Kt = 1/Ti where Ti = kp/ki).
+
+        Args:
+            u_actual: The actual output delivered (0-100%).
+            u_commanded: The commanded output (0-100%).
+            dt: Duration over which the discrepancy occurred (seconds).
+
+        """
+        if self._state is None or dt <= 0 or self.kp == 0:
+            return
+
+        kt = self.ki / self.kp
+        new_integral = self._state.integral + kt * (u_actual - u_commanded) * dt
+        new_integral = max(self.integral_min, min(self.integral_max, new_integral))
+
+        if new_integral == self._state.integral:
+            return
+
+        self._state = PIDState(
+            error=self._state.error,
+            proportional=self._state.proportional,
+            integral=new_integral,
+            derivative=self._state.derivative,
+            duty_cycle=self._state.duty_cycle,
+        )

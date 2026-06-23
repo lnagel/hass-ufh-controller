@@ -24,6 +24,7 @@ from custom_components.ufh_controller.const import (
 from .heating_curve import HeatingCurveConfig, calculate_supply_target
 from .history import get_observation_start
 from .pid import PIDController
+from .scheduler import apply_flow_constraint
 from .zone import (
     CircuitType,
     ZoneAction,
@@ -67,6 +68,8 @@ class ControllerConfig:
     summer_mode_entity: str | None = None
     supply_temp_entity: str | None = None
     outdoor_temp_entity: str | None = None
+    optimal_flow_rate_min: float | None = None
+    optimal_flow_rate_max: float | None = None
     heating_curve: HeatingCurveConfig = field(default_factory=HeatingCurveConfig)
     timing: TimingConfig = field(default_factory=TimingConfig)
     zones: list[ZoneConfig] = field(default_factory=list)
@@ -441,7 +444,7 @@ class HeatingController:
             now=now,
         )
 
-        # Phase 3: Evaluate flush zones with explicit flush_request parameter
+        # Phase 3: Evaluate flush zones
         for zone_id, runtime in self._zones.items():
             if runtime.config.circuit_type == CircuitType.FLUSH:
                 valve_actions[zone_id] = evaluate_zone(
@@ -450,6 +453,18 @@ class HeatingController:
                     self.config.timing,
                     flush_request=flush_request,
                 )
+
+        # Phase 4: Apply flow constraint to ALL zones together
+        if (
+            self.config.optimal_flow_rate_max is not None
+            or self.config.optimal_flow_rate_min is not None
+        ):
+            valve_actions = apply_flow_constraint(
+                desired_actions=valve_actions,
+                zones=self._zones,
+                optimal_flow_rate_min=self.config.optimal_flow_rate_min,
+                optimal_flow_rate_max=self.config.optimal_flow_rate_max,
+            )
 
         # Pump request: any zone with confirmed flow
         pump_request = any(rt.state.flow for rt in self._zones.values())
@@ -464,6 +479,17 @@ class HeatingController:
             rd > self.config.timing.closing_warning_duration
             for rd in remaining_durations.values()
         )
+
+        # Flow minimum gating: suppress heat request when aggregate flow is
+        # below the configured minimum (latent heat mode)
+        if heat_request and self.config.optimal_flow_rate_min is not None:
+            total_active_flow = sum(
+                rt.config.nominal_flow_rate
+                for rt in self._zones.values()
+                if rt.state.flow and rt.config.nominal_flow_rate is not None
+            )
+            if total_active_flow < self.config.optimal_flow_rate_min:
+                heat_request = False
 
         return ControllerActions(
             valve_actions=valve_actions,
@@ -505,6 +531,26 @@ class HeatingController:
             actions.heat_request = False
 
         return actions
+
+    def mark_valve_convergence_points(
+        self, actions: dict[str, ZoneAction], now: datetime
+    ) -> None:
+        """
+        Mark convergence points for zones with valve state transitions.
+
+        Called after evaluate() to record PWM decision points for
+        back-calculation anti-windup. Only TURN_ON and TURN_OFF are
+        meaningful convergence points — STAY_ON/STAY_OFF happen every
+        cycle and would make the reference too fresh.
+
+        Args:
+            actions: Valve actions from evaluate().
+            now: Current time.
+
+        """
+        for zone_id, action in actions.items():
+            if action in (ZoneAction.TURN_ON, ZoneAction.TURN_OFF):
+                self._zones[zone_id].mark_convergence_point(now)
 
     def get_summer_mode_value(self, *, heat_request: bool) -> str | None:
         """
@@ -591,8 +637,14 @@ class HeatingController:
         )
 
         if new_period:
+            is_first_period = self._state.last_force_update is None
+            if not is_first_period:
+                observation_period = timing.observation_period
+                for runtime in self._zones.values():
+                    runtime.apply_period_end_back_calculation(observation_period)
             for runtime in self._zones.values():
                 runtime.reset_used_duration()
+                runtime.mark_convergence_point(now)
             self._state.last_force_update = now
 
         return new_period

@@ -240,6 +240,9 @@ class SimulationHarness:
         controller.state.pump_request = actions.pump_request
         controller.state.heat_request = actions.heat_request
 
+        # Mark convergence points for anti-windup tracking (matches coordinator)
+        controller.mark_valve_convergence_points(actions.valve_actions, now)
+
         # Advance room models — heat only when valve sufficiently open
         for zone_id, room in self.rooms.items():
             position = self._valve_position[zone_id]

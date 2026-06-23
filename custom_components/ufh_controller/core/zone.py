@@ -104,6 +104,8 @@ class ZoneState:
     supply_coefficient: float | None = None
     used_duration: float = 0.0
     requested_duration: float = 0.0
+    last_action_at: datetime | None = None
+    last_requested_duration: float = 0.0
 
     # Zone enabled state
     enabled: bool = True
@@ -143,6 +145,7 @@ class ZoneConfig:
     integral_min: float = DEFAULT_PID["integral_min"]
     integral_max: float = DEFAULT_PID["integral_max"]
     temp_ema_time_constant: int = DEFAULT_TEMP_EMA_TIME_CONSTANT
+    nominal_flow_rate: float | None = None
 
 
 class ZoneRuntime:
@@ -349,6 +352,38 @@ class ZoneRuntime:
         else:
             # Fallback: simple accumulation
             self.state.used_duration += dt
+
+    def apply_period_end_back_calculation(self, observation_period: int) -> None:
+        """
+        Apply back-calculation anti-windup at observation period boundary.
+
+        Compares actual delivery (used_duration) against the duty cycle
+        derived from the last convergence point (last_requested_duration)
+        and corrects the integral term to prevent windup when the valve
+        couldn't deliver the commanded output.
+
+        Args:
+            observation_period: Full observation period in seconds.
+
+        """
+        if self.pid.state is None:
+            return
+        if not self.state.enabled:
+            return
+        if self.state.last_action_at is None:
+            return
+        u_actual = (self.state.used_duration / observation_period) * 100
+        u_commanded = (self.state.last_requested_duration / observation_period) * 100
+        self.pid.apply_saturation_correction(
+            u_actual=u_actual,
+            u_commanded=u_commanded,
+            dt=float(observation_period),
+        )
+
+    def mark_convergence_point(self, now: datetime) -> None:
+        """Record a PWM convergence point for back-calculation anti-windup."""
+        self.state.last_action_at = now
+        self.state.last_requested_duration = self.state.requested_duration
 
     def reset_used_duration(self) -> None:
         """Reset used_duration at the start of a new observation period."""
