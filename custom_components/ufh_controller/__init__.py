@@ -116,7 +116,7 @@ async def async_unload_entry(
     LOGGER.debug("Unloading Underfloor Heating Controller entry: %s", entry.entry_id)
 
     # Save state before unloading
-    if hasattr(entry, "runtime_data") and entry.runtime_data is not None:
+    if entry.runtime_data is not None:
         coordinator = entry.runtime_data.coordinator
         await coordinator.async_save_state()
 
@@ -135,7 +135,7 @@ async def _async_handle_config_update(
     parameter changes can be applied in-place without entity recreation.
     """
     # Check if entry has runtime data (might not during initial setup)
-    if not hasattr(entry, "runtime_data") or entry.runtime_data is None:
+    if entry.runtime_data is None:
         LOGGER.debug("No runtime data, performing full reload")
         await hass.config_entries.async_reload(entry.entry_id)
         return
