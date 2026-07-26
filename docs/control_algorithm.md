@@ -87,7 +87,9 @@ The zone evaluation follows a priority-based decision tree:
 
 **Note:** Window blocking affects PID integration (pausing accumulation), not valve control directly. Valves follow quota-based scheduling regardless of window state. Absolute DHW priority is the one exception that does close valves, since no amount of PID pausing keeps DHW-temperature water out of the floor.
 
-**Note:** PID integration continues normally during a DHW block. The room temperature reading stays valid and the room really is losing heat, so the integral builds and the zone catches up once the block clears. Quota is preserved rather than compensated: `used_duration` does not advance while a circuit is closed.
+**Note:** PID integration continues normally during a DHW block. The room temperature reading stays valid and the room really is losing heat, so the integral builds and the zone catches up once the block clears.
+
+**Note:** Quota is preserved rather than compensated, but not instantly. `used_duration` accrues while `flow` is true, and `flow` is derived from the estimated valve position, which ramps down over `valve_close_time` after the block commands the valve shut. A zone therefore keeps consuming quota for roughly the first 15% of `valve_close_time` (about 30 s at the default 210 s) before flow drops below the 0.85 threshold. That is deliberate: during that window the circuit is receiving cylinder-temperature water, so it is being charged for heat it genuinely got. If DHW spans an observation-period boundary the unused remainder is dropped, which the PID integral self-corrects over the next period.
 
 ### Heat Request Logic
 

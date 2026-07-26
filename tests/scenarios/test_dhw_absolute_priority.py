@@ -2,8 +2,9 @@
 End-to-end DHW cycles under absolute priority.
 
 Walks a complete DHW charge from start to recovery expiry, verifying that
-circuits close, stay closed through the hold-off, that quota survives the
-interruption, and that latent heat capture is deferred rather than cancelled.
+circuits close, stay closed through the hold-off and across a reload or
+restart, that quota stops accruing once flow decays, and that latent heat
+capture is deferred rather than cancelled.
 """
 
 from datetime import UTC, datetime, timedelta
@@ -128,23 +129,42 @@ async def test_full_dhw_cycle_closes_and_resumes() -> None:
     assert actions.valve_actions["living_room"] == ZoneAction.TURN_ON
 
 
-async def test_quota_survives_the_interruption() -> None:
-    """Quota is preserved while closed, so the zone catches up afterwards."""
+async def test_quota_stops_accruing_once_flow_decays() -> None:
+    """
+    A blocked zone is charged only for the heat it actually received.
+
+    The previous version of this test set valve_position=0.0, so flow was
+    already false and update_used_duration no-opped regardless of the block -
+    it would have passed with the whole feature removed. This one starts from
+    a zone that was genuinely running when DHW asserted.
+    """
     controller = build_controller()
-    demand_zone(controller, "living_room", duty_cycle=60.0, valve_position=0.0)
+    demand_zone(controller, "living_room", duty_cycle=60.0, valve_position=1.0)
     runtime = controller.get_zone_runtime("living_room")
     remaining_before = runtime.state.remaining_duration
     assert remaining_before > 0
+    assert runtime.state.flow is True
 
     controller.update_dhw_state(dhw_active=True, now=NOW)
+    assert (
+        controller.evaluate(now=NOW).valve_actions["living_room"] == ZoneAction.TURN_OFF
+    )
+
+    # Quota still accrues while the actuator is closing and flow reads true
+    runtime.update_used_duration(30.0)
+    charged_while_closing = runtime.state.used_duration
+    assert charged_while_closing > 0
+
+    # Once the estimated position falls below the flow threshold it stops
+    setup_zone_historical(controller, "living_room", valve_position=0.0, window=False)
     for step in range(1, 6):
         moment = NOW + timedelta(seconds=60 * step)
         controller.update_dhw_state(dhw_active=True, now=moment)
         controller.evaluate(now=moment)
         runtime.update_used_duration(60.0)
 
-    assert runtime.state.used_duration == 0.0
-    assert runtime.state.remaining_duration == remaining_before
+    assert runtime.state.used_duration == charged_while_closing
+    assert runtime.state.remaining_duration == remaining_before - charged_while_closing
 
 
 async def test_latent_heat_capture_is_deferred_not_cancelled() -> None:
