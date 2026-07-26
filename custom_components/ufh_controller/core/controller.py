@@ -12,8 +12,10 @@ from datetime import datetime, timedelta
 
 from custom_components.ufh_controller.const import (
     DEFAULT_CYCLE_MODE_HOURS,
+    DEFAULT_DHW_PRIORITY,
     INITIALIZING_TIMEOUT,
     ControllerStatus,
+    DHWPriority,
     OperationMode,
     SummerMode,
     TimingConfig,
@@ -47,6 +49,8 @@ class ControllerState:
     heat_request: bool | None = None
     flush_enabled: bool = False
     dhw_active: bool = False
+    dhw_block: bool = False
+    dhw_block_until: datetime | None = None
     flush_until: datetime | None = None
     flush_request: bool = False
     zones: dict[str, ZoneState] = field(default_factory=dict)
@@ -64,6 +68,7 @@ class ControllerConfig:
     pump_request_entity: str | None = None
     heat_request_entity: str | None = None
     dhw_active_entity: str | None = None
+    dhw_priority: DHWPriority = DEFAULT_DHW_PRIORITY
     summer_mode_entity: str | None = None
     supply_temp_entity: str | None = None
     outdoor_temp_entity: str | None = None
@@ -546,28 +551,48 @@ class HeatingController:
 
     def update_dhw_state(self, *, dhw_active: bool, now: datetime) -> None:
         """
-        Update DHW state and manage post-DHW flush timer.
+        Update DHW state and manage the block and post-DHW flush timers.
 
         Detects transitions:
-        - ON→OFF: starts post-flush timer if flush enabled and duration > 0
+        - ON→OFF: arms the recovery hold-off and starts the post-flush timer if
+          flush enabled and duration > 0
         - OFF→ON: clears flush_until timer
+
+        Recomputes dhw_block on every call so the hold-off expires on time.
 
         Args:
             dhw_active: Current DHW active state.
-            now: Current time for flush timer calculation.
+            now: Current time for timer calculation.
 
         """
+        absolute = self.config.dhw_priority == DHWPriority.ABSOLUTE
+        recovery = self.config.timing.dhw_recovery_time
+
         # Detect DHW OFF transition (was on, now off)
         if self._state.dhw_active and not dhw_active:
+            # Safety timer, armed regardless of the flush feature
+            self._state.dhw_block_until = now + timedelta(seconds=recovery)
+
             flush_duration = self.config.timing.flush_duration
             if flush_duration > 0 and self._state.flush_enabled:
-                self._state.flush_until = now + timedelta(seconds=flush_duration)
+                # Absolute priority defers the flush window past the hold-off
+                offset = recovery if absolute else 0
+                self._state.flush_until = now + timedelta(
+                    seconds=offset + flush_duration
+                )
 
         # Clear flush_until when DHW starts
         if dhw_active and not self._state.dhw_active:
             self._state.flush_until = None
 
         self._state.dhw_active = dhw_active
+        self._state.dhw_block = absolute and (
+            dhw_active
+            or (
+                self._state.dhw_block_until is not None
+                and now < self._state.dhw_block_until
+            )
+        )
 
     def handle_observation_period_transition(self, now: datetime) -> bool:
         """
