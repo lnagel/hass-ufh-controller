@@ -205,3 +205,46 @@ async def test_user_flow_allows_non_absolute_without_dhw_sensor(
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"]["dhw_priority"] == DHWPriority.PARALLEL.value
+
+
+async def test_user_flow_error_preserves_entered_values(
+    hass: HomeAssistant,
+    mock_setup_entry: None,
+) -> None:
+    """
+    Test a validation error costs no typing and keeps the chosen priority.
+
+    Previously every field came back blank and dhw_priority silently reverted
+    to partial, so adding the sensor and resubmitting would quietly configure
+    a weaker setting than the user asked for.
+    """
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+
+    submitted = {
+        "name": "My Heating",
+        "pump_request_entity": "switch.pump",
+        "heat_request_entity": "switch.boiler",
+        "summer_mode_entity": "select.summer",
+        "dhw_priority": DHWPriority.ABSOLUTE.value,
+    }
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input=submitted
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"dhw_priority": "dhw_priority_requires_sensor"}
+
+    schema = result["data_schema"]
+    assert schema is not None
+    redisplayed: dict[str, object] = {}
+    for key in schema.schema:
+        description = getattr(key, "description", None) or {}
+        if "suggested_value" in description:
+            redisplayed[key.schema] = description["suggested_value"]
+        else:
+            redisplayed[key.schema] = key.default()
+
+    for field, value in submitted.items():
+        assert redisplayed[field] == value, f"{field} was not redisplayed"

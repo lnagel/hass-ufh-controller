@@ -70,6 +70,11 @@ CONF_SUPPLY_TEMP_WARM = "supply_temp_warm"
 CONF_SUPPLY_TEMP_COLD = "supply_temp_cold"
 
 
+def _suggest(values: dict[str, Any], key: str) -> dict[str, Any]:
+    """Redisplay a submitted value, so a validation error costs no typing."""
+    return {"suggested_value": values.get(key)}
+
+
 def validate_dhw_priority(user_input: dict[str, Any]) -> dict[str, str]:
     """
     Reject a DHW priority that cannot function with the configured entities.
@@ -611,6 +616,7 @@ class UFHControllerFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> config_entries.ConfigFlowResult:
         """Handle a flow initialized by the user."""
         errors: dict[str, str] = {}
+        entered: dict[str, Any] = user_input or {}
 
         if user_input is not None:
             errors = validate_dhw_priority(user_input)
@@ -651,23 +657,39 @@ class UFHControllerFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="user",
             data_schema=vol.Schema(
                 {
-                    vol.Required(CONF_NAME): selector.TextSelector(
+                    vol.Required(
+                        CONF_NAME, description=_suggest(entered, CONF_NAME)
+                    ): selector.TextSelector(
                         selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
                     ),
-                    vol.Optional(CONF_PUMP_REQUEST_ENTITY): selector.EntitySelector(
+                    vol.Optional(
+                        CONF_PUMP_REQUEST_ENTITY,
+                        description=_suggest(entered, CONF_PUMP_REQUEST_ENTITY),
+                    ): selector.EntitySelector(
                         selector.EntitySelectorConfig(domain="switch")
                     ),
-                    vol.Optional(CONF_HEAT_REQUEST_ENTITY): selector.EntitySelector(
+                    vol.Optional(
+                        CONF_HEAT_REQUEST_ENTITY,
+                        description=_suggest(entered, CONF_HEAT_REQUEST_ENTITY),
+                    ): selector.EntitySelector(
                         selector.EntitySelectorConfig(domain="switch")
                     ),
-                    vol.Optional(CONF_DHW_ACTIVE_ENTITY): selector.EntitySelector(
+                    vol.Optional(
+                        CONF_DHW_ACTIVE_ENTITY,
+                        description=_suggest(entered, CONF_DHW_ACTIVE_ENTITY),
+                    ): selector.EntitySelector(
                         selector.EntitySelectorConfig(domain="binary_sensor")
                     ),
                     vol.Required(
                         CONF_DHW_PRIORITY,
-                        default=DEFAULT_DHW_PRIORITY.value,
+                        default=entered.get(
+                            CONF_DHW_PRIORITY, DEFAULT_DHW_PRIORITY.value
+                        ),
                     ): get_dhw_priority_selector(),
-                    vol.Optional(CONF_SUMMER_MODE_ENTITY): selector.EntitySelector(
+                    vol.Optional(
+                        CONF_SUMMER_MODE_ENTITY,
+                        description=_suggest(entered, CONF_SUMMER_MODE_ENTITY),
+                    ): selector.EntitySelector(
                         selector.EntitySelectorConfig(domain="select")
                     ),
                 }
