@@ -8,6 +8,10 @@ interruption, and that latent heat capture is deferred rather than cancelled.
 
 from datetime import UTC, datetime, timedelta
 
+from homeassistant.const import STATE_OFF, STATE_ON
+from homeassistant.core import HomeAssistant
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+
 from custom_components.ufh_controller.const import (
     DHWPriority,
     TimingConfig,
@@ -178,3 +182,78 @@ async def test_latent_heat_capture_is_deferred_not_cancelled() -> None:
     expired = dhw_end + timedelta(seconds=RECOVERY + FLUSH_DURATION + 30)
     controller.update_dhw_state(dhw_active=False, now=expired)
     assert controller.evaluate(now=expired).flush_request is False
+
+
+async def test_hold_off_survives_config_reload(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_temp_sensor: None,
+) -> None:
+    """An in-place config reload must not release circuits early."""
+    hass.states.async_set("binary_sensor.dhw_active", STATE_ON)
+
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = mock_config_entry.runtime_data.coordinator
+    coordinator.controller.config.dhw_priority = DHWPriority.ABSOLUTE
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    assert coordinator.controller.state.dhw_block is True
+
+    # DHW ends - the recovery hold-off is armed
+    hass.states.async_set("binary_sensor.dhw_active", STATE_OFF)
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    assert coordinator.controller.state.dhw_block is True
+    armed_until = coordinator.controller.state.dhw_block_until
+    assert armed_until is not None
+
+    # A parameter change mid-recovery rebuilds the controller in place
+    hass.config_entries.async_update_entry(
+        mock_config_entry,
+        data={**mock_config_entry.data, "dhw_priority": DHWPriority.ABSOLUTE.value},
+    )
+    await coordinator.async_reload_config()
+    await hass.async_block_till_done()
+
+    assert coordinator.controller.state.dhw_block is True
+    assert coordinator.controller.state.dhw_block_until == armed_until
+
+
+async def test_hold_off_survives_restart(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_temp_sensor: None,
+) -> None:
+    """A restart mid-recovery restores the deadline from storage."""
+    hass.states.async_set("binary_sensor.dhw_active", STATE_OFF)
+
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = mock_config_entry.runtime_data.coordinator
+    deadline = datetime.now(UTC) + timedelta(seconds=RECOVERY)
+    stored = {
+        "dhw_active": False,
+        "dhw_block": True,
+        "dhw_block_until": deadline.isoformat(),
+    }
+
+    coordinator.controller.config.dhw_priority = DHWPriority.ABSOLUTE
+    coordinator._restore_controller_state(stored)
+
+    assert coordinator.controller.state.dhw_block is True
+    assert coordinator.controller.state.dhw_block_until == deadline
+
+    # The restored deadline still governs the next recompute
+    coordinator.controller.update_dhw_state(
+        dhw_active=False, now=deadline - timedelta(seconds=1)
+    )
+    assert coordinator.controller.state.dhw_block is True
+    coordinator.controller.update_dhw_state(
+        dhw_active=False, now=deadline + timedelta(seconds=1)
+    )
+    assert coordinator.controller.state.dhw_block is False

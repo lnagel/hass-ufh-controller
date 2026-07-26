@@ -1121,7 +1121,12 @@ class UFHControllerDataUpdateCoordinator(
                 "dhw_priority": self._controller.state.dhw_priority.value,
                 "dhw_sensor_available": self._controller.state.dhw_sensor_available,
                 "dhw_block": self._controller.state.dhw_block,
-                "dhw_block_until": self._controller.state.dhw_block_until,
+                # ISO string so the in-place reload path round-trips like storage
+                "dhw_block_until": (
+                    self._controller.state.dhw_block_until.isoformat()
+                    if self._controller.state.dhw_block_until is not None
+                    else None
+                ),
                 "flush_until": self._controller.state.flush_until,
                 "flush_request": self._controller.state.flush_request,
                 "pump_request": self._controller.state.pump_request,
@@ -1190,6 +1195,29 @@ class UFHControllerDataUpdateCoordinator(
         self._controller.state.flush_enabled = enabled
         await self.async_request_refresh()
 
+    def _restore_dhw_state(self, controller_data: dict[str, Any]) -> None:
+        """
+        Restore the DHW block and its recovery deadline.
+
+        The hold-off is armed only on the DHW ON->OFF edge, and a restart or an
+        in-place config reload destroys the controller that saw it. Without
+        this the deadline is lost and circuits reopen early into a primary that
+        is still at cylinder temperature.
+
+        dhw_active is restored so the edge detector has the right prior state,
+        but the live sensor is re-read on the next cycle and overrides it. An
+        already-expired deadline simply lapses on the first recompute.
+        """
+        if "dhw_active" in controller_data:
+            self._controller.state.dhw_active = bool(controller_data["dhw_active"])
+
+        if "dhw_block" in controller_data:
+            self._controller.state.dhw_block = bool(controller_data["dhw_block"])
+
+        if ts := controller_data.get("dhw_block_until"):
+            with contextlib.suppress(ValueError, TypeError):
+                self._controller.state.dhw_block_until = datetime.fromisoformat(ts)
+
     def _restore_controller_state(self, controller_data: dict[str, Any]) -> None:
         """Restore controller-level state from V2 storage format."""
         if "mode" in controller_data:
@@ -1204,6 +1232,8 @@ class UFHControllerDataUpdateCoordinator(
             self._controller.state.supply_target_temp = controller_data[
                 "supply_target_temp"
             ]
+
+        self._restore_dhw_state(controller_data)
 
         if ts := controller_data.get("last_force_update"):
             with contextlib.suppress(ValueError, TypeError):

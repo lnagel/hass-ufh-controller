@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.binary_sensor import (
@@ -118,14 +117,11 @@ FLUSH_REQUEST_SENSOR = UFHControllerBinarySensorEntityDescription(
 
 def _dhw_block_attrs(data: dict[str, Any]) -> dict[str, Any]:
     """Return context explaining why circuits are held closed."""
-    block_until = data.get("dhw_block_until")
     return {
         "dhw_priority": data.get("dhw_priority"),
         "dhw_active": data.get("dhw_active"),
         "dhw_sensor_available": data.get("dhw_sensor_available"),
-        "dhw_block_until": (
-            block_until.isoformat() if isinstance(block_until, datetime) else None
-        ),
+        "dhw_block_until": data.get("dhw_block_until"),
     }
 
 
