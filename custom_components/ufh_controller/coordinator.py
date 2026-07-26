@@ -61,7 +61,7 @@ from .const import (
     ValveState,
     ZoneStatus,
 )
-from .core.controller import ControllerConfig, HeatingController, resolve_dhw_active
+from .core.controller import ControllerConfig, HeatingController
 from .core.heating_curve import HeatingCurveConfig
 from .core.history import get_valve_position_window
 from .core.pid import PIDState
@@ -700,14 +700,8 @@ class UFHControllerDataUpdateCoordinator(
             STATE_UNAVAILABLE,
             STATE_UNKNOWN,
         )
-        current_dhw_active = resolve_dhw_active(
-            sensor_available=available,
-            sensor_on=state is not None and state.state == STATE_ON,
-            last_known=self._controller.state.dhw_active,
-            priority=self._controller.config.dhw_priority,
-        )
         self._controller.update_dhw_state(
-            dhw_active=current_dhw_active,
+            dhw_active=state is not None and state.state == STATE_ON,
             now=datetime.now(UTC),
             sensor_available=available,
         )

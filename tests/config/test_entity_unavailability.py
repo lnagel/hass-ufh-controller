@@ -15,6 +15,7 @@ from custom_components.ufh_controller.const import (
     DEFAULT_TIMING,
     DOMAIN,
     SUBENTRY_TYPE_ZONE,
+    ControllerStatus,
     DHWPriority,
     SummerMode,
 )
@@ -741,6 +742,7 @@ async def test_dhw_sensor_unavailable_holds_block_under_absolute(
     """Test absolute priority holds the block when the DHW sensor drops out."""
     hass.states.async_set("binary_sensor.dhw_active", STATE_ON)
     hass.states.async_set("sensor.zone1_temp", "20.5")
+    hass.states.async_set("switch.zone1_valve", "off")
 
     mock_config_entry_with_dhw.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_config_entry_with_dhw.entry_id)
@@ -757,7 +759,47 @@ async def test_dhw_sensor_unavailable_holds_block_under_absolute(
     await coordinator.async_refresh()
     await hass.async_block_till_done()
 
-    assert coordinator.controller.state.dhw_active is True
+    assert coordinator.controller.state.dhw_sensor_fault is True
     assert coordinator.controller.state.dhw_block is True
     assert coordinator.controller.state.dhw_block_until is None
     assert coordinator.controller.state.dhw_sensor_available is False
+    assert coordinator.controller.status == ControllerStatus.DEGRADED
+
+
+async def test_dhw_sensor_missing_entirely_faults_under_absolute(
+    hass: HomeAssistant,
+    mock_config_entry_with_dhw: MockConfigEntry,
+) -> None:
+    """Test a configured DHW entity that does not exist is treated as a fault."""
+    hass.states.async_set("sensor.zone1_temp", "20.5")
+
+    mock_config_entry_with_dhw.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry_with_dhw.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = mock_config_entry_with_dhw.runtime_data.coordinator
+    coordinator.controller.config.dhw_priority = DHWPriority.ABSOLUTE
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    assert coordinator.controller.state.dhw_sensor_fault is True
+    assert coordinator.controller.state.dhw_block is True
+
+
+async def test_dhw_fault_does_not_trip_during_initializing(
+    hass: HomeAssistant,
+    mock_config_entry_with_dhw: MockConfigEntry,
+) -> None:
+    """Test the fault does not raise status while entities are still pending."""
+    mock_config_entry_with_dhw.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry_with_dhw.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = mock_config_entry_with_dhw.runtime_data.coordinator
+    coordinator.controller.config.dhw_priority = DHWPriority.ABSOLUTE
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    # The fault is recorded, but INITIALIZING is not escalated out of
+    assert coordinator.controller.state.dhw_sensor_fault is True
+    assert coordinator.controller.status == ControllerStatus.INITIALIZING

@@ -51,6 +51,8 @@ class ControllerState:
     dhw_active: bool = False
     dhw_priority: DHWPriority = DEFAULT_DHW_PRIORITY
     dhw_sensor_available: bool = True
+    dhw_sensor_fault: bool = False
+    dhw_sensor_fault_since: datetime | None = None
     dhw_block: bool = False
     dhw_block_until: datetime | None = None
     flush_until: datetime | None = None
@@ -93,45 +95,32 @@ class ControllerActions:
     flush_request: bool = False
 
 
-def resolve_dhw_active(
+def is_dhw_sensor_faulted(
     *,
     sensor_available: bool,
-    sensor_on: bool,
-    last_known: bool,
     priority: DHWPriority,
 ) -> bool:
     """
-    Resolve DHW active state, tolerating a sensor that has dropped out.
+    Decide whether an unreadable DHW sensor is a fault.
 
-    A sensor reading unavailable or unknown carries no information. Treating
-    that as "off" synthesises an ON->OFF edge, which under absolute priority
-    arms the recovery hold-off and then reopens every circuit while the heat
-    source may still be charging the cylinder.
+    A sensor reading unavailable or unknown carries no information at all.
+    Under absolute priority that is not a state to be inferred: the setting
+    exists because we must be certain DHW is not charging before opening a
+    circuit, and neither "assume off" nor "assume the last known value" can
+    provide that certainty. It is treated as a fault instead.
 
-    Absolute priority therefore holds the last known state until the sensor
-    returns. Choosing it is a statement that over-temperature flow is a
-    hardware hazard, so uncertainty resolves towards keeping circuits closed,
-    consistent with how zone sensor loss already forces valves shut. Parallel
-    and partial keep the historical fail-open behaviour, where the cost is
-    comfort rather than damage.
+    Parallel and partial keep the historical behaviour of resolving an
+    unreadable sensor to "off", where the cost is comfort rather than damage.
 
     Args:
         sensor_available: Whether the DHW sensor reported a usable state.
-        sensor_on: Whether that state was "on" (meaningless if unavailable).
-        last_known: Previously resolved DHW active state.
         priority: Configured DHW priority level.
 
     Returns:
-        The DHW active state to act on this cycle.
+        True if the unreadable sensor should be treated as a fault.
 
     """
-    if sensor_available:
-        return sensor_on
-
-    if priority == DHWPriority.ABSOLUTE:
-        return last_known
-
-    return False
+    return not sensor_available and priority == DHWPriority.ABSOLUTE
 
 
 def compute_flush_request(  # noqa: PLR0913
@@ -264,6 +253,7 @@ class HeatingController:
 
         if not zone_statuses:
             self._state.status = ControllerStatus.NORMAL
+            self._apply_dhw_fault_status()
             return
 
         # Count zones in each state
@@ -297,6 +287,22 @@ class HeatingController:
             self._state.status = ControllerStatus.FAIL_SAFE
         else:
             # Mix of degraded and fail-safe, but no normal or initializing
+            self._state.status = ControllerStatus.DEGRADED
+
+        self._apply_dhw_fault_status()
+
+    def _apply_dhw_fault_status(self) -> None:
+        """
+        Raise the controller status while the DHW sensor is faulted.
+
+        Applied after zone aggregation so it cannot be overwritten, and after
+        the INITIALIZING deferral so a sensor that has not loaded yet during
+        startup does not trip it.
+        """
+        if not self._state.dhw_sensor_fault:
+            return
+
+        if self._state.status != ControllerStatus.FAIL_SAFE:
             self._state.status = ControllerStatus.DEGRADED
 
     def get_zone_state(self, zone_id: str) -> ZoneState:
@@ -629,6 +635,22 @@ class HeatingController:
 
         return SummerMode.WINTER if heat_request else SummerMode.SUMMER
 
+    def _apply_dhw_sensor_fault(self, now: datetime) -> None:
+        """
+        Hold everything still while the DHW sensor cannot be read.
+
+        No edge detection and no timer changes: an unreadable sensor gives no
+        information to detect edges from, and inventing one would either arm
+        the recovery hold-off from a charge that has not ended or release a
+        hold-off that should still be running. Circuits are blocked outright
+        instead, and the fault clock starts so a sustained outage can escalate.
+        """
+        self._state.dhw_sensor_available = False
+        self._state.dhw_block = True
+        if not self._state.dhw_sensor_fault:
+            self._state.dhw_sensor_fault = True
+            self._state.dhw_sensor_fault_since = now
+
     def update_dhw_state(
         self, *, dhw_active: bool, now: datetime, sensor_available: bool = True
     ) -> None:
@@ -651,9 +673,18 @@ class HeatingController:
 
         """
         self._state.dhw_priority = self.config.dhw_priority
-        self._state.dhw_sensor_available = sensor_available
         absolute = self.config.dhw_priority == DHWPriority.ABSOLUTE
         recovery = self.config.timing.dhw_recovery_time
+
+        if is_dhw_sensor_faulted(
+            sensor_available=sensor_available, priority=self.config.dhw_priority
+        ):
+            self._apply_dhw_sensor_fault(now)
+            return
+
+        self._state.dhw_sensor_available = sensor_available
+        self._state.dhw_sensor_fault = False
+        self._state.dhw_sensor_fault_since = None
 
         # Detect DHW OFF transition (was on, now off)
         if self._state.dhw_active and not dhw_active:
