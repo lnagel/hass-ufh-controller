@@ -7,6 +7,7 @@ from homeassistant.data_entry_flow import FlowResultType
 from custom_components.ufh_controller.const import (
     DEFAULT_TIMING,
     DOMAIN,
+    DHWPriority,
 )
 
 
@@ -118,3 +119,47 @@ async def test_user_flow_generates_controller_id(
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"]["controller_id"] == "living-room-heating-system"
+
+
+async def test_user_flow_defaults_to_partial_dhw_priority(
+    hass: HomeAssistant,
+    mock_setup_entry: None,
+) -> None:
+    """Test a new entry keeps the historical soft-gate behaviour by default."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        user_input={"name": "Default Priority"},
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"]["dhw_priority"] == DHWPriority.PARTIAL.value
+    assert (
+        result["options"]["timing"]["dhw_recovery_time"]
+        == (DEFAULT_TIMING["dhw_recovery_time"])
+    )
+
+
+async def test_user_flow_with_absolute_dhw_priority(
+    hass: HomeAssistant,
+    mock_setup_entry: None,
+) -> None:
+    """Test selecting absolute priority during initial setup."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        user_input={
+            "name": "Unmixed Manifold",
+            "dhw_active_entity": "binary_sensor.dhw_active",
+            "dhw_priority": DHWPriority.ABSOLUTE.value,
+        },
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"]["dhw_priority"] == DHWPriority.ABSOLUTE.value

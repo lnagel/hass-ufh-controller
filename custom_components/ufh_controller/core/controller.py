@@ -49,6 +49,7 @@ class ControllerState:
     heat_request: bool | None = None
     flush_enabled: bool = False
     dhw_active: bool = False
+    dhw_priority: DHWPriority = DEFAULT_DHW_PRIORITY
     dhw_block: bool = False
     dhw_block_until: datetime | None = None
     flush_until: datetime | None = None
@@ -163,7 +164,11 @@ class HeatingController:
 
         """
         self.config = config
-        self._state = ControllerState(started_at=started_at, mode=OperationMode.HEAT)
+        self._state = ControllerState(
+            started_at=started_at,
+            mode=OperationMode.HEAT,
+            dhw_priority=config.dhw_priority,
+        )
         self._zones: dict[str, ZoneRuntime] = {}
 
         # Initialize zones from config
@@ -484,9 +489,14 @@ class HeatingController:
             for zone_id, rt in self._zones.items()
             if rt.state.flow
         }
-        heat_request = pump_request and any(
-            rd > self.config.timing.closing_warning_duration
-            for rd in remaining_durations.values()
+        # Valves take minutes to close, so drop the heat request explicitly
+        heat_request = (
+            not self._state.dhw_block
+            and pump_request
+            and any(
+                rd > self.config.timing.closing_warning_duration
+                for rd in remaining_durations.values()
+            )
         )
 
         return ControllerActions(
@@ -584,6 +594,7 @@ class HeatingController:
             now: Current time for timer calculation.
 
         """
+        self._state.dhw_priority = self.config.dhw_priority
         absolute = self.config.dhw_priority == DHWPriority.ABSOLUTE
         recovery = self.config.timing.dhw_recovery_time
 

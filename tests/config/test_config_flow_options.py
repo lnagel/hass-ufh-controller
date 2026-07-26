@@ -13,6 +13,7 @@ from custom_components.ufh_controller.const import (
     DEFAULT_SUPPLY_TEMP_WARM,
     DOMAIN,
     SUBENTRY_TYPE_CONTROLLER,
+    DHWPriority,
 )
 
 
@@ -421,3 +422,54 @@ async def test_options_flow_backwards_compatible(
     assert entry.data["supply_target_temp"] == 42.0
     assert entry.data["outdoor_temp_warm"] == DEFAULT_OUTDOOR_TEMP_WARM
     assert entry.data["outdoor_temp_cold"] == DEFAULT_OUTDOOR_TEMP_COLD
+
+
+async def test_options_flow_update_dhw_priority(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Test changing DHW priority via the control entities step."""
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    result = await hass.config_entries.options.async_init(mock_config_entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={"next_step_id": "control_entities"},
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={
+            "dhw_active_entity": "binary_sensor.dhw_active",
+            "dhw_priority": DHWPriority.ABSOLUTE.value,
+        },
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert mock_config_entry.data["dhw_priority"] == DHWPriority.ABSOLUTE.value
+
+
+async def test_options_flow_control_entities_defaults_priority(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Test an entry predating the option falls back to partial priority."""
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert "dhw_priority" not in mock_config_entry.data
+
+    result = await hass.config_entries.options.async_init(mock_config_entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={"next_step_id": "control_entities"},
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={"dhw_active_entity": "binary_sensor.dhw_active"},
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert mock_config_entry.data["dhw_priority"] == DHWPriority.PARTIAL.value

@@ -20,6 +20,7 @@ from custom_components.ufh_controller.const import (
     DEFAULT_VALVE_OPEN_THRESHOLD,
     FAIL_SAFE_TIMEOUT,
     INITIALIZING_TIMEOUT,
+    DHWPriority,
     OperationMode,
     TimingConfig,
     ValveState,
@@ -555,7 +556,11 @@ def evaluate_zone(  # noqa: PLR0911
         if estimated_runtime < timing.min_run_time:
             return ZoneAction.STAY_OFF if valve_off else ZoneAction.TURN_OFF
 
-        if controller.dhw_active and zone.circuit_type == CircuitType.REGULAR:
+        if (
+            controller.dhw_active
+            and controller.dhw_priority == DHWPriority.PARTIAL
+            and zone.circuit_type == CircuitType.REGULAR
+        ):
             # Wait for DHW heating to finish
             return ZoneAction.STAY_OFF if valve_off else ZoneAction.TURN_OFF
 

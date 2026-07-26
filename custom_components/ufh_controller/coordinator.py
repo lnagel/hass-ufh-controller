@@ -1106,7 +1106,7 @@ class UFHControllerDataUpdateCoordinator(
                 "zones_fail_safe": zones_fail_safe,
                 "flush_enabled": self._controller.state.flush_enabled,
                 "dhw_active": self._controller.state.dhw_active,
-                "dhw_priority": self._controller.config.dhw_priority.value,
+                "dhw_priority": self._controller.state.dhw_priority.value,
                 "dhw_block": self._controller.state.dhw_block,
                 "dhw_block_until": self._controller.state.dhw_block_until,
                 "flush_until": self._controller.state.flush_until,
