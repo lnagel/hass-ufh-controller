@@ -716,7 +716,7 @@ class UFHControllerDataUpdateCoordinator(
             return None
         try:
             return float(supply_state.state)
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             return None
 
     def _get_outdoor_temp(self) -> float | None:
@@ -729,7 +729,7 @@ class UFHControllerDataUpdateCoordinator(
             return None
         try:
             return float(outdoor_state.state)
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             return None
 
     def _update_outdoor_temp(self) -> None:
@@ -790,7 +790,7 @@ class UFHControllerDataUpdateCoordinator(
                 raw_temp = float(temp_state.state)
                 # Update temperature with EMA smoothing
                 runtime.update_temperature(raw_temp, dt)
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 temp_unavailable = True
                 LOGGER.warning(
                     "Invalid temperature state for %s: %s",

@@ -47,6 +47,7 @@ target-version = "py314"
 select = ["ALL"]
 ignore = [
     "ANN401", # Dynamically typed expressions (typing.Any) are disallowed
+    "CPY001", # Missing copyright notice at top of file
     "D203", # no-blank-line-before-class (incompatible with formatter)
     "D212", # multi-line-summary-first-line (incompatible with formatter)
     "COM812", # incompatible with formatter
@@ -69,10 +70,13 @@ max-complexity = 25
     "ARG001", # Allow unused arguments in fixtures
     "PLR2004", # Allow magic values in tests
     "PLR0913", # Allow many arguments in test functions (fixtures + parametrize)
+    "PLR0917", # Allow many positional arguments in test functions
     "SLF001", # Allow private member access in tests
     "EM101", # Allow string literals in exceptions
     "TRY003", # Allow long exception messages
     "FBT001", # Allow boolean positional args (pytest parametrize)
+    "TC002", # Allow non-type-checking imports in test annotations
+    "TC003", # Allow non-type-checking imports in test annotations
 ]
 
 [tool.coverage.run]
