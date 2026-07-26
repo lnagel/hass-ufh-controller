@@ -22,9 +22,10 @@ All controller entities belong to a device named after the controller (user-defi
 **Note:** The flush enabled switch, flush request sensor and DHW block sensor are only created when `dhw_active_entity` is configured, as all three require DHW state input to function.
 
 **DHW Block Behavior:**
-The DHW block sensor reports whether [absolute DHW priority](configuration.md#dhw_priority) is currently forcing every circuit closed:
+The DHW block sensor reports whether the [absolute DHW priority](configuration.md#dhw_priority) block *condition* is in force — not whether valves are currently closed:
 - **ON:** While DHW is charging, and throughout the `dhw_recovery_time` hold-off after it ends
 - **OFF:** Whenever `dhw_priority` is `parallel` or `partial`, since neither closes running circuits
+- **Manual override modes ignore it:** `heat`, `flush` and `cycle` act on the block; `all_on` and `off` do not, so the sensor can read ON while those modes hold valves open. Read it alongside the mode select rather than as a guarantee about valve positions
 - **Attributes:** `dhw_priority` (the configured level), `dhw_active` (resolved DHW state), `dhw_sensor_available` (false while the DHW sensor is unavailable and the block is being held) and `dhw_block_until` (when the hold-off expires)
 - **Survives restarts:** the block and its deadline are persisted, so a restart or an options change mid-recovery does not release circuits early
 
