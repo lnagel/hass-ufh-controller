@@ -297,6 +297,9 @@
           "dhw_active": {
             "name": "DHW Active"
           },
+          "dhw_sensor_available": {
+            "name": "DHW Sensor Available"
+          },
           "dhw_block_until": {
             "name": "Block Until"
           }

@@ -14,6 +14,7 @@ from custom_components.ufh_controller.core.controller import (
     ControllerConfig,
     ControllerState,
     HeatingController,
+    resolve_dhw_active,
 )
 from custom_components.ufh_controller.core.zone import (
     CircuitType,
@@ -430,3 +431,105 @@ class TestDHWPriorityBackwardCompatibility:
 
         actions = controller.evaluate(now=NOW)
         assert actions.valve_actions["living_room"] == ZoneAction.TURN_ON
+
+
+class TestResolveDHWActive:
+    """DHW state resolution when the sensor drops out."""
+
+    @pytest.mark.parametrize(
+        ("priority", "last_known", "expected"),
+        [
+            (DHWPriority.ABSOLUTE, True, True),
+            (DHWPriority.ABSOLUTE, False, False),
+            (DHWPriority.PARTIAL, True, False),
+            (DHWPriority.PARALLEL, True, False),
+        ],
+        ids=[
+            "absolute_holds_active",
+            "absolute_holds_inactive",
+            "partial_fails_open",
+            "parallel_fails_open",
+        ],
+    )
+    def test_unavailable_sensor(
+        self, priority: DHWPriority, last_known: bool, expected: bool
+    ) -> None:
+        """Absolute holds the last known state; others keep failing open."""
+        assert (
+            resolve_dhw_active(
+                sensor_available=False,
+                sensor_on=False,
+                last_known=last_known,
+                priority=priority,
+            )
+            is expected
+        )
+
+    @pytest.mark.parametrize("priority", list(DHWPriority))
+    @pytest.mark.parametrize("sensor_on", [True, False])
+    def test_available_sensor_is_authoritative(
+        self, priority: DHWPriority, sensor_on: bool
+    ) -> None:
+        """A usable reading always wins, whatever was held before."""
+        assert (
+            resolve_dhw_active(
+                sensor_available=True,
+                sensor_on=sensor_on,
+                last_known=not sensor_on,
+                priority=priority,
+            )
+            is sensor_on
+        )
+
+
+class TestDHWSensorLoss:
+    """The block survives a DHW sensor dropping out mid-charge."""
+
+    def test_block_holds_while_sensor_unavailable(self) -> None:
+        """No spurious ON->OFF edge, so the block does not expire."""
+        controller = HeatingController(
+            make_config(DHWPriority.ABSOLUTE), started_at=NOW
+        )
+        controller.update_dhw_state(dhw_active=True, now=NOW)
+        assert controller.state.dhw_block is True
+
+        # Sensor drops out; resolved state holds rather than reading as OFF
+        for step in range(1, 12):
+            moment = NOW + timedelta(seconds=60 * step)
+            held = resolve_dhw_active(
+                sensor_available=False,
+                sensor_on=False,
+                last_known=controller.state.dhw_active,
+                priority=controller.config.dhw_priority,
+            )
+            controller.update_dhw_state(
+                dhw_active=held, now=moment, sensor_available=False
+            )
+
+        # Well past the hold-off, but DHW never actually ended
+        assert controller.state.dhw_block is True
+        assert controller.state.dhw_block_until is None
+        assert controller.state.dhw_sensor_available is False
+
+    def test_block_releases_normally_once_sensor_returns(self) -> None:
+        """Recovery runs from the real DHW end, not the dropout."""
+        controller = HeatingController(
+            make_config(DHWPriority.ABSOLUTE), started_at=NOW
+        )
+        controller.update_dhw_state(dhw_active=True, now=NOW)
+
+        outage = NOW + timedelta(minutes=5)
+        controller.update_dhw_state(dhw_active=True, now=outage, sensor_available=False)
+
+        returned = NOW + timedelta(minutes=10)
+        controller.update_dhw_state(
+            dhw_active=False, now=returned, sensor_available=True
+        )
+        assert controller.state.dhw_block_until == returned + timedelta(
+            seconds=RECOVERY
+        )
+
+        after = returned + timedelta(seconds=RECOVERY + 1)
+        controller.update_dhw_state(dhw_active=False, now=after)
+        assert controller.state.dhw_block is False
+        assert controller.state.dhw_sensor_available is True

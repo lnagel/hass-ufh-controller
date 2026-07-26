@@ -50,6 +50,7 @@ class ControllerState:
     flush_enabled: bool = False
     dhw_active: bool = False
     dhw_priority: DHWPriority = DEFAULT_DHW_PRIORITY
+    dhw_sensor_available: bool = True
     dhw_block: bool = False
     dhw_block_until: datetime | None = None
     flush_until: datetime | None = None
@@ -90,6 +91,47 @@ class ControllerActions:
     pump_request: bool | None = None
     heat_request: bool | None = None
     flush_request: bool = False
+
+
+def resolve_dhw_active(
+    *,
+    sensor_available: bool,
+    sensor_on: bool,
+    last_known: bool,
+    priority: DHWPriority,
+) -> bool:
+    """
+    Resolve DHW active state, tolerating a sensor that has dropped out.
+
+    A sensor reading unavailable or unknown carries no information. Treating
+    that as "off" synthesises an ON->OFF edge, which under absolute priority
+    arms the recovery hold-off and then reopens every circuit while the heat
+    source may still be charging the cylinder.
+
+    Absolute priority therefore holds the last known state until the sensor
+    returns. Choosing it is a statement that over-temperature flow is a
+    hardware hazard, so uncertainty resolves towards keeping circuits closed,
+    consistent with how zone sensor loss already forces valves shut. Parallel
+    and partial keep the historical fail-open behaviour, where the cost is
+    comfort rather than damage.
+
+    Args:
+        sensor_available: Whether the DHW sensor reported a usable state.
+        sensor_on: Whether that state was "on" (meaningless if unavailable).
+        last_known: Previously resolved DHW active state.
+        priority: Configured DHW priority level.
+
+    Returns:
+        The DHW active state to act on this cycle.
+
+    """
+    if sensor_available:
+        return sensor_on
+
+    if priority == DHWPriority.ABSOLUTE:
+        return last_known
+
+    return False
 
 
 def compute_flush_request(  # noqa: PLR0913
@@ -583,7 +625,9 @@ class HeatingController:
 
         return SummerMode.WINTER if heat_request else SummerMode.SUMMER
 
-    def update_dhw_state(self, *, dhw_active: bool, now: datetime) -> None:
+    def update_dhw_state(
+        self, *, dhw_active: bool, now: datetime, sensor_available: bool = True
+    ) -> None:
         """
         Update DHW state and manage the block and post-DHW flush timers.
 
@@ -595,11 +639,15 @@ class HeatingController:
         Recomputes dhw_block on every call so the hold-off expires on time.
 
         Args:
-            dhw_active: Current DHW active state.
+            dhw_active: Current DHW active state, already resolved against
+                sensor availability by resolve_dhw_active.
             now: Current time for timer calculation.
+            sensor_available: Whether the DHW sensor reported a usable state,
+                recorded for diagnostics.
 
         """
         self._state.dhw_priority = self.config.dhw_priority
+        self._state.dhw_sensor_available = sensor_available
         absolute = self.config.dhw_priority == DHWPriority.ABSOLUTE
         recovery = self.config.timing.dhw_recovery_time
 

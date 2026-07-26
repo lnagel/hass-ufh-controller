@@ -122,6 +122,7 @@ def _dhw_block_attrs(data: dict[str, Any]) -> dict[str, Any]:
     return {
         "dhw_priority": data.get("dhw_priority"),
         "dhw_active": data.get("dhw_active"),
+        "dhw_sensor_available": data.get("dhw_sensor_available"),
         "dhw_block_until": (
             block_until.isoformat() if isinstance(block_until, datetime) else None
         ),

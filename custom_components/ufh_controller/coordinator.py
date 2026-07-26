@@ -23,6 +23,7 @@ from homeassistant.components.select import SERVICE_SELECT_OPTION
 from homeassistant.const import (
     SERVICE_TURN_OFF,
     SERVICE_TURN_ON,
+    STATE_ON,
     STATE_UNAVAILABLE,
     STATE_UNKNOWN,
     Platform,
@@ -60,7 +61,7 @@ from .const import (
     ValveState,
     ZoneStatus,
 )
-from .core.controller import ControllerConfig, HeatingController
+from .core.controller import ControllerConfig, HeatingController, resolve_dhw_active
 from .core.heating_curve import HeatingCurveConfig
 from .core.history import get_valve_position_window
 from .core.pid import PIDState
@@ -664,9 +665,20 @@ class UFHControllerDataUpdateCoordinator(
             return
 
         state = self.hass.states.get(dhw_entity)
-        current_dhw_active = state is not None and state.state == "on"
+        available = state is not None and state.state not in (
+            STATE_UNAVAILABLE,
+            STATE_UNKNOWN,
+        )
+        current_dhw_active = resolve_dhw_active(
+            sensor_available=available,
+            sensor_on=state is not None and state.state == STATE_ON,
+            last_known=self._controller.state.dhw_active,
+            priority=self._controller.config.dhw_priority,
+        )
         self._controller.update_dhw_state(
-            dhw_active=current_dhw_active, now=datetime.now(UTC)
+            dhw_active=current_dhw_active,
+            now=datetime.now(UTC),
+            sensor_available=available,
         )
 
     def _get_supply_temp(self) -> float | None:
@@ -1107,6 +1119,7 @@ class UFHControllerDataUpdateCoordinator(
                 "flush_enabled": self._controller.state.flush_enabled,
                 "dhw_active": self._controller.state.dhw_active,
                 "dhw_priority": self._controller.state.dhw_priority.value,
+                "dhw_sensor_available": self._controller.state.dhw_sensor_available,
                 "dhw_block": self._controller.state.dhw_block,
                 "dhw_block_until": self._controller.state.dhw_block_until,
                 "flush_until": self._controller.state.flush_until,

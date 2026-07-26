@@ -4,7 +4,7 @@ from typing import Any
 from unittest.mock import patch
 
 import pytest
-from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
+from homeassistant.const import STATE_ON, STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from sqlalchemy.exc import OperationalError
@@ -15,6 +15,7 @@ from custom_components.ufh_controller.const import (
     DEFAULT_TIMING,
     DOMAIN,
     SUBENTRY_TYPE_ZONE,
+    DHWPriority,
     SummerMode,
 )
 
@@ -731,3 +732,32 @@ async def test_pump_request_switch_missing_no_error(
 
     coordinator = mock_config_entry_with_pump_request.runtime_data.coordinator
     assert coordinator is not None
+
+
+async def test_dhw_sensor_unavailable_holds_block_under_absolute(
+    hass: HomeAssistant,
+    mock_config_entry_with_dhw: MockConfigEntry,
+) -> None:
+    """Test absolute priority holds the block when the DHW sensor drops out."""
+    hass.states.async_set("binary_sensor.dhw_active", STATE_ON)
+    hass.states.async_set("sensor.zone1_temp", "20.5")
+
+    mock_config_entry_with_dhw.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry_with_dhw.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = mock_config_entry_with_dhw.runtime_data.coordinator
+    coordinator.controller.config.dhw_priority = DHWPriority.ABSOLUTE
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    assert coordinator.controller.state.dhw_block is True
+
+    # Sensor drops out mid-charge - must not read as "DHW finished"
+    hass.states.async_set("binary_sensor.dhw_active", STATE_UNAVAILABLE)
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    assert coordinator.controller.state.dhw_active is True
+    assert coordinator.controller.state.dhw_block is True
+    assert coordinator.controller.state.dhw_block_until is None
+    assert coordinator.controller.state.dhw_sensor_available is False
