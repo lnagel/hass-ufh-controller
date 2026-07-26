@@ -558,3 +558,38 @@ class TestParseDHWPriority:
     def test_unusable_values_fall_back(self, value: object) -> None:
         """Missing or unrecognised values degrade instead of failing setup."""
         assert _parse_dhw_priority(value) is DEFAULT_DHW_PRIORITY
+
+
+class TestHoldOffDeadlineCleanup:
+    """The recovery deadline does not linger once it has passed."""
+
+    def test_expired_deadline_is_cleared(self) -> None:
+        """A passed deadline stops being reported as pending."""
+        controller = HeatingController(
+            make_config(DHWPriority.ABSOLUTE), started_at=NOW
+        )
+        controller.update_dhw_state(dhw_active=True, now=NOW)
+        end = NOW + timedelta(minutes=10)
+        controller.update_dhw_state(dhw_active=False, now=end)
+        assert controller.state.dhw_block_until is not None
+
+        controller.update_dhw_state(
+            dhw_active=False, now=end + timedelta(seconds=RECOVERY + 1)
+        )
+        assert controller.state.dhw_block is False
+        assert controller.state.dhw_block_until is None
+
+    def test_pending_deadline_is_retained(self) -> None:
+        """A deadline still in the future is left alone."""
+        controller = HeatingController(
+            make_config(DHWPriority.ABSOLUTE), started_at=NOW
+        )
+        controller.update_dhw_state(dhw_active=True, now=NOW)
+        end = NOW + timedelta(minutes=10)
+        controller.update_dhw_state(dhw_active=False, now=end)
+
+        controller.update_dhw_state(
+            dhw_active=False, now=end + timedelta(seconds=RECOVERY - 1)
+        )
+        assert controller.state.dhw_block is True
+        assert controller.state.dhw_block_until == end + timedelta(seconds=RECOVERY)

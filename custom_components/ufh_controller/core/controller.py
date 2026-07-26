@@ -672,13 +672,16 @@ class HeatingController:
         if dhw_active and not self._state.dhw_active:
             self._state.flush_until = None
 
+        # Drop an expired deadline so it stops being reported as pending
+        if (
+            self._state.dhw_block_until is not None
+            and now >= self._state.dhw_block_until
+        ):
+            self._state.dhw_block_until = None
+
         self._state.dhw_active = dhw_active
         self._state.dhw_block = absolute and (
-            dhw_active
-            or (
-                self._state.dhw_block_until is not None
-                and now < self._state.dhw_block_until
-            )
+            dhw_active or self._state.dhw_block_until is not None
         )
 
     def handle_observation_period_transition(self, now: datetime) -> bool:
