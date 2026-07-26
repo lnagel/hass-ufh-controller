@@ -5,11 +5,13 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from custom_components.ufh_controller.const import (
+    DEFAULT_DHW_PRIORITY,
     DHWPriority,
     OperationMode,
     TimingConfig,
     ValveState,
 )
+from custom_components.ufh_controller.coordinator import _parse_dhw_priority
 from custom_components.ufh_controller.core.controller import (
     ControllerConfig,
     ControllerState,
@@ -542,3 +544,17 @@ class TestDHWSensorLoss:
         controller.update_dhw_state(dhw_active=False, now=after)
         assert controller.state.dhw_block is False
         assert controller.state.dhw_sensor_available is True
+
+
+class TestParseDHWPriority:
+    """Stored priority values are parsed defensively."""
+
+    @pytest.mark.parametrize("priority", list(DHWPriority))
+    def test_known_values_round_trip(self, priority: DHWPriority) -> None:
+        """Every enum member parses back to itself."""
+        assert _parse_dhw_priority(priority.value) is priority
+
+    @pytest.mark.parametrize("value", [None, "", "Absolute", "aggressive", 42])
+    def test_unusable_values_fall_back(self, value: object) -> None:
+        """Missing or unrecognised values degrade instead of failing setup."""
+        assert _parse_dhw_priority(value) is DEFAULT_DHW_PRIORITY

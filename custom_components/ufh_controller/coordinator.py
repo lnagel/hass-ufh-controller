@@ -79,6 +79,28 @@ STORAGE_VERSION = 3
 STORAGE_KEY = "ufh_controller"
 
 
+def _parse_dhw_priority(value: Any) -> DHWPriority:
+    """
+    Parse a stored DHW priority, falling back to the default.
+
+    Constructing the enum directly raises on any unrecognised value, and that
+    exception propagates out of setup, leaving the integration with no heating
+    control at all rather than a mistuned one. Reachable by downgrading after
+    a new level is added, or by a hand-edited config entry.
+    """
+    if not value:
+        return DEFAULT_DHW_PRIORITY
+    try:
+        return DHWPriority(value)
+    except ValueError:
+        LOGGER.warning(
+            "Unrecognised dhw_priority %r, falling back to %s",
+            value,
+            DEFAULT_DHW_PRIORITY.value,
+        )
+        return DEFAULT_DHW_PRIORITY
+
+
 class UFHControllerStore(Store[dict[str, Any]]):
     """Store with migration support."""
 
@@ -290,9 +312,7 @@ class UFHControllerDataUpdateCoordinator(
             pump_request_entity=data.get(CONF_PUMP_REQUEST_ENTITY),
             heat_request_entity=data.get(CONF_HEAT_REQUEST_ENTITY),
             dhw_active_entity=data.get(CONF_DHW_ACTIVE_ENTITY),
-            dhw_priority=DHWPriority(
-                data.get(CONF_DHW_PRIORITY) or DEFAULT_DHW_PRIORITY
-            ),
+            dhw_priority=_parse_dhw_priority(data.get(CONF_DHW_PRIORITY)),
             summer_mode_entity=data.get(CONF_SUMMER_MODE_ENTITY),
             supply_temp_entity=data.get(CONF_SUPPLY_TEMP_ENTITY),
             outdoor_temp_entity=data.get(CONF_OUTDOOR_TEMP_ENTITY),
