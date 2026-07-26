@@ -360,8 +360,13 @@ class HeatingController:
         """
         Flush mode - all valves open, circulation only (no boiler firing).
 
-        Permanently not heating: heat_request=False.
+        Permanently not heating: heat_request=False. Suspended while absolute
+        DHW priority holds the circuits closed; the mode itself is retained and
+        resumes once the block clears.
         """
+        if self._state.dhw_block:
+            return self._evaluate_all_off_mode()
+
         valve_actions = {
             zid: (
                 ZoneAction.STAY_ON
@@ -384,8 +389,13 @@ class HeatingController:
         Hour 0: all closed (rest hour)
         Hours 1-7: zones open sequentially
 
-        Permanently not heating: heat_request=False.
+        Permanently not heating: heat_request=False. Suspended while absolute
+        DHW priority holds the circuits closed; the rotation is retained and
+        resumes once the block clears.
         """
+        if self._state.dhw_block:
+            return self._evaluate_all_off_mode()
+
         cycle_hour = now.hour % DEFAULT_CYCLE_MODE_HOURS
         zone_ids = list(self._zones.keys())
 

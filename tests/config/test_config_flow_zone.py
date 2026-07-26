@@ -546,6 +546,7 @@ def test_get_timing_schema_with_custom() -> None:
         "window_block_time": 900,
         "controller_loop_interval": 60,
         "flush_duration": 600,
+        "dhw_recovery_time": 420,
     }
     schema = get_timing_schema(custom_timing)
 
