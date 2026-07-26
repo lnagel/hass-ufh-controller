@@ -488,7 +488,24 @@ How the heating circuits behave while the heat source is charging domestic hot w
 
 **Requires a DHW sensor.** `absolute` cannot function without [dhw_active_entity](#dhw_active_entity) — the controller would never learn that a charge had started. The config flow rejects the combination rather than accepting a setting that silently does nothing.
 
-**Behaviour when the DHW sensor drops out:** under `absolute`, an `unavailable` or `unknown` reading holds the last known DHW state instead of being treated as "off". Treating it as off would synthesise a false end-of-charge, start the recovery countdown, and reopen every circuit mid-charge. The `dhw_block` sensor's `dhw_sensor_available` attribute shows when this is happening. `parallel` and `partial` keep the historical behaviour of treating an unusable reading as off, where the cost is comfort rather than damage.
+**Behaviour when the DHW sensor drops out:** under `absolute`, a sensor that is missing, `unavailable` or `unknown` is treated as a **fault**, not as a state to be guessed. Absolute priority exists because you must be certain DHW is not charging before opening a circuit, and neither "assume off" nor "assume the last known value" provides that certainty.
+
+The fault escalates in two stages, matching how zone failures already escalate:
+
+| Stage | When | Effect |
+|-------|------|--------|
+| Block | First cycle that cannot read the sensor | All circuits closed, both timers frozen, controller status `degraded` |
+| Escalation | Fault sustained for 1 hour | Controller status `fail_safe`; valves closed in every mode except `off`, and boiler summer mode set to `auto` |
+
+The timers freeze rather than run, because an unreadable sensor gives nothing to detect a DHW end from. When the sensor returns, the recovery hold-off is timed from the moment visibility was regained.
+
+The `dhw_block` sensor's `dhw_sensor_available` attribute and the `status` sensor's `fail_safe_reason` attribute both show when this is happening.
+
+**Residual risk:** while the sensor is unreadable, you have **no heating at all**. This is deliberate — the DHW hazard is chosen over the freeze hazard — but be aware that the `auto` summer mode at escalation does *not* soften it: the controller keeps every valve shut, so the boiler's own thermostats cannot deliver floor heat either. Watch `binary_sensor.{controller_id}_status`, which reports a problem from the first blocked cycle.
+
+**A note on flapping sensors:** because the block latches immediately, a brief dropout (an MQTT reconnect, a gateway reboot) closes every valve and reopens them, bypassing `min_run_time`. This is partly self-limiting, since actuators need around `valve_close_time` to travel, so a short flap may not move the valve far.
+
+`parallel` and `partial` keep the historical behaviour of treating an unreadable reading as off, where the cost is comfort rather than damage, and never raise this fault.
 
 **Limitation to be aware of:** Thermal actuators typically need around 3.5 minutes to close (see [valve_close_time](#valve_close_time)). The controller commands closure the instant DHW asserts, but it cannot make the valve close faster than the hardware allows, so a brief exposure window is unavoidable. Where the boiler offers its own diverter valve or a mixing valve can be fitted, that hardware solution remains preferable to a software one.
 

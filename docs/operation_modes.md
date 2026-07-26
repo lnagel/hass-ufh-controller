@@ -43,7 +43,8 @@ Diagnostic mode that rotates through zones.
 Manual override - maximum heating.
 
 - All valves forced OPEN
-- **Not** overridden by absolute DHW priority: an explicit manual override states user intent
+- **Not** overridden by a normal absolute DHW priority block: an explicit manual override states user intent
+- **Is** overridden by a sustained DHW sensor fault, which reaches controller fail-safe and closes valves in every mode except `off`
 - Pump request ON
 - Heat request ON
 - Boiler summer_mode set to "winter"
