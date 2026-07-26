@@ -18,7 +18,8 @@
       }
     },
     "error": {
-      "already_configured": "This controller is already configured."
+      "already_configured": "This controller is already configured.",
+      "dhw_priority_requires_sensor": "Absolute priority needs a DHW active sensor to detect when charging starts and stops. Without one it would never close any circuit. Configure the sensor, or choose a different priority."
     }
   },
   "options": {
@@ -117,6 +118,9 @@
           "preset_boost": "Boost temperature"
         }
       }
+    },
+    "error": {
+      "dhw_priority_requires_sensor": "Absolute priority needs a DHW active sensor to detect when charging starts and stops. Without one it would never close any circuit. Configure the sensor, or choose a different priority."
     }
   },
   "config_subentries": {

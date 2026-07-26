@@ -473,3 +473,27 @@ async def test_options_flow_control_entities_defaults_priority(
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert mock_config_entry.data["dhw_priority"] == DHWPriority.PARTIAL.value
+
+
+async def test_options_flow_rejects_absolute_without_dhw_sensor(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Test the options flow rejects absolute priority with no DHW sensor."""
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    result = await hass.config_entries.options.async_init(mock_config_entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={"next_step_id": "control_entities"},
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={"dhw_priority": DHWPriority.ABSOLUTE.value},
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"dhw_priority": "dhw_priority_requires_sensor"}
+    assert mock_config_entry.data.get("dhw_priority") is None

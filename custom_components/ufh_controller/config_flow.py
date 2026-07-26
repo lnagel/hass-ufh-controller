@@ -70,6 +70,29 @@ CONF_SUPPLY_TEMP_WARM = "supply_temp_warm"
 CONF_SUPPLY_TEMP_COLD = "supply_temp_cold"
 
 
+def validate_dhw_priority(user_input: dict[str, Any]) -> dict[str, str]:
+    """
+    Reject a DHW priority that cannot function with the configured entities.
+
+    Absolute priority is inert without a DHW sensor: the controller never
+    learns that a charge is in progress, so no circuit is ever closed and the
+    dhw_block sensor is not even created. Someone who correctly identifies
+    their manifold as at-risk would be left unprotected with nothing in the UI
+    to reveal it, so this is an error rather than a silent no-op.
+
+    Args:
+        user_input: Submitted form values.
+
+    Returns:
+        Field-keyed errors, empty when the combination is usable.
+
+    """
+    priority = user_input.get(CONF_DHW_PRIORITY, DEFAULT_DHW_PRIORITY.value)
+    if priority == DHWPriority.ABSOLUTE and not user_input.get(CONF_DHW_ACTIVE_ENTITY):
+        return {CONF_DHW_PRIORITY: "dhw_priority_requires_sensor"}
+    return {}
+
+
 def get_dhw_priority_selector() -> selector.SelectSelector:
     """Get the selector for DHW priority, translated via strings.json."""
     return selector.SelectSelector(
@@ -590,6 +613,9 @@ class UFHControllerFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
+            errors = validate_dhw_priority(user_input)
+
+        if user_input is not None and not errors:
             # Generate controller_id from name if not provided
             controller_id = user_input.get(CONF_CONTROLLER_ID) or slugify(
                 user_input[CONF_NAME]
@@ -685,7 +711,12 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
         user_input: dict[str, Any] | None = None,
     ) -> config_entries.ConfigFlowResult:
         """Configure control entities (heat request, summer mode, etc.)."""
+        errors: dict[str, str] = {}
+
         if user_input is not None:
+            errors = validate_dhw_priority(user_input)
+
+        if user_input is not None and not errors:
             # Update the config entry data with new control entities
             new_data = {
                 **self.config_entry.data,
@@ -703,8 +734,8 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
             )
             return self.async_create_entry(title="", data={})
 
-        # Get current values from config entry data
-        current_data = self.config_entry.data
+        # Redisplay the rejected input rather than discarding what was typed
+        current_data = {**self.config_entry.data, **(user_input or {})}
 
         return self.async_show_form(
             step_id="control_entities",
@@ -754,6 +785,7 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
                     ),
                 }
             ),
+            errors=errors,
         )
 
     async def async_step_timing(

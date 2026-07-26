@@ -163,3 +163,45 @@ async def test_user_flow_with_absolute_dhw_priority(
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"]["dhw_priority"] == DHWPriority.ABSOLUTE.value
+
+
+async def test_user_flow_rejects_absolute_without_dhw_sensor(
+    hass: HomeAssistant,
+    mock_setup_entry: None,
+) -> None:
+    """Test absolute priority without a DHW sensor is rejected, not silently inert."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        user_input={
+            "name": "No Sensor",
+            "dhw_priority": DHWPriority.ABSOLUTE.value,
+        },
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"dhw_priority": "dhw_priority_requires_sensor"}
+
+
+async def test_user_flow_allows_non_absolute_without_dhw_sensor(
+    hass: HomeAssistant,
+    mock_setup_entry: None,
+) -> None:
+    """Test parallel and partial remain valid with no DHW sensor configured."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        user_input={
+            "name": "No Sensor Parallel",
+            "dhw_priority": DHWPriority.PARALLEL.value,
+        },
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"]["dhw_priority"] == DHWPriority.PARALLEL.value
