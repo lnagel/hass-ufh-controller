@@ -148,7 +148,7 @@ async def test_latent_heat_capture_is_deferred_not_cancelled() -> None:
     controller = build_controller()
     controller.state.flush_enabled = True
 
-    # Regular zone has met its quota, so it will not compete with the flush
+    # Both zones start with quota met, so nothing competes with the flush
     demand_zone(controller, "living_room", duty_cycle=0.0, valve_position=0.0)
     demand_zone(controller, "bathroom", duty_cycle=0.0, valve_position=0.0)
 

@@ -445,6 +445,12 @@ class HeatingController:
         Uses PID-based quota scheduling for regular zones, then evaluates
         flush circuits based on whether any regular zones are running.
 
+        The heat request is gated on dhw_block because thermal actuators need
+        minutes to close: a circuit still reports flow at the instant DHW
+        asserts, which would otherwise have the controller ask the boiler to
+        fire for space heating mid-charge. Pump request stays flow-driven and
+        decays on its own as the valves close.
+
         Returns raw computed values; the coordinator handles change detection.
         """
         valve_actions: dict[str, ZoneAction] = {}
@@ -483,13 +489,12 @@ class HeatingController:
         # Pump request: any zone with confirmed flow
         pump_request = any(rt.state.flow for rt in self._zones.values())
 
-        # Aggregate heat request from per-zone decisions, gated on pump
+        # Aggregate heat request from per-zone decisions, gated on pump and DHW
         remaining_durations = {
             zone_id: rt.state.remaining_duration
             for zone_id, rt in self._zones.items()
             if rt.state.flow
         }
-        # A closing valve still reports flow, which would otherwise ask for heat
         heat_request = (
             not self._state.dhw_block
             and pump_request
@@ -605,7 +610,7 @@ class HeatingController:
 
             flush_duration = self.config.timing.flush_duration
             if flush_duration > 0 and self._state.flush_enabled:
-                # Absolute priority defers the flush window past the hold-off
+                # Flush opens after the hold-off under absolute, at once otherwise
                 offset = recovery if absolute else 0
                 self._state.flush_until = now + timedelta(
                     seconds=offset + flush_duration
