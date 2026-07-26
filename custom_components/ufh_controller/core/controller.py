@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 from custom_components.ufh_controller.const import (
     DEFAULT_CYCLE_MODE_HOURS,
     DEFAULT_DHW_PRIORITY,
+    FAIL_SAFE_TIMEOUT,
     INITIALIZING_TIMEOUT,
     ControllerStatus,
     DHWPriority,
@@ -253,7 +254,7 @@ class HeatingController:
 
         if not zone_statuses:
             self._state.status = ControllerStatus.NORMAL
-            self._apply_dhw_fault_status()
+            self._apply_dhw_fault_status(now)
             return
 
         # Count zones in each state
@@ -289,11 +290,18 @@ class HeatingController:
             # Mix of degraded and fail-safe, but no normal or initializing
             self._state.status = ControllerStatus.DEGRADED
 
-        self._apply_dhw_fault_status()
+        self._apply_dhw_fault_status(now)
 
-    def _apply_dhw_fault_status(self) -> None:
+    def _apply_dhw_fault_status(self, now: datetime) -> None:
         """
         Raise the controller status while the DHW sensor is faulted.
+
+        Two stages, matching how zone failures already escalate. The block
+        applied in update_dhw_state is the protective half and is immediate;
+        this is the reporting half. Escalation to fail-safe is deferred by
+        FAIL_SAFE_TIMEOUT because the valves are already shut, so it adds no
+        protection - it signals a persistent fault and hands the boiler back
+        its own thermostats.
 
         Applied after zone aggregation so it cannot be overwritten, and after
         the INITIALIZING deferral so a sensor that has not loaded yet during
@@ -302,7 +310,10 @@ class HeatingController:
         if not self._state.dhw_sensor_fault:
             return
 
-        if self._state.status != ControllerStatus.FAIL_SAFE:
+        since = self._state.dhw_sensor_fault_since
+        if since is not None and (now - since).total_seconds() > FAIL_SAFE_TIMEOUT:
+            self._state.status = ControllerStatus.FAIL_SAFE
+        elif self._state.status != ControllerStatus.FAIL_SAFE:
             self._state.status = ControllerStatus.DEGRADED
 
     def get_zone_state(self, zone_id: str) -> ZoneState:

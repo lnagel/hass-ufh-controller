@@ -6,6 +6,7 @@ import pytest
 
 from custom_components.ufh_controller.const import (
     DEFAULT_DHW_PRIORITY,
+    FAIL_SAFE_TIMEOUT,
     ControllerStatus,
     DHWPriority,
     OperationMode,
@@ -603,3 +604,50 @@ class TestHoldOffDeadlineCleanup:
         )
         assert controller.state.dhw_block is True
         assert controller.state.dhw_block_until == end + timedelta(seconds=RECOVERY)
+
+
+class TestDHWFaultEscalation:
+    """A sustained DHW sensor fault escalates to controller fail-safe."""
+
+    def _faulted(self, at: datetime) -> HeatingController:
+        """Create a controller with a live DHW sensor fault."""
+        controller = HeatingController(
+            make_config(DHWPriority.ABSOLUTE), started_at=NOW
+        )
+        controller.update_dhw_state(dhw_active=False, now=at, sensor_available=False)
+        return controller
+
+    def test_stays_degraded_before_the_timeout(self) -> None:
+        """Escalation waits, matching how zone failures escalate."""
+        controller = self._faulted(NOW)
+        later = NOW + timedelta(seconds=FAIL_SAFE_TIMEOUT - 60)
+        controller.update_dhw_state(dhw_active=False, now=later, sensor_available=False)
+        controller.update_status(now=later, has_pending_entities=False)
+        assert controller.status == ControllerStatus.DEGRADED
+
+    def test_escalates_after_the_timeout(self) -> None:
+        """A persistent fault reaches fail-safe so the boiler is handed back."""
+        controller = self._faulted(NOW)
+        later = NOW + timedelta(seconds=FAIL_SAFE_TIMEOUT + 60)
+        controller.update_dhw_state(dhw_active=False, now=later, sensor_available=False)
+        controller.update_status(now=later, has_pending_entities=False)
+        assert controller.status == ControllerStatus.FAIL_SAFE
+
+    def test_recovery_before_the_timeout_never_escalates(self) -> None:
+        """A transient dropout resets the clock rather than accumulating."""
+        controller = self._faulted(NOW)
+
+        back = NOW + timedelta(seconds=60)
+        controller.update_dhw_state(dhw_active=False, now=back, sensor_available=True)
+        assert controller.state.dhw_sensor_fault is False
+        assert controller.state.dhw_sensor_fault_since is None
+
+        # A later fault starts a fresh clock, not one carried over
+        again = back + timedelta(seconds=60)
+        controller.update_dhw_state(dhw_active=False, now=again, sensor_available=False)
+        assert controller.state.dhw_sensor_fault_since == again
+
+        soon = again + timedelta(seconds=FAIL_SAFE_TIMEOUT - 60)
+        controller.update_dhw_state(dhw_active=False, now=soon, sensor_available=False)
+        controller.update_status(now=soon, has_pending_entities=False)
+        assert controller.status == ControllerStatus.DEGRADED
