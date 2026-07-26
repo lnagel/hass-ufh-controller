@@ -17,7 +17,7 @@ While generic thermostats adapt radiator or TRV logic to UFH, this integration i
 | | Generic Thermostats | This Integration |
 |---|---|---|
 | **Zone coordination** | Each zone fires the heat source independently | Zones aggregate demand into a single heat request with valve pre-opening |
-| **Hot water priority** | Unaware of DHW or fights for priority | Blocks new heating during DHW, captures residual heat after |
+| **Hot water priority** | Unaware of DHW or fights for priority | Parallel, partial or absolute priority; captures residual heat after |
 | **Quota fairness** | Time-based or none | Supply-temperature-weighted — zones aren't penalized for cold-start periods |
 | **UFH tuning** | Adapted from radiator/TRV logic | PID defaults, observation periods, and minimum run times designed for screed thermal mass |
 
@@ -98,6 +98,7 @@ Multiple UFH zones sharing one heat source need coordination that per-zone therm
 When domestic hot water is being heated, generic thermostats either fight the heat source for priority or don't know DHW is happening. This controller:
 
 - **Blocks new heating** during DHW — zones already flowing continue circulating, but new zones wait
+- **Closes every circuit** during DHW, if your boiler raises its flow temperature for the cylinder and nothing mixes or isolates the manifold (`absolute` priority)
 - **Captures residual heat** — after DHW finishes, hot water still in the system gets circulated through floors instead of wasted
 - **Configurable flush duration** — control how long post-DHW circulation runs
 

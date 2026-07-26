@@ -489,7 +489,7 @@ class HeatingController:
             for zone_id, rt in self._zones.items()
             if rt.state.flow
         }
-        # Valves take minutes to close, so drop the heat request explicitly
+        # A closing valve still reports flow, which would otherwise ask for heat
         heat_request = (
             not self._state.dhw_block
             and pump_request

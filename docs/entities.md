@@ -17,18 +17,26 @@ All controller entities belong to a device named after the controller (user-defi
 | binary_sensor | `binary_sensor.{controller_id}_pump_request` | "{name} Pump Request" | Pump is requested for water circulation through zones |
 | binary_sensor | `binary_sensor.{controller_id}_heat_request` | "{name} Heat Request" | Controller is requesting heat from the boiler |
 | binary_sensor | `binary_sensor.{controller_id}_flush_request` | "{name} Flush Request" | Flush is actively running (only when `dhw_active_entity` configured) |
+| binary_sensor | `binary_sensor.{controller_id}_dhw_block` | "{name} DHW Block" | Absolute DHW priority is holding circuits closed (only when `dhw_active_entity` configured) |
 
-**Note:** The flush enabled switch and flush request sensor are only created when `dhw_active_entity` is configured, as the DHW latent heat capture feature requires DHW state input to function.
+**Note:** The flush enabled switch, flush request sensor and DHW block sensor are only created when `dhw_active_entity` is configured, as all three require DHW state input to function.
+
+**DHW Block Behavior:**
+The DHW block sensor reports whether [absolute DHW priority](configuration.md#dhw_priority) is currently forcing every circuit closed:
+- **ON:** While DHW is charging, and throughout the `dhw_recovery_time` hold-off after it ends
+- **OFF:** Whenever `dhw_priority` is `parallel` or `partial`, since neither closes running circuits
+- **Attributes:** `dhw_priority` (the configured level), `dhw_active` (the raw sensor state) and `dhw_block_until` (when the hold-off expires)
 
 **Flush Enabled Behavior:**
 - **Enabled:** Flush-type circuits can turn on for a configurable period after DHW ends (`flush_duration`) to capture latent heat (only when no regular circuits are currently running with valve ON).
 - **Disabled:** Flush-type circuits behave like regular circuits — no special DHW priority.
-- **DHW priority for regular zones is independent of this setting.** Regular zones that are OFF cannot turn ON during DHW heating regardless of the flush enabled state. This switch only controls whether flush circuits get special treatment.
+- **DHW priority for regular zones is independent of this setting.** Under the default `partial` priority, regular zones that are OFF cannot turn ON during DHW heating regardless of the flush enabled state. This switch only controls whether flush circuits get special treatment.
+- **Under `absolute` priority, latent heat capture is deferred, not cancelled.** The flush window opens only after `dhw_recovery_time` has elapsed, at its full `flush_duration`. Consider leaving this switch off on unmixed systems — see [dhw_priority](configuration.md#dhw_priority).
 
 **Flush Request Behavior:**
 The flush request sensor indicates when flush circuits are actively capturing heat:
 - **ON:** During the post-DHW flush period
-- **OFF:** When DHW is active or not within the post-DHW flush period
+- **OFF:** When DHW is active, when a DHW block is in force, or when not within the post-DHW flush period
 - **Requires flush_enabled:** The sensor only reports ON if `flush_enabled` switch is also on
 
 **Select Options for Mode:**
