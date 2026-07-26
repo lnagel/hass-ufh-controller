@@ -764,6 +764,18 @@ class HeatingController:
         return new_period
 
     @property
+    def fail_safe_reason(self) -> str | None:
+        """Explain a degraded or fail-safe status, or None when normal."""
+        if self._state.status not in (
+            ControllerStatus.DEGRADED,
+            ControllerStatus.FAIL_SAFE,
+        ):
+            return None
+        if self._state.dhw_sensor_fault:
+            return "dhw_sensor_unavailable"
+        return "zone_failures"
+
+    @property
     def any_zone_in_fail_safe(self) -> bool:
         """Check if any zone is in fail-safe mode."""
         return any(

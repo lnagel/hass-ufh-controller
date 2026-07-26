@@ -463,3 +463,49 @@ async def test_dhw_block_exposes_hold_off_expiry(
     block_until = state.attributes["dhw_block_until"]
     assert block_until is not None
     assert datetime.fromisoformat(block_until) > datetime.now(UTC)
+
+
+async def test_status_reports_dhw_fault_reason(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_temp_sensor: None,
+) -> None:
+    """Test the status sensor distinguishes a DHW fault from zone failures."""
+    hass.states.async_set("binary_sensor.dhw_active", STATE_UNAVAILABLE)
+
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = mock_config_entry.runtime_data.coordinator
+    coordinator.controller.config.dhw_priority = DHWPriority.ABSOLUTE
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    state = hass.states.get("binary_sensor.test_controller_status")
+    assert state is not None
+    assert state.state == "on"
+    assert state.attributes["fail_safe_reason"] == "dhw_sensor_unavailable"
+    # Every zone is healthy, which is exactly why the reason is needed
+    assert state.attributes["zones_fail_safe"] == 0
+
+
+async def test_status_reports_no_reason_when_normal(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_temp_sensor: None,
+) -> None:
+    """Test fail_safe_reason is absent while the controller is healthy."""
+    hass.states.async_set("binary_sensor.dhw_active", "off")
+
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = mock_config_entry.runtime_data.coordinator
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    state = hass.states.get("binary_sensor.test_controller_status")
+    assert state is not None
+    assert state.attributes["fail_safe_reason"] is None

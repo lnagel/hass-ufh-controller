@@ -1137,6 +1137,7 @@ class UFHControllerDataUpdateCoordinator(
                 "observation_start": self._controller.state.observation_start,
                 "period_elapsed": self._controller.state.period_elapsed,
                 "status": self._controller.status.value,
+                "fail_safe_reason": self._controller.fail_safe_reason,
                 "zones_initializing": zones_initializing,
                 "zones_normal": zones_normal,
                 "zones_degraded": zones_degraded,

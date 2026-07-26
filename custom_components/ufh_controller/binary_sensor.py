@@ -74,9 +74,16 @@ def _status_value(data: dict[str, Any]) -> bool:
 
 
 def _status_attrs(data: dict[str, Any]) -> dict[str, Any]:
-    """Return additional status attributes."""
+    """
+    Return additional status attributes.
+
+    fail_safe_reason exists because a DHW sensor fault reaches fail-safe with
+    every zone still healthy, so zones_fail_safe reads 0 and the state would
+    otherwise look like a bug.
+    """
     return {
         "status": data.get("status"),
+        "fail_safe_reason": data.get("fail_safe_reason"),
         "zones_initializing": data.get("zones_initializing"),
         "zones_normal": data.get("zones_normal"),
         "zones_degraded": data.get("zones_degraded"),

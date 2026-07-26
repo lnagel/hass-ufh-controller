@@ -321,6 +321,13 @@
               "fail_safe": "Fail-Safe"
             }
           },
+          "fail_safe_reason": {
+            "name": "Reason",
+            "state": {
+              "dhw_sensor_unavailable": "DHW sensor unavailable",
+              "zone_failures": "Zone failures"
+            }
+          },
           "consecutive_failures": {
             "name": "Consecutive Failures"
           },
