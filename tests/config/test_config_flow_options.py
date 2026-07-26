@@ -497,3 +497,38 @@ async def test_options_flow_rejects_absolute_without_dhw_sensor(
     assert result["type"] is FlowResultType.FORM
     assert result["errors"] == {"dhw_priority": "dhw_priority_requires_sensor"}
     assert mock_config_entry.data.get("dhw_priority") is None
+
+
+async def test_options_flow_error_keeps_cleared_entity_cleared(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Test a cleared DHW sensor is not reinstated when validation fails."""
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert mock_config_entry.data["dhw_active_entity"] == "binary_sensor.dhw_active"
+
+    result = await hass.config_entries.options.async_init(mock_config_entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={"next_step_id": "control_entities"},
+    )
+    # Clear the sensor and pick absolute, which is rejected
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={"dhw_priority": DHWPriority.ABSOLUTE.value},
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"dhw_priority": "dhw_priority_requires_sensor"}
+
+    schema = result["data_schema"]
+    assert schema is not None
+    suggested = {
+        key.schema: key.description.get("suggested_value")
+        for key in schema.schema
+        if getattr(key, "description", None)
+    }
+    assert suggested.get("dhw_active_entity") is None

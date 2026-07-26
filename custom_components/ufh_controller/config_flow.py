@@ -734,8 +734,10 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
             )
             return self.async_create_entry(title="", data={})
 
-        # Redisplay the rejected input rather than discarding what was typed
-        current_data = {**self.config_entry.data, **(user_input or {})}
+        # Redisplay the rejected input verbatim. Merging over stored data would
+        # reinstate a field the user cleared, since a cleared optional selector
+        # is absent from user_input rather than present and empty.
+        current_data = user_input if user_input is not None else self.config_entry.data
 
         return self.async_show_form(
             step_id="control_entities",
