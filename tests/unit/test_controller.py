@@ -780,6 +780,90 @@ class TestGetSummerModeValue:
         controller = HeatingController(config, started_at=NOW)
         assert controller.get_summer_mode_value(heat_request=False) == SummerMode.SUMMER
 
+    def test_cycle_mode_returns_summer(self) -> None:
+        """Test cycle mode returns summer (maintenance circulation only)."""
+        config = ControllerConfig(
+            controller_id="heating",
+            name="Heating",
+            summer_mode_entity="select.boiler_summer",
+            zones=[],
+        )
+        controller = HeatingController(config, started_at=NOW)
+        controller.mode = OperationMode.CYCLE
+        assert controller.get_summer_mode_value(heat_request=False) == SummerMode.SUMMER
+
+
+class TestGetSummerModeValueFailSafe:
+    """
+    Test get_summer_mode_value with fail_safe set.
+
+    Delegating to the boiler with 'auto' is only permitted in heat mode, where
+    the controller is actively heating and valve-controller fallback thermostats
+    may physically open a valve that needs supply. Every explicit mode keeps
+    enforcing its own value so a user instruction is never silently overridden.
+    """
+
+    @staticmethod
+    def _controller(mode: OperationMode) -> HeatingController:
+        """Build a controller with a summer mode entity in the given mode."""
+        config = ControllerConfig(
+            controller_id="heating",
+            name="Heating",
+            summer_mode_entity="select.boiler_summer",
+            zones=[],
+        )
+        controller = HeatingController(config, started_at=NOW)
+        controller.mode = mode
+        return controller
+
+    @pytest.mark.parametrize("heat_request", [True, False])
+    def test_heat_mode_delegates_to_auto(self, *, heat_request: bool) -> None:
+        """Test heat mode returns auto in fail-safe, whatever the heat request."""
+        controller = self._controller(OperationMode.HEAT)
+        assert (
+            controller.get_summer_mode_value(heat_request=heat_request, fail_safe=True)
+            == SummerMode.AUTO
+        )
+
+    @pytest.mark.parametrize(
+        "mode",
+        [OperationMode.FLUSH, OperationMode.CYCLE, OperationMode.ALL_OFF],
+    )
+    def test_no_heat_modes_keep_summer(self, mode: OperationMode) -> None:
+        """Test modes that must not fire the boiler stay on summer in fail-safe."""
+        controller = self._controller(mode)
+        assert (
+            controller.get_summer_mode_value(heat_request=False, fail_safe=True)
+            == SummerMode.SUMMER
+        )
+
+    def test_all_on_mode_keeps_winter(self) -> None:
+        """Test all_on stays on winter in fail-safe rather than delegating."""
+        controller = self._controller(OperationMode.ALL_ON)
+        assert (
+            controller.get_summer_mode_value(heat_request=True, fail_safe=True)
+            == SummerMode.WINTER
+        )
+
+    def test_off_mode_returns_none(self) -> None:
+        """Test off mode writes nothing even in fail-safe."""
+        controller = self._controller(OperationMode.OFF)
+        assert (
+            controller.get_summer_mode_value(heat_request=False, fail_safe=True) is None
+        )
+
+    def test_no_summer_mode_entity_returns_none(self) -> None:
+        """Test fail-safe does not invent a value when no entity is configured."""
+        config = ControllerConfig(
+            controller_id="heating",
+            name="Heating",
+            zones=[],
+        )
+        controller = HeatingController(config, started_at=NOW)
+        assert (
+            controller.get_summer_mode_value(heat_request=False, fail_safe=True) is None
+        )
+
 
 class TestComputeActionsWithFlushZones:
     """Test compute_actions method with flush circuit zones."""

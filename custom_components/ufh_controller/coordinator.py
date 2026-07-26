@@ -534,23 +534,11 @@ class UFHControllerDataUpdateCoordinator(
         await self._execute_heat_request(heat_request=False)
         await self._execute_pump_request(pump_request=False)
 
-        # Set summer mode to 'auto' to pass control back to the boiler
-        summer_entity = self._controller.config.summer_mode_entity
-        if summer_entity:
-            # Track expected state for external change detection
-            self._entities_expected_states[summer_entity] = SummerMode.AUTO
-
-            await self.hass.services.async_call(
-                Platform.SELECT,
-                SERVICE_SELECT_OPTION,
-                {"entity_id": summer_entity, "option": SummerMode.AUTO},
-            )
-            LOGGER.debug(
-                "Select service '%s' called for %s with option '%s'",
-                SERVICE_SELECT_OPTION,
-                summer_entity,
-                SummerMode.AUTO,
-            )
+        summer_mode = self._controller.get_summer_mode_value(
+            heat_request=False, fail_safe=True
+        )
+        if summer_mode is not None:
+            await self._set_summer_mode(summer_mode)
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Update data via controller logic."""
@@ -613,7 +601,10 @@ class UFHControllerDataUpdateCoordinator(
             )
 
         # If ALL zones are in fail-safe, execute controller-level fail-safe
-        if self._controller.status == ControllerStatus.FAIL_SAFE:
+        if (
+            self._controller.status == ControllerStatus.FAIL_SAFE
+            and self._controller.mode != OperationMode.OFF
+        ):
             await self._execute_fail_safe_actions()
             return self._build_state_dict()
 
@@ -648,11 +639,12 @@ class UFHControllerDataUpdateCoordinator(
                 heat_request=actions.heat_request, force_update=force_update
             )
 
-            # Derive and update summer mode from heat_request
-            summer_mode = (
-                SummerMode.WINTER if actions.heat_request else SummerMode.SUMMER
+            summer_mode = self._controller.get_summer_mode_value(
+                heat_request=actions.heat_request,
+                fail_safe=self._controller.any_zone_in_fail_safe,
             )
-            await self._set_summer_mode(summer_mode, force_update=force_update)
+            if summer_mode is not None:
+                await self._set_summer_mode(summer_mode, force_update=force_update)
 
         return self._build_state_dict()
 
@@ -999,22 +991,10 @@ class UFHControllerDataUpdateCoordinator(
     async def _set_summer_mode(
         self, summer_mode: SummerMode, *, force_update: bool = False
     ) -> None:
-        """
-        Set boiler summer mode to specified value.
-
-        Safety: If ANY zone is in fail-safe, summer mode is forced to 'auto'
-        to allow physical fallback valves to receive heated water.
-        """
+        """Set boiler summer mode to the value decided by the caller."""
         entity_id = self._controller.config.summer_mode_entity
         if entity_id is None:
             return
-
-        # Safety check: if any zone is in fail-safe, force summer mode to 'auto'
-        if self._controller.any_zone_in_fail_safe:
-            summer_mode = SummerMode.AUTO
-            LOGGER.debug(
-                "Zone(s) in fail-safe, forcing summer mode to 'auto' for fallbacks"
-            )
 
         current_state = self.hass.states.get(entity_id)
         if current_state is None:

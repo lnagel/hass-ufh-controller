@@ -12,6 +12,8 @@ Default mode. Full PID control with quota-based scheduling.
 - Window blocking active
 - DHW priority active (if configured)
 - Post-DHW residual heat capture active (if configured)
+- Boiler summer_mode follows heat request, or "auto" when any zone is in fail-safe
+  (see [Fault Isolation](fault_isolation.md#summer-mode-safety))
 
 ### Flush Mode (`flush`)
 
@@ -32,6 +34,7 @@ Diagnostic mode that rotates through zones.
 - Hours 1-7: zones open sequentially
 - Pump request: flow-gated (on when the active zone has confirmed flow)
 - Heat request OFF
+- Boiler summer_mode set to "summer" (rotation only, no firing)
 
 ### All On Mode (`all_on`)
 
@@ -53,6 +56,12 @@ Manual override - heating disabled.
 
 ### Off Mode (`off`)
 
-Controller inactive. No actions taken, entities remain in last state.
+Controller inactive. No actions taken, entities remain in last state. This holds
+even if zones enter fail-safe, which is still tracked and reported.
+
+---
+
+Except in `heat` mode, the summer_mode values above are enforced even when zones
+enter fail-safe. See [Fault Isolation](fault_isolation.md#summer-mode-safety).
 
 ---

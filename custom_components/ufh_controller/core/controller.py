@@ -506,16 +506,21 @@ class HeatingController:
 
         return actions
 
-    def get_summer_mode_value(self, *, heat_request: bool) -> str | None:
+    def get_summer_mode_value(
+        self, *, heat_request: bool, fail_safe: bool = False
+    ) -> SummerMode | None:
         """
         Determine the summer mode value for the boiler.
 
         Args:
             heat_request: Current heat request state.
+            fail_safe: Whether zone control has been lost (any zone in
+                fail-safe). Only heat mode delegates to the boiler.
 
         Returns:
-            SummerMode.WINTER for heating, SummerMode.SUMMER for no heating,
-            or None if not applicable.
+            SummerMode.AUTO to hand control to the boiler, SummerMode.WINTER
+            for heating, SummerMode.SUMMER for no heating, or None if not
+            applicable.
 
         """
         if self.config.summer_mode_entity is None:
@@ -526,13 +531,17 @@ class HeatingController:
         if mode == OperationMode.OFF:
             return None
 
-        if mode in (OperationMode.FLUSH, OperationMode.ALL_OFF):
+        # Explicit modes state user intent; a zone failure must not override it
+        if mode in (OperationMode.FLUSH, OperationMode.CYCLE, OperationMode.ALL_OFF):
             return SummerMode.SUMMER
 
         if mode == OperationMode.ALL_ON:
             return SummerMode.WINTER
 
-        # Heat and cycle modes depend on heat request
+        # Heat is the only automatic mode: delegate so fallback thermostats get supply
+        if fail_safe:
+            return SummerMode.AUTO
+
         return SummerMode.WINTER if heat_request else SummerMode.SUMMER
 
     def update_dhw_state(self, *, dhw_active: bool, now: datetime) -> None:

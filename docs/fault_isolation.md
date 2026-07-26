@@ -41,9 +41,37 @@ Derived from zone statuses:
 
 The `binary_sensor.{controller_id}_status` entity shows `on` (problem) when degraded or fail-safe.
 
+When the controller status is `fail_safe`, all valves are closed and pump and heat
+request are turned off.
+
+Zone failure tracking runs in every operation mode, so the controller can reach
+`fail_safe` even in `off` mode. Because `off` mode takes no actions at all, the
+fail-safe actions are skipped there and no outputs are written; the status is
+still reported.
+
 ## Summer Mode Safety
 
-When ANY zone is in fail-safe:
-- Summer mode forced to "auto"
-- Allows physical fallback valves to receive heated water
-- Ensures heating available via physical fallback mechanisms
+When a zone is in fail-safe its valve is forced closed, so the controller can no
+longer deliver heat to it. In `heat` mode the controller therefore sets summer
+mode to "auto", handing the heating circuit back to the boiler so valve
+controllers acting as offline thermostats can still receive heated water.
+
+This applies in `heat` mode only, whether one zone or all zones have failed. Every
+other mode is an explicit instruction that a zone failure must not override:
+
+| Mode | Summer mode while any zone is in fail-safe |
+|------|--------------------------------------------|
+| `heat` | `auto` — delegated to the boiler |
+| `flush` | `summer` — circulation only, no firing |
+| `cycle` | `summer` — maintenance rotation, no firing |
+| `all_on` | `winter` |
+| `all_off` | `summer` |
+| `off` | not written |
+
+Delegating in a mode that must not fire the boiler would let the boiler heat on
+its own curve while the controller reports no heat request. Because the failed
+zones' valves are closed, that heat would be driven into whichever zones remain
+open, with no PID, quota or window blocking applied.
+
+Frost protection does not depend on this: the boiler applies its own internal
+frost protection regardless of summer mode.
