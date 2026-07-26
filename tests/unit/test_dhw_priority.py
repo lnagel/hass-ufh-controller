@@ -309,6 +309,15 @@ class TestDHWBlockModeInteraction:
             make_config(DHWPriority.ABSOLUTE), started_at=NOW
         )
         controller.mode = mode
+
+        # A zone still reporting flow, so the pump assertion is load-bearing
+        setup_zone_pid(controller, "living_room", 20.0, 60.0)
+        setup_zone_historical(
+            controller, "living_room", valve_position=1.0, window=False
+        )
+        controller.get_zone_runtime("living_room").update_requested_duration(7200)
+        controller.get_zone_runtime("living_room").state.valve_state = ValveState.ON
+
         controller.update_dhw_state(dhw_active=True, now=NOW)
 
         actions = controller.evaluate(now=NOW)
