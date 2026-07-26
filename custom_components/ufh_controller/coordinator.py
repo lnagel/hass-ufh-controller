@@ -641,7 +641,7 @@ class UFHControllerDataUpdateCoordinator(
                 seconds=self._controller.config.timing.controller_loop_interval
             )
 
-        # If ALL zones are in fail-safe, execute controller-level fail-safe
+        # Controller fail-safe, from all zones failing or a controller-level fault
         if (
             self._controller.status == ControllerStatus.FAIL_SAFE
             and self._controller.mode != OperationMode.OFF
