@@ -12,6 +12,7 @@ from custom_components.ufh_controller.const import (
     OperationMode,
     TimingConfig,
     ValveState,
+    ZoneStatus,
 )
 from custom_components.ufh_controller.coordinator import _parse_dhw_priority
 from custom_components.ufh_controller.core.controller import (
@@ -651,6 +652,25 @@ class TestDHWFaultEscalation:
         controller.update_dhw_state(dhw_active=False, now=soon, sensor_available=False)
         controller.update_status(now=soon, has_pending_entities=False)
         assert controller.status == ControllerStatus.DEGRADED
+
+    def test_pending_fault_never_downgrades_zone_fail_safe(self) -> None:
+        """
+        A DHW fault only ever raises the status, so it must not lower one.
+
+        Both escalation paths write the same field, and zone aggregation can
+        reach fail-safe while the DHW clock is still running. Reporting
+        DEGRADED there would call the controller healthier than its zones are.
+        """
+        controller = self._faulted(NOW)
+        for runtime in controller.zone_runtimes:
+            runtime.state.zone_status = ZoneStatus.FAIL_SAFE
+
+        soon = NOW + timedelta(seconds=60)
+        controller.update_dhw_state(dhw_active=False, now=soon, sensor_available=False)
+        controller.update_status(now=soon, has_pending_entities=False)
+
+        assert controller.status == ControllerStatus.FAIL_SAFE
+        assert controller.fail_safe_reason == "dhw_sensor_unavailable"
 
 
 class TestHoldOffScoping:
