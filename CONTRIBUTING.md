@@ -81,7 +81,7 @@ uv run pytest --cov=custom_components/ufh_controller
 ## Code Quality Standards
 
 This project uses:
-- **[Ruff](https://docs.astral.sh/ruff/)** for linting and formatting (line length: 88, Python 3.13+)
+- **[Ruff](https://docs.astral.sh/ruff/)** for linting and formatting (line length: 88, Python 3.14+)
 - **[ty](https://github.com/astral-sh/ty)** for type checking
 
 Use type hints for all function signatures. See `const.py` for examples of TypedDict usage.
