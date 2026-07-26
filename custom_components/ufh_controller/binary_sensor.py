@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.binary_sensor import (
@@ -115,6 +116,26 @@ FLUSH_REQUEST_SENSOR = UFHControllerBinarySensorEntityDescription(
 )
 
 
+def _dhw_block_attrs(data: dict[str, Any]) -> dict[str, Any]:
+    """Return context explaining why circuits are held closed."""
+    block_until = data.get("dhw_block_until")
+    return {
+        "dhw_priority": data.get("dhw_priority"),
+        "dhw_active": data.get("dhw_active"),
+        "dhw_block_until": (
+            block_until.isoformat() if isinstance(block_until, datetime) else None
+        ),
+    }
+
+
+DHW_BLOCK_SENSOR = UFHControllerBinarySensorEntityDescription(
+    key="dhw_block",
+    translation_key="dhw_block",
+    value_fn=lambda data: bool(data.get("dhw_block")),
+    attrs_fn=_dhw_block_attrs,
+)
+
+
 async def async_setup_entry(
     _hass: HomeAssistant,
     entry: UFHControllerConfigEntry,
@@ -132,9 +153,10 @@ async def async_setup_entry(
             HEAT_REQUEST_SENSOR,
         ]
 
-        # Only create flush_request sensor if DHW entity is configured
+        # Only create DHW-derived sensors if the DHW entity is configured
         if entry.data.get("dhw_active_entity"):
             controller_descriptions.append(FLUSH_REQUEST_SENSOR)
+            controller_descriptions.append(DHW_BLOCK_SENSOR)
 
         async_add_entities(
             [
