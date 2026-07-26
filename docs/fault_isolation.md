@@ -41,6 +41,14 @@ Derived from zone statuses:
 
 The `binary_sensor.{controller_id}_status` entity shows `on` (problem) when degraded or fail-safe.
 
+When the controller status is `fail_safe`, all valves are closed and pump and heat
+request are turned off.
+
+Zone failure tracking runs in every operation mode, so the controller can reach
+`fail_safe` even in `off` mode. Because `off` mode takes no actions at all, the
+fail-safe actions are skipped there and no outputs are written; the status is
+still reported.
+
 ## Summer Mode Safety
 
 When a zone is in fail-safe its valve is forced closed, so the controller can no

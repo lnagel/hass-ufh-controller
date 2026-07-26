@@ -601,7 +601,10 @@ class UFHControllerDataUpdateCoordinator(
             )
 
         # If ALL zones are in fail-safe, execute controller-level fail-safe
-        if self._controller.status == ControllerStatus.FAIL_SAFE:
+        if (
+            self._controller.status == ControllerStatus.FAIL_SAFE
+            and self._controller.mode != OperationMode.OFF
+        ):
             await self._execute_fail_safe_actions()
             return self._build_state_dict()
 

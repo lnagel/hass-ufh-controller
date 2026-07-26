@@ -56,7 +56,8 @@ Manual override - heating disabled.
 
 ### Off Mode (`off`)
 
-Controller inactive. No actions taken, entities remain in last state.
+Controller inactive. No actions taken, entities remain in last state. This holds
+even if zones enter fail-safe, which is still tracked and reported.
 
 ---
 

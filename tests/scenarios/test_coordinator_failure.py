@@ -962,3 +962,99 @@ class TestSummerModeFallbackRespectsMode:
         )
 
         assert calls[-1] == SummerMode.AUTO
+
+
+class TestOffModeSkipsFailSafeActions:
+    """
+    Test off mode writes no outputs when the controller enters fail-safe.
+
+    Off mode means the integration takes no actions at all, leaving the manifold
+    to whatever else is managing it. Zone failure tracking still runs in off
+    mode, so the controller can reach fail-safe there; doing so must not start
+    driving valves, pump, heat request or summer mode.
+    """
+
+    async def test_off_mode_writes_nothing_in_fail_safe(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry_all_entities: MockConfigEntry,
+    ) -> None:
+        """Test no service calls are made in off mode once all zones fail."""
+        mock_config_entry_all_entities.add_to_hass(hass)
+        hass.states.async_set("sensor.zone1_temp", "20.5")
+        hass.states.async_set("switch.zone1_valve", "on")
+        hass.states.async_set("switch.pump_request", "on")
+        hass.states.async_set("switch.heat_request", "on")
+        hass.states.async_set("select.summer_mode", "winter")
+        hass.states.async_set("binary_sensor.dhw_active", "off")
+
+        await hass.config_entries.async_setup(mock_config_entry_all_entities.entry_id)
+        await hass.async_block_till_done()
+
+        service_calls: list[str] = []
+
+        async def track_call(call: ServiceCall) -> None:
+            service_calls.append(f"{call.domain}.{call.service}")
+
+        hass.services.async_register("switch", "turn_on", track_call)
+        hass.services.async_register("switch", "turn_off", track_call)
+        hass.services.async_register("select", "select_option", track_call)
+
+        coordinator = mock_config_entry_all_entities.runtime_data.coordinator
+        coordinator.controller.mode = OperationMode.OFF
+
+        # The only zone has been failing for longer than the fail-safe timeout
+        hass.states.async_set("sensor.zone1_temp", "unavailable")
+        zone1 = coordinator.controller.get_zone_runtime("zone1")
+        assert zone1 is not None
+        zone1.state.last_successful_update = datetime.now(UTC) - timedelta(
+            seconds=FAIL_SAFE_TIMEOUT + 60
+        )
+
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+
+        assert coordinator.status == ControllerStatus.FAIL_SAFE
+        assert service_calls == []
+
+    async def test_heat_mode_still_executes_fail_safe(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry_all_entities: MockConfigEntry,
+    ) -> None:
+        """Test the fail-safe path still runs in heat mode."""
+        mock_config_entry_all_entities.add_to_hass(hass)
+        hass.states.async_set("sensor.zone1_temp", "20.5")
+        hass.states.async_set("switch.zone1_valve", "on")
+        hass.states.async_set("switch.pump_request", "on")
+        hass.states.async_set("switch.heat_request", "on")
+        hass.states.async_set("select.summer_mode", "winter")
+        hass.states.async_set("binary_sensor.dhw_active", "off")
+
+        await hass.config_entries.async_setup(mock_config_entry_all_entities.entry_id)
+        await hass.async_block_till_done()
+
+        service_calls: list[str] = []
+
+        async def track_call(call: ServiceCall) -> None:
+            service_calls.append(f"{call.domain}.{call.service}")
+
+        hass.services.async_register("switch", "turn_on", track_call)
+        hass.services.async_register("switch", "turn_off", track_call)
+        hass.services.async_register("select", "select_option", track_call)
+
+        coordinator = mock_config_entry_all_entities.runtime_data.coordinator
+
+        hass.states.async_set("sensor.zone1_temp", "unavailable")
+        zone1 = coordinator.controller.get_zone_runtime("zone1")
+        assert zone1 is not None
+        zone1.state.last_successful_update = datetime.now(UTC) - timedelta(
+            seconds=FAIL_SAFE_TIMEOUT + 60
+        )
+
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+
+        assert coordinator.status == ControllerStatus.FAIL_SAFE
+        assert "switch.turn_off" in service_calls
+        assert "select.select_option" in service_calls
