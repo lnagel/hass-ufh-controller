@@ -34,7 +34,7 @@ if TYPE_CHECKING:
 
 
 def setup_zone_pid(
-    controller: "HeatingController",
+    controller: HeatingController,
     zone_id: str,
     current_temp: float | None,
     dt: float,
@@ -61,7 +61,7 @@ def setup_zone_pid(
 
 
 def setup_zone_historical(
-    controller: "HeatingController",
+    controller: HeatingController,
     zone_id: str,
     *,
     valve_position: float,

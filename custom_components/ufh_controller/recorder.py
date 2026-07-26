@@ -36,7 +36,7 @@ async def _query_entity_states(
     )
 
     entity_states = states.get(entity_id)
-    return entity_states if entity_states else None
+    return entity_states or None
 
 
 async def get_state_average(
@@ -96,7 +96,7 @@ async def get_state_average(
     return total_on_time / total_time
 
 
-async def get_valve_position(  # noqa: PLR0913
+async def get_valve_position(  # noqa: PLR0913, PLR0917
     hass: HomeAssistant,
     entity_id: str,
     start: datetime,

@@ -266,7 +266,7 @@ class TestPIDState:
         )
 
         with pytest.raises(AttributeError):
-            state.error = 2.0  # type: ignore[misc]
+            state.error = 2.0  # ty: ignore[invalid-assignment]
 
     def test_state_fields(self) -> None:
         """Test PIDState with all fields."""

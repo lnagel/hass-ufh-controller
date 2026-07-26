@@ -3,13 +3,13 @@ name = "hass-ufh-controller"
 version = "0.5.0"
 description = "A Home Assistant integration for underfloor heating controller"
 readme = "README.md"
-requires-python = ">=3.13.2"
+requires-python = ">=3.14.2"
 authors = [
     { name = "lnagel", email = "lnagel@users.noreply.github.com" }
 ]
 dependencies = [
     "colorlog>=6.10.1",
-    "homeassistant>=2025.10.0",
+    "homeassistant>=2026.3.0",
 ]
 
 [dependency-groups]
@@ -17,7 +17,7 @@ dev = [
     "pytest>=7.0.0",
     "pytest-asyncio>=0.20.0",
     "pytest-cov>=4.0.0",
-    "pytest-homeassistant-custom-component>=0.13.285",
+    "pytest-homeassistant-custom-component==0.13.320",
     "bump-my-version>=1.1.0",
     "diff-cover>=9.0.0",
     "ruff>=0.14.10",
@@ -41,16 +41,18 @@ asyncio_default_fixture_loop_scope = "function"
 
 [tool.ruff]
 line-length = 88
-target-version = "py313"
+target-version = "py314"
 
 [tool.ruff.lint]
 select = ["ALL"]
 ignore = [
     "ANN401", # Dynamically typed expressions (typing.Any) are disallowed
+    "CPY001", # Missing copyright notice at top of file
     "D203", # no-blank-line-before-class (incompatible with formatter)
     "D212", # multi-line-summary-first-line (incompatible with formatter)
     "COM812", # incompatible with formatter
     "ISC001", # incompatible with formatter
+    "RUF012", # Home Assistant entity _attr_* defaults cannot be ClassVar
 ]
 
 [tool.ruff.lint.flake8-pytest-style]
@@ -69,10 +71,13 @@ max-complexity = 25
     "ARG001", # Allow unused arguments in fixtures
     "PLR2004", # Allow magic values in tests
     "PLR0913", # Allow many arguments in test functions (fixtures + parametrize)
+    "PLR0917", # Allow many positional arguments in test functions
     "SLF001", # Allow private member access in tests
     "EM101", # Allow string literals in exceptions
     "TRY003", # Allow long exception messages
     "FBT001", # Allow boolean positional args (pytest parametrize)
+    "TC002", # Allow non-type-checking imports in test annotations
+    "TC003", # Allow non-type-checking imports in test annotations
 ]
 
 [tool.coverage.run]
@@ -90,7 +95,15 @@ fail_under = 90
 show_missing = true
 
 [tool.ty.environment]
-python-version = "3.13"
+python-version = "3.14"
+
+[[tool.ty.overrides]]
+# Home Assistant registers selector classes through a decorator that erases them
+# to type[Selector], so they are not valid static type expressions
+include = ["custom_components/ufh_controller/config_flow.py"]
+
+[tool.ty.overrides.rules]
+"invalid-type-form" = "ignore"
 
 [tool.bumpversion]
 current_version = "0.5.0"

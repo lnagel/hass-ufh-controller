@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 class UFHZoneBinarySensorEntityDescription(BinarySensorEntityDescription):
     """Describes UFH zone binary sensor entity."""
 
-    value_fn: Callable[[dict[str, Any]], bool]
+    value_fn: Callable[[dict[str, Any]], bool | None]
     entity_registry_visible_default: bool = False
 
 
@@ -40,7 +40,7 @@ class UFHZoneBinarySensorEntityDescription(BinarySensorEntityDescription):
 class UFHControllerBinarySensorEntityDescription(BinarySensorEntityDescription):
     """Describes UFH controller binary sensor entity."""
 
-    value_fn: Callable[[dict[str, Any]], bool]
+    value_fn: Callable[[dict[str, Any]], bool | None]
     attrs_fn: Callable[[dict[str, Any]], dict[str, Any]] | None = None
     entity_registry_visible_default: bool = False
 
@@ -215,7 +215,7 @@ class UFHZoneBinarySensor(UFHControllerZoneEntity, BinarySensorEntity):
         self._attr_unique_id = f"{controller_id}_{zone_id}_{description.key}"
 
     @property
-    def is_on(self) -> bool:
+    def is_on(self) -> bool | None:
         """Return the sensor state."""
         zone_data = self.coordinator.data.get("zones", {}).get(self._zone_id, {})
         return self.entity_description.value_fn(zone_data)
@@ -257,7 +257,7 @@ class UFHControllerBinarySensor(UFHControllerEntity, BinarySensorEntity):
         self._attr_unique_id = f"{controller_id}_{description.key}"
 
     @property
-    def is_on(self) -> bool:
+    def is_on(self) -> bool | None:
         """Return the sensor state."""
         controller_data = self.coordinator.data.get("controller", {})
         return self.entity_description.value_fn(controller_data)

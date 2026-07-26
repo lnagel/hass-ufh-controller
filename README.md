@@ -28,7 +28,7 @@ This integration is designed for **hydronic underfloor heating** systems with an
 **You need:**
 - Temperature sensor per zone (Zigbee, Z-Wave, WiFi — anything HA supports)
 - Controllable valve per zone (relay board, smart switch, etc.)
-- Home Assistant 2025.10 or newer
+- Home Assistant 2026.3 or newer
 
 **Optional hardware for advanced features:**
 - Heat request switch or EMS-ESP for heat source coordination

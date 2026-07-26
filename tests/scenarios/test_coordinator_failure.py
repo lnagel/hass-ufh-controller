@@ -719,7 +719,7 @@ class TestTempEntityNotFound:
         self,
         hass: HomeAssistant,
         mock_config_entry: MockConfigEntry,
-        caplog: object,
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         """Test that temp entity not found logs a warning."""
         mock_config_entry.add_to_hass(hass)
@@ -739,14 +739,14 @@ class TestTempEntityNotFound:
                 "homeassistant.components.recorder.get_instance",
                 return_value=mock_recorder,
             ),
-            caplog.at_level(logging.WARNING),  # type: ignore[union-attr]
+            caplog.at_level(logging.WARNING),
         ):
             await coordinator._update_zone("zone1", now, 60.0)
 
         assert any(
             "Temperature entity sensor.zone1_temp not found for zone zone1"
             in record.message
-            for record in caplog.records  # type: ignore[union-attr]
+            for record in caplog.records
         )
 
 
@@ -798,7 +798,7 @@ class TestInitializingTimeout:
         self,
         hass: HomeAssistant,
         mock_config_entry: MockConfigEntry,
-        caplog: object,
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         """Fail-safe log message reports the initializing timeout, not 1 hour."""
         mock_config_entry.add_to_hass(hass)
@@ -825,13 +825,13 @@ class TestInitializingTimeout:
                 "homeassistant.components.recorder.get_instance",
                 return_value=mock_recorder,
             ),
-            caplog.at_level(logging.ERROR),  # type: ignore[union-attr]
+            caplog.at_level(logging.ERROR),
         ):
             await coordinator._update_zone("zone1", later, 60.0)
 
         assert any(
             f"after {INITIALIZING_TIMEOUT} seconds" in record.message
-            for record in caplog.records  # type: ignore[union-attr]
+            for record in caplog.records
         )
 
 
