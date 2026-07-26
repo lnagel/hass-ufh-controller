@@ -651,3 +651,35 @@ class TestDHWFaultEscalation:
         controller.update_dhw_state(dhw_active=False, now=soon, sensor_available=False)
         controller.update_status(now=soon, has_pending_entities=False)
         assert controller.status == ControllerStatus.DEGRADED
+
+
+class TestHoldOffScoping:
+    """The hold-off deadline exists only where a block can engage."""
+
+    @pytest.mark.parametrize("priority", [DHWPriority.PARTIAL, DHWPriority.PARALLEL])
+    def test_no_deadline_armed_without_absolute(self, priority: DHWPriority) -> None:
+        """
+        Non-absolute priorities never arm the hold-off.
+
+        Arming it regardless meant partial and parallel users saw a populated
+        "Block Until" attribute, and had it persisted, for a block that could
+        never engage.
+        """
+        controller = HeatingController(make_config(priority), started_at=NOW)
+        controller.update_dhw_state(dhw_active=True, now=NOW)
+        end = NOW + timedelta(minutes=10)
+        controller.update_dhw_state(dhw_active=False, now=end)
+
+        assert controller.state.dhw_block_until is None
+        assert controller.state.dhw_block is False
+
+    def test_deadline_armed_under_absolute(self) -> None:
+        """Absolute still arms it, so the block has something to run on."""
+        controller = HeatingController(
+            make_config(DHWPriority.ABSOLUTE), started_at=NOW
+        )
+        controller.update_dhw_state(dhw_active=True, now=NOW)
+        end = NOW + timedelta(minutes=10)
+        controller.update_dhw_state(dhw_active=False, now=end)
+
+        assert controller.state.dhw_block_until == end + timedelta(seconds=RECOVERY)

@@ -699,8 +699,10 @@ class HeatingController:
 
         # Detect DHW OFF transition (was on, now off)
         if self._state.dhw_active and not dhw_active:
-            # Safety timer, armed regardless of the flush feature
-            self._state.dhw_block_until = now + timedelta(seconds=recovery)
+            # Safety timer, armed regardless of the flush feature but only
+            # where a block can actually engage
+            if absolute:
+                self._state.dhw_block_until = now + timedelta(seconds=recovery)
 
             flush_duration = self.config.timing.flush_duration
             if flush_duration > 0 and self._state.flush_enabled:
