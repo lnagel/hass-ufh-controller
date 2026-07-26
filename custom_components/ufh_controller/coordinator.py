@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from .config_flow import (
     CONF_DHW_ACTIVE_ENTITY,
+    CONF_DHW_PRIORITY,
     CONF_HEAT_REQUEST_ENTITY,
     CONF_OUTDOOR_TEMP_ENTITY,
     CONF_PUMP_REQUEST_ENTITY,
@@ -36,6 +37,7 @@ from homeassistant.helpers.update_coordinator import TimestampDataUpdateCoordina
 from sqlalchemy.exc import SQLAlchemyError
 
 from .const import (
+    DEFAULT_DHW_PRIORITY,
     DEFAULT_OUTDOOR_TEMP_COLD,
     DEFAULT_OUTDOOR_TEMP_WARM,
     DEFAULT_PID,
@@ -51,6 +53,7 @@ from .const import (
     SUBENTRY_TYPE_CONTROLLER,
     SUBENTRY_TYPE_ZONE,
     ControllerStatus,
+    DHWPriority,
     OperationMode,
     SummerMode,
     TimingConfig,
@@ -225,6 +228,9 @@ class UFHControllerDataUpdateCoordinator(
             flush_duration=timing_opts.get(
                 "flush_duration", DEFAULT_TIMING["flush_duration"]
             ),
+            dhw_recovery_time=timing_opts.get(
+                "dhw_recovery_time", DEFAULT_TIMING["dhw_recovery_time"]
+            ),
         )
 
         # Build zones from subentries
@@ -283,6 +289,9 @@ class UFHControllerDataUpdateCoordinator(
             pump_request_entity=data.get(CONF_PUMP_REQUEST_ENTITY),
             heat_request_entity=data.get(CONF_HEAT_REQUEST_ENTITY),
             dhw_active_entity=data.get(CONF_DHW_ACTIVE_ENTITY),
+            dhw_priority=DHWPriority(
+                data.get(CONF_DHW_PRIORITY) or DEFAULT_DHW_PRIORITY
+            ),
             summer_mode_entity=data.get(CONF_SUMMER_MODE_ENTITY),
             supply_temp_entity=data.get(CONF_SUPPLY_TEMP_ENTITY),
             outdoor_temp_entity=data.get(CONF_OUTDOOR_TEMP_ENTITY),
@@ -1097,6 +1106,9 @@ class UFHControllerDataUpdateCoordinator(
                 "zones_fail_safe": zones_fail_safe,
                 "flush_enabled": self._controller.state.flush_enabled,
                 "dhw_active": self._controller.state.dhw_active,
+                "dhw_priority": self._controller.config.dhw_priority.value,
+                "dhw_block": self._controller.state.dhw_block,
+                "dhw_block_until": self._controller.state.dhw_block_until,
                 "flush_until": self._controller.state.flush_until,
                 "flush_request": self._controller.state.flush_request,
                 "pump_request": self._controller.state.pump_request,

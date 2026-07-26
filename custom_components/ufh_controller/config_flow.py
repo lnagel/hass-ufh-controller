@@ -17,6 +17,7 @@ from homeassistant.helpers import selector
 from slugify import slugify
 
 from .const import (
+    DEFAULT_DHW_PRIORITY,
     DEFAULT_OUTDOOR_TEMP_COLD,
     DEFAULT_OUTDOOR_TEMP_WARM,
     DEFAULT_PID,
@@ -41,12 +42,14 @@ from .const import (
     UI_TEMP_EMA_TIME_CONSTANT,
     UI_TIMING_CLOSING_WARNING,
     UI_TIMING_CONTROLLER_LOOP_INTERVAL,
+    UI_TIMING_DHW_RECOVERY_TIME,
     UI_TIMING_FLUSH_DURATION,
     UI_TIMING_MIN_RUN_TIME,
     UI_TIMING_OBSERVATION_PERIOD,
     UI_TIMING_VALVE_CLOSE_TIME,
     UI_TIMING_VALVE_OPEN_TIME,
     UI_TIMING_WINDOW_BLOCK_TIME,
+    DHWPriority,
     TimingDefaults,
 )
 from .core.zone import CircuitType
@@ -56,6 +59,7 @@ CONF_CONTROLLER_ID = "controller_id"
 CONF_PUMP_REQUEST_ENTITY = "pump_request_entity"
 CONF_HEAT_REQUEST_ENTITY = "heat_request_entity"
 CONF_DHW_ACTIVE_ENTITY = "dhw_active_entity"
+CONF_DHW_PRIORITY = "dhw_priority"
 CONF_SUMMER_MODE_ENTITY = "summer_mode_entity"
 CONF_SUPPLY_TEMP_ENTITY = "supply_temp_entity"
 CONF_SUPPLY_TARGET_TEMP = "supply_target_temp"
@@ -64,6 +68,17 @@ CONF_OUTDOOR_TEMP_WARM = "outdoor_temp_warm"
 CONF_OUTDOOR_TEMP_COLD = "outdoor_temp_cold"
 CONF_SUPPLY_TEMP_WARM = "supply_temp_warm"
 CONF_SUPPLY_TEMP_COLD = "supply_temp_cold"
+
+
+def get_dhw_priority_selector() -> selector.SelectSelector:
+    """Get the selector for DHW priority, translated via strings.json."""
+    return selector.SelectSelector(
+        selector.SelectSelectorConfig(
+            options=[priority.value for priority in DHWPriority],
+            mode=selector.SelectSelectorMode.DROPDOWN,
+            translation_key=CONF_DHW_PRIORITY,
+        )
+    )
 
 
 def get_timing_schema(timing: TimingDefaults | None = None) -> vol.Schema:
@@ -174,6 +189,20 @@ def get_timing_schema(timing: TimingDefaults | None = None) -> vol.Schema:
                     min=UI_TIMING_FLUSH_DURATION["min"],
                     max=UI_TIMING_FLUSH_DURATION["max"],
                     step=UI_TIMING_FLUSH_DURATION["step"],
+                    unit_of_measurement=UnitOfTime.SECONDS,
+                )
+            ),
+            vol.Required(
+                "dhw_recovery_time",
+                default=timing.get(
+                    "dhw_recovery_time",
+                    DEFAULT_TIMING["dhw_recovery_time"],
+                ),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=UI_TIMING_DHW_RECOVERY_TIME["min"],
+                    max=UI_TIMING_DHW_RECOVERY_TIME["max"],
+                    step=UI_TIMING_DHW_RECOVERY_TIME["step"],
                     unit_of_measurement=UnitOfTime.SECONDS,
                 )
             ),
@@ -582,6 +611,9 @@ class UFHControllerFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_PUMP_REQUEST_ENTITY: user_input.get(CONF_PUMP_REQUEST_ENTITY),
                     CONF_HEAT_REQUEST_ENTITY: user_input.get(CONF_HEAT_REQUEST_ENTITY),
                     CONF_DHW_ACTIVE_ENTITY: user_input.get(CONF_DHW_ACTIVE_ENTITY),
+                    CONF_DHW_PRIORITY: user_input.get(
+                        CONF_DHW_PRIORITY, DEFAULT_DHW_PRIORITY.value
+                    ),
                     CONF_SUMMER_MODE_ENTITY: user_input.get(CONF_SUMMER_MODE_ENTITY),
                 },
                 options={
@@ -605,6 +637,10 @@ class UFHControllerFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                     vol.Optional(CONF_DHW_ACTIVE_ENTITY): selector.EntitySelector(
                         selector.EntitySelectorConfig(domain="binary_sensor")
                     ),
+                    vol.Required(
+                        CONF_DHW_PRIORITY,
+                        default=DEFAULT_DHW_PRIORITY.value,
+                    ): get_dhw_priority_selector(),
                     vol.Optional(CONF_SUMMER_MODE_ENTITY): selector.EntitySelector(
                         selector.EntitySelectorConfig(domain="select")
                     ),
@@ -656,6 +692,9 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
                 CONF_PUMP_REQUEST_ENTITY: user_input.get(CONF_PUMP_REQUEST_ENTITY),
                 CONF_HEAT_REQUEST_ENTITY: user_input.get(CONF_HEAT_REQUEST_ENTITY),
                 CONF_DHW_ACTIVE_ENTITY: user_input.get(CONF_DHW_ACTIVE_ENTITY),
+                CONF_DHW_PRIORITY: user_input.get(
+                    CONF_DHW_PRIORITY, DEFAULT_DHW_PRIORITY.value
+                ),
                 CONF_SUMMER_MODE_ENTITY: user_input.get(CONF_SUMMER_MODE_ENTITY),
             }
             self.hass.config_entries.async_update_entry(
@@ -699,6 +738,12 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
                     ): selector.EntitySelector(
                         selector.EntitySelectorConfig(domain="binary_sensor")
                     ),
+                    vol.Required(
+                        CONF_DHW_PRIORITY,
+                        default=current_data.get(
+                            CONF_DHW_PRIORITY, DEFAULT_DHW_PRIORITY.value
+                        ),
+                    ): get_dhw_priority_selector(),
                     vol.Optional(
                         CONF_SUMMER_MODE_ENTITY,
                         description={
@@ -735,6 +780,7 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
                 "window_block_time": int(user_input["window_block_time"]),
                 "controller_loop_interval": int(user_input["controller_loop_interval"]),
                 "flush_duration": int(user_input["flush_duration"]),
+                "dhw_recovery_time": int(user_input["dhw_recovery_time"]),
             }
 
             # Update the controller subentry with new timing

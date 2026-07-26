@@ -9,7 +9,11 @@
           "pump_request_entity": "Pump request switch",
           "heat_request_entity": "Heat request switch",
           "dhw_active_entity": "DHW active sensor",
+          "dhw_priority": "DHW priority",
           "summer_mode_entity": "Summer mode select"
+        },
+        "data_description": {
+          "dhw_priority": "How heating circuits behave while the heat source is charging domestic hot water. Choose Absolute if DHW charging raises the flow temperature above what your floor construction tolerates and no mixing valve or diverter protects the manifold."
         }
       }
     },
@@ -33,7 +37,11 @@
           "pump_request_entity": "Pump request switch",
           "heat_request_entity": "Heat request switch",
           "dhw_active_entity": "DHW active sensor",
+          "dhw_priority": "DHW priority",
           "summer_mode_entity": "Summer mode select"
+        },
+        "data_description": {
+          "dhw_priority": "How heating circuits behave while the heat source is charging domestic hot water. Choose Absolute if DHW charging raises the flow temperature above what your floor construction tolerates and no mixing valve or diverter protects the manifold."
         }
       },
       "timing": {
@@ -46,7 +54,11 @@
           "closing_warning_duration": "Closing warning duration",
           "window_block_time": "Window block time",
           "controller_loop_interval": "Controller loop interval",
-          "flush_duration": "Flush duration after DHW"
+          "flush_duration": "Flush duration after DHW",
+          "dhw_recovery_time": "DHW recovery time"
+        },
+        "data_description": {
+          "dhw_recovery_time": "Under absolute priority, how long circuits stay closed after DHW finishes so the primary flow temperature can fall back to heating levels. Also delays the post-DHW flush window by the same amount."
         }
       },
       "heat_accounting": {
@@ -126,7 +138,11 @@
             "closing_warning_duration": "Closing warning duration",
             "window_block_time": "Window block time",
             "controller_loop_interval": "Controller loop interval",
-            "flush_duration": "Flush duration after DHW"
+            "flush_duration": "Flush duration after DHW",
+            "dhw_recovery_time": "DHW recovery time"
+          },
+          "data_description": {
+            "dhw_recovery_time": "Under absolute priority, how long circuits stay closed after DHW finishes so the primary flow temperature can fall back to heating levels. Also delays the post-DHW flush window by the same amount."
           }
         }
       },
@@ -272,6 +288,20 @@
       "flush_request": {
         "name": "Flush Request"
       },
+      "dhw_block": {
+        "name": "DHW Block",
+        "state_attributes": {
+          "dhw_priority": {
+            "name": "DHW Priority"
+          },
+          "dhw_active": {
+            "name": "DHW Active"
+          },
+          "dhw_block_until": {
+            "name": "Block Until"
+          }
+        }
+      },
       "status": {
         "name": "Status",
         "state_attributes": {
@@ -309,6 +339,15 @@
     "switch": {
       "flush_enabled": {
         "name": "Flush Enabled"
+      }
+    }
+  },
+  "selector": {
+    "dhw_priority": {
+      "options": {
+        "parallel": "Parallel - heating runs during DHW",
+        "partial": "Partial - open circuits continue, closed ones wait",
+        "absolute": "Absolute - all circuits close during DHW"
       }
     }
   }

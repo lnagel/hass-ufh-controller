@@ -264,6 +264,7 @@ UI_TIMING_CLOSING_WARNING = {"min": 60, "max": 600, "step": 30}
 UI_TIMING_WINDOW_BLOCK_TIME = {"min": 0, "max": 3600, "step": 60}
 UI_TIMING_CONTROLLER_LOOP_INTERVAL = {"min": 10, "max": 300, "step": 5}
 UI_TIMING_FLUSH_DURATION = {"min": 0, "max": 1800, "step": 60}  # 0-30 minutes
+UI_TIMING_DHW_RECOVERY_TIME = {"min": 0, "max": 3600, "step": 60}  # 0-60 minutes
 
 # UI validation constraints for setpoint parameters
 UI_SETPOINT_MIN = {"min": 5.0, "max": 30.0, "step": 0.1}
