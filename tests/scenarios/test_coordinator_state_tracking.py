@@ -131,12 +131,14 @@ async def test_fail_safe_sets_expected_state_for_summer_mode(
     """
     Test that fail-safe actions set expected state for summer mode.
 
-    During fail-safe, the coordinator resets summer mode to 'auto'. The expected
-    state must be set so this self-initiated change isn't treated as external.
+    During fail-safe in heat mode, the coordinator resets summer mode to 'auto'.
+    The expected state must be set so this self-initiated change isn't treated
+    as external.
     """
     mock_config_entry_all_entities.add_to_hass(hass)
     hass.states.async_set("sensor.zone1_temp", "20.5")
     hass.states.async_set("switch.zone1_valve", "on")
+    hass.states.async_set("select.summer_mode", "winter")
 
     # Register services needed by fail-safe actions
     hass.services.async_register("switch", "turn_off", AsyncMock())

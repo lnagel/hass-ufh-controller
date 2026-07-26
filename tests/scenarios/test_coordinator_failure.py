@@ -13,6 +13,7 @@ from custom_components.ufh_controller.const import (
     FAIL_SAFE_TIMEOUT,
     INITIALIZING_TIMEOUT,
     ControllerStatus,
+    OperationMode,
     SummerMode,
     ValveState,
     ZoneStatus,
@@ -493,43 +494,6 @@ class TestZoneIsolation:
 
         assert zone1.state.zone_status == ZoneStatus.NORMAL
 
-    async def test_summer_mode_forced_auto_when_zone_in_fail_safe(
-        self,
-        hass: HomeAssistant,
-        mock_config_entry_multiple_zones: MockConfigEntry,
-    ) -> None:
-        """Test summer mode is forced to auto when any zone is in fail-safe."""
-        mock_config_entry_multiple_zones.add_to_hass(hass)
-        hass.states.async_set("sensor.zone1_temp", "20.5")
-        hass.states.async_set("sensor.zone2_temp", "20.5")
-        hass.states.async_set("switch.zone1_valve", "off")
-        hass.states.async_set("switch.zone2_valve", "off")
-        hass.states.async_set("select.summer_mode", "winter")
-
-        # Register select service
-        summer_mode_calls: list[str] = []
-
-        async def track_select_call(call: ServiceCall) -> None:
-            summer_mode_calls.append(call.data["option"])
-
-        hass.services.async_register("select", "select_option", track_select_call)
-
-        coordinator = UFHControllerDataUpdateCoordinator(
-            hass, mock_config_entry_multiple_zones
-        )
-
-        # Put zone2 into fail-safe
-        zone2 = coordinator._controller.get_zone_runtime("zone2")
-        assert zone2 is not None
-        zone2.state.zone_status = ZoneStatus.FAIL_SAFE
-
-        # Try to set summer mode to "winter"
-        # Without fail-safe zone, this would set to "winter"
-        # But with fail-safe zone, it should force to "auto"
-        await coordinator._set_summer_mode(SummerMode.WINTER)
-
-        assert "auto" in summer_mode_calls
-
     async def test_state_dict_includes_zone_status(
         self,
         hass: HomeAssistant,
@@ -869,3 +833,132 @@ class TestInitializingTimeout:
             f"after {INITIALIZING_TIMEOUT} seconds" in record.message
             for record in caplog.records  # type: ignore[union-attr]
         )
+
+
+class TestSummerModeFallbackRespectsMode:
+    """
+    Test the summer mode fallback honours the active operation mode.
+
+    Handing heating authority to the boiler with 'auto' is only appropriate in
+    heat mode, where the controller is actively heating and valve-controller
+    fallback thermostats may physically open a valve that needs supply. In every
+    explicit mode the user has already stated the intent, so a zone failure must
+    not silently override it.
+    """
+
+    @staticmethod
+    async def _run_loop_with_failed_zone(
+        hass: HomeAssistant,
+        entry: MockConfigEntry,
+        mode: OperationMode,
+    ) -> list[str]:
+        """
+        Run one control loop with zone2 in fail-safe and zone1 healthy.
+
+        Returns the summer mode options requested during that loop.
+        """
+        entry.add_to_hass(hass)
+        hass.states.async_set("sensor.zone1_temp", "20.5")
+        hass.states.async_set("sensor.zone2_temp", "unavailable")
+        hass.states.async_set("switch.zone1_valve", "on")
+        hass.states.async_set("switch.zone2_valve", "on")
+        hass.states.async_set("select.summer_mode", "winter")
+        hass.states.async_set("binary_sensor.dhw_active", "off")
+
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        summer_mode_calls: list[str] = []
+
+        async def track_select_call(call: ServiceCall) -> None:
+            summer_mode_calls.append(call.data["option"])
+
+        hass.services.async_register("select", "select_option", track_select_call)
+        hass.services.async_register("switch", "turn_on", AsyncMock())
+        hass.services.async_register("switch", "turn_off", AsyncMock())
+
+        coordinator = entry.runtime_data.coordinator
+        coordinator.controller.mode = mode
+
+        # Zone2 has been failing for longer than the fail-safe timeout
+        zone2 = coordinator.controller.get_zone_runtime("zone2")
+        assert zone2 is not None
+        zone2.state.last_successful_update = datetime.now(UTC) - timedelta(
+            seconds=FAIL_SAFE_TIMEOUT + 60
+        )
+
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+
+        # Precondition: exactly one zone failed, so the controller is degraded
+        assert zone2.state.zone_status == ZoneStatus.FAIL_SAFE
+        assert coordinator.status == ControllerStatus.DEGRADED
+
+        return summer_mode_calls
+
+    async def test_flush_mode_keeps_summer(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry_multiple_zones: MockConfigEntry,
+    ) -> None:
+        """
+        Test flush mode keeps summer when a zone fails.
+
+        Flush means circulate without firing the boiler. Delegating to 'auto'
+        here lets the boiler heat on its own curve, and with the failed zones'
+        valves forced shut all of that heat is driven into whichever loops
+        remain open.
+        """
+        calls = await self._run_loop_with_failed_zone(
+            hass, mock_config_entry_multiple_zones, OperationMode.FLUSH
+        )
+
+        assert SummerMode.AUTO not in calls
+        assert calls[-1] == SummerMode.SUMMER
+
+    async def test_all_off_mode_keeps_summer(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry_multiple_zones: MockConfigEntry,
+    ) -> None:
+        """Test all_off mode keeps summer when a zone fails."""
+        calls = await self._run_loop_with_failed_zone(
+            hass, mock_config_entry_multiple_zones, OperationMode.ALL_OFF
+        )
+
+        assert SummerMode.AUTO not in calls
+        assert calls[-1] == SummerMode.SUMMER
+
+    async def test_all_on_mode_keeps_winter(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry_multiple_zones: MockConfigEntry,
+    ) -> None:
+        """
+        Test all_on mode keeps winter when a zone fails.
+
+        Winter is already the seeded state, so the correct behaviour is to leave
+        it alone rather than to request anything.
+        """
+        calls = await self._run_loop_with_failed_zone(
+            hass, mock_config_entry_multiple_zones, OperationMode.ALL_ON
+        )
+
+        assert SummerMode.AUTO not in calls
+        assert all(option == SummerMode.WINTER for option in calls)
+
+    async def test_heat_mode_still_delegates_to_auto(
+        self,
+        hass: HomeAssistant,
+        mock_config_entry_multiple_zones: MockConfigEntry,
+    ) -> None:
+        """
+        Test heat mode still delegates to auto when a zone fails.
+
+        This is the behaviour the fallback exists for and must be preserved.
+        """
+        calls = await self._run_loop_with_failed_zone(
+            hass, mock_config_entry_multiple_zones, OperationMode.HEAT
+        )
+
+        assert calls[-1] == SummerMode.AUTO
