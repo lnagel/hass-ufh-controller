@@ -12,22 +12,32 @@ FLUSH_UNTIL_EXPIRED = "expired"
 
 
 @pytest.mark.parametrize(
-    ("flush_enabled", "dhw_active", "flush_until", "any_regular_on", "expected"),
+    (
+        "flush_enabled",
+        "dhw_active",
+        "dhw_block",
+        "flush_until",
+        "any_regular_on",
+        "expected",
+    ),
     [
         # flush_enabled=False always returns False
-        (False, False, None, False, False),
-        (False, False, FLUSH_UNTIL_FUTURE, False, False),
+        (False, False, False, None, False, False),
+        (False, False, False, FLUSH_UNTIL_FUTURE, False, False),
         # No post-DHW timer returns False (even if flush enabled)
-        (True, False, None, False, False),
+        (True, False, False, None, False, False),
         # DHW currently active returns False
-        (True, True, None, False, False),
-        (True, True, FLUSH_UNTIL_FUTURE, False, False),
+        (True, True, False, None, False, False),
+        (True, True, False, FLUSH_UNTIL_FUTURE, False, False),
         # Post-DHW period (timer active) + no regular ON = True
-        (True, False, FLUSH_UNTIL_FUTURE, False, True),
+        (True, False, False, FLUSH_UNTIL_FUTURE, False, True),
         # Post-DHW period + regular ON = False
-        (True, False, FLUSH_UNTIL_FUTURE, True, False),
+        (True, False, False, FLUSH_UNTIL_FUTURE, True, False),
         # Post-DHW period expired = False
-        (True, False, FLUSH_UNTIL_EXPIRED, False, False),
+        (True, False, False, FLUSH_UNTIL_EXPIRED, False, False),
+        # Absolute DHW priority hold-off suppresses the flush window
+        (True, False, True, FLUSH_UNTIL_FUTURE, False, False),
+        (True, True, True, FLUSH_UNTIL_FUTURE, False, False),
     ],
     ids=[
         "disabled_returns_false",
@@ -38,11 +48,14 @@ FLUSH_UNTIL_EXPIRED = "expired"
         "post_dhw_no_regular_returns_true",
         "post_dhw_regular_on_returns_false",
         "post_dhw_expired_returns_false",
+        "dhw_block_during_recovery_returns_false",
+        "dhw_block_while_dhw_active_returns_false",
     ],
 )
 def test_compute_flush_request(
     flush_enabled: bool,
     dhw_active: bool,
+    dhw_block: bool,
     flush_until: str | None,
     any_regular_on: bool,
     expected: bool,
@@ -60,6 +73,7 @@ def test_compute_flush_request(
     result = compute_flush_request(
         flush_enabled=flush_enabled,
         dhw_active=dhw_active,
+        dhw_block=dhw_block,
         flush_until=flush_until_dt,
         any_regular_on=any_regular_on,
         now=now,

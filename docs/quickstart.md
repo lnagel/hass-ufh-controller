@@ -33,6 +33,7 @@ Verify your entities are working before setup:
 | Heat request switch | `switch.boiler_heat_request` | Optional: signals boiler to fire |
 | Summer mode select | `select.boiler_summer_mode` | Optional: EMS-ESP boiler control |
 | DHW active sensor | `binary_sensor.boiler_dhw_active` | Optional: hot water priority |
+| DHW priority | `partial` | How circuits behave during DHW (see below) |
 | Supply temp sensor | `sensor.manifold_supply_temp` | Optional: heat accounting |
 
 ## Step 1: Install the Integration
@@ -78,7 +79,10 @@ Navigate to **Settings → Devices & Services → Add Integration** and search f
 → Leave both blank. The controller will manage valves only.
 
 **Do you want DHW (hot water) priority?**
-→ Configure `dhw_active_entity` to point to a sensor that indicates when your boiler is heating hot water. This prevents new heating cycles during DHW and enables flush circuit heat capture.
+→ Configure `dhw_active_entity` to point to a sensor that indicates when your boiler is heating hot water. On the default `partial` priority this prevents new heating cycles during DHW and enables flush circuit heat capture.
+
+**Does your boiler raise its flow temperature for hot water?**
+→ If it runs, say, 45 °C for heating and 70 °C for the cylinder, and no 3-way diverter or mixing valve protects your manifold, set `dhw_priority` to `absolute`. Otherwise a zone that happens to be open when hot water starts will circulate cylinder-temperature water through your floor. See [dhw_priority](configuration.md#dhw_priority).
 
 **Do you want fair heat accounting?**
 → Configure `supply_temp_entity` to point to your manifold supply temperature sensor, and set `supply_target_temp` to your expected supply temperature (typically 35-45°C for UFH).

@@ -65,25 +65,31 @@ See [Heat Accounting](heat_accounting.md) for detailed documentation.
 
 The zone evaluation follows a priority-based decision tree:
 
-1. **Flush circuit priority:** If flush is enabled and DHW has recently ended with no regular circuits currently running, flush circuits turn on to capture latent heat from the boiler.
+1. **Absolute DHW priority:** If `dhw_priority` is `absolute` and DHW is charging (or the `dhw_recovery_time` hold-off has not expired), every circuit is driven closed. This overrides all the steps below, including the already-on and end-of-period-freeze paths, because the hazard it guards against is hydraulic rather than thermal — see [dhw_priority](configuration.md#dhw_priority).
 
-2. **End-of-period freeze:** When less than `min_run_time` remains in the observation period, valve positions are frozen to prevent unnecessary cycling at period boundaries.
+2. **Flush circuit priority:** If flush is enabled and DHW has recently ended with no regular circuits currently running, flush circuits turn on to capture latent heat from the boiler.
 
-3. **Quota-based scheduling:** For zones that haven't met their quota:
+3. **End-of-period freeze:** When less than `min_run_time` remains in the observation period, valve positions are frozen to prevent unnecessary cycling at period boundaries.
+
+4. **Quota-based scheduling:** For zones that haven't met their quota:
    - If valve is already on: stay on (commands are re-sent to prevent relay timeout)
    - If estimated wall clock runtime is less than `min_run_time`: stay off (not worth a short run).
      When a supply coefficient is available, remaining quota is converted to estimated wall clock time
      (capped at remaining quota so coefficients above 100% never shorten the estimate):
      `estimated_runtime = max(remaining_quota, remaining_quota / (supply_coefficient / 100))`.
      Without a supply sensor, remaining quota is compared directly.
-   - If DHW is active and this is a regular circuit currently off: stay off (DHW priority)
+   - If `dhw_priority` is `partial` (the default), DHW is active and this is a regular circuit currently off: stay off. Circuits already running are left alone; `parallel` skips this check entirely.
    - Otherwise: turn on
 
-4. **Quota met:** For zones that have met their quota:
+5. **Quota met:** For zones that have met their quota:
    - If valve is on: turn off
    - If valve is off: stay off
 
-**Note:** Window blocking affects PID integration (pausing accumulation), not valve control directly. Valves follow quota-based scheduling regardless of window state.
+**Note:** Window blocking affects PID integration (pausing accumulation), not valve control directly. Valves follow quota-based scheduling regardless of window state. Absolute DHW priority is the one exception that does close valves, since no amount of PID pausing keeps DHW-temperature water out of the floor.
+
+**Note:** PID integration continues normally during a DHW block. The room temperature reading stays valid and the room really is losing heat, so the integral builds and the zone catches up once the block clears.
+
+**Note:** Quota is preserved rather than compensated, but not instantly. `used_duration` accrues while `flow` is true, and `flow` is derived from the estimated valve position, which ramps down over `valve_close_time` after the block commands the valve shut. A zone therefore keeps consuming quota for roughly the first 15% of `valve_close_time` (about 30 s at the default 210 s) before flow drops below the 0.85 threshold. That is deliberate: during that window the circuit is receiving cylinder-temperature water, so it is being charged for heat it genuinely got. If DHW spans an observation-period boundary the unused remainder is dropped, which the PID integral self-corrects over the next period.
 
 ### Heat Request Logic
 
@@ -91,6 +97,7 @@ The controller computes a single heat request signal from all zones with active 
 - Only zones with `flow=True` (valve confirmed fully open) are considered
 - A zone contributes to the heat request when its `remaining_duration` exceeds the `closing_warning_duration` (zone won't close imminently)
 - If any qualifying zone needs heat, the boiler heat request is enabled
+- While a DHW block is in force both the heat request and the pump request are suppressed outright. Thermal actuators take minutes to close, so a circuit still reports flow immediately after DHW asserts; without this the controller would ask the boiler to fire mid-charge and keep an independent circulation pump pushing cylinder-temperature water through the closing circuit.
 
 ### Boiler Summer Mode Management
 

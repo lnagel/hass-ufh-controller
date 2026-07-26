@@ -53,6 +53,26 @@ class SummerMode(StrEnum):
     SUMMER = "summer"
 
 
+class DHWPriority(StrEnum):
+    """
+    Domestic hot water priority levels.
+
+    Controls how the heating circuits behave while the heat source is charging
+    the DHW cylinder. Naming follows established boiler control terminology
+    (Vorrangschaltung):
+
+    - PARALLEL: No restriction, heating and DHW run concurrently.
+    - PARTIAL: Circuits already open stay open, closed circuits cannot start.
+    - ABSOLUTE: All circuits are actively closed for the duration of DHW plus a
+      recovery period. Required on systems where DHW charging raises the flow
+      temperature above what the floor construction tolerates.
+    """
+
+    PARALLEL = "parallel"
+    PARTIAL = "partial"
+    ABSOLUTE = "absolute"
+
+
 class ControllerStatus(StrEnum):
     """Controller operational status for error tracking."""
 
@@ -116,6 +136,7 @@ class TimingDefaults(TypedDict):
     window_block_time: int
     controller_loop_interval: int
     flush_duration: int
+    dhw_recovery_time: int
 
 
 class PIDDefaults(TypedDict):
@@ -157,7 +178,11 @@ DEFAULT_TIMING: TimingDefaults = {
     "window_block_time": 600,  # 10 minutes - block if window open this long
     "controller_loop_interval": 60,  # PID update interval
     "flush_duration": 480,  # 8 minutes - flush duration after DHW ends
+    "dhw_recovery_time": 300,  # 5 minutes - hold-off after DHW under absolute priority
 }
+
+# Default DHW priority level (matches the historical soft-gate behaviour)
+DEFAULT_DHW_PRIORITY = DHWPriority.PARTIAL
 
 
 @dataclass
@@ -176,6 +201,7 @@ class TimingConfig:
     window_block_time: int = DEFAULT_TIMING["window_block_time"]
     controller_loop_interval: int = DEFAULT_TIMING["controller_loop_interval"]
     flush_duration: int = DEFAULT_TIMING["flush_duration"]
+    dhw_recovery_time: int = DEFAULT_TIMING["dhw_recovery_time"]
 
 
 # Default PID controller parameters
@@ -238,6 +264,7 @@ UI_TIMING_CLOSING_WARNING = {"min": 60, "max": 600, "step": 30}
 UI_TIMING_WINDOW_BLOCK_TIME = {"min": 0, "max": 3600, "step": 60}
 UI_TIMING_CONTROLLER_LOOP_INTERVAL = {"min": 10, "max": 300, "step": 5}
 UI_TIMING_FLUSH_DURATION = {"min": 0, "max": 1800, "step": 60}  # 0-30 minutes
+UI_TIMING_DHW_RECOVERY_TIME = {"min": 0, "max": 3600, "step": 60}  # 0-60 minutes
 
 # UI validation constraints for setpoint parameters
 UI_SETPOINT_MIN = {"min": 5.0, "max": 30.0, "step": 0.1}

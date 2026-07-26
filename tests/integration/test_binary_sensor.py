@@ -8,7 +8,11 @@ from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.ufh_controller.const import FAIL_SAFE_TIMEOUT, ZoneStatus
+from custom_components.ufh_controller.const import (
+    FAIL_SAFE_TIMEOUT,
+    DHWPriority,
+    ZoneStatus,
+)
 
 
 @pytest.fixture
@@ -357,3 +361,151 @@ async def test_flush_request_on_during_post_dhw_period(
     state = hass.states.get("binary_sensor.test_controller_flush_request")
     assert state is not None
     assert state.state == "on"
+
+
+async def test_dhw_block_binary_sensor_created_with_dhw(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Test dhw_block binary sensor is created when DHW entity is configured."""
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get("binary_sensor.test_controller_dhw_block")
+    assert state is not None
+
+
+async def test_dhw_block_not_created_without_dhw(
+    hass: HomeAssistant,
+    mock_config_entry_no_zones: MockConfigEntry,
+) -> None:
+    """Test dhw_block sensor is NOT created when DHW entity is not configured."""
+    mock_config_entry_no_zones.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry_no_zones.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get("binary_sensor.test_controller_dhw_block")
+    assert state is None
+
+
+async def test_dhw_block_off_under_partial_priority(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_temp_sensor: None,
+) -> None:
+    """Test dhw_block stays OFF during DHW when priority is partial."""
+    hass.states.async_set("binary_sensor.dhw_active", "on")
+
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = mock_config_entry.runtime_data.coordinator
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    state = hass.states.get("binary_sensor.test_controller_dhw_block")
+    assert state is not None
+    assert state.state == "off"
+    assert state.attributes["dhw_priority"] == DHWPriority.PARTIAL.value
+    assert state.attributes["dhw_active"] is True
+    assert state.attributes["dhw_block_until"] is None
+
+
+async def test_dhw_block_on_under_absolute_priority(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_temp_sensor: None,
+) -> None:
+    """Test dhw_block reports ON during DHW when priority is absolute."""
+    hass.states.async_set("binary_sensor.dhw_active", "on")
+
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = mock_config_entry.runtime_data.coordinator
+    coordinator.controller.config.dhw_priority = DHWPriority.ABSOLUTE
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    state = hass.states.get("binary_sensor.test_controller_dhw_block")
+    assert state is not None
+    assert state.state == "on"
+    assert state.attributes["dhw_priority"] == DHWPriority.ABSOLUTE.value
+
+
+async def test_dhw_block_exposes_hold_off_expiry(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_temp_sensor: None,
+) -> None:
+    """Test dhw_block_until is serialised once the hold-off is armed."""
+    hass.states.async_set("binary_sensor.dhw_active", "on")
+
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = mock_config_entry.runtime_data.coordinator
+    coordinator.controller.config.dhw_priority = DHWPriority.ABSOLUTE
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    hass.states.async_set("binary_sensor.dhw_active", "off")
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    state = hass.states.get("binary_sensor.test_controller_dhw_block")
+    assert state is not None
+    assert state.state == "on"
+    block_until = state.attributes["dhw_block_until"]
+    assert block_until is not None
+    assert datetime.fromisoformat(block_until) > datetime.now(UTC)
+
+
+async def test_status_reports_dhw_fault_reason(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_temp_sensor: None,
+) -> None:
+    """Test the status sensor distinguishes a DHW fault from zone failures."""
+    hass.states.async_set("binary_sensor.dhw_active", STATE_UNAVAILABLE)
+
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = mock_config_entry.runtime_data.coordinator
+    coordinator.controller.config.dhw_priority = DHWPriority.ABSOLUTE
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    state = hass.states.get("binary_sensor.test_controller_status")
+    assert state is not None
+    assert state.state == "on"
+    assert state.attributes["fail_safe_reason"] == "dhw_sensor_unavailable"
+    # Every zone is healthy, which is exactly why the reason is needed
+    assert state.attributes["zones_fail_safe"] == 0
+
+
+async def test_status_reports_no_reason_when_normal(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_temp_sensor: None,
+) -> None:
+    """Test fail_safe_reason is absent while the controller is healthy."""
+    hass.states.async_set("binary_sensor.dhw_active", "off")
+
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = mock_config_entry.runtime_data.coordinator
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    state = hass.states.get("binary_sensor.test_controller_status")
+    assert state is not None
+    assert state.attributes["fail_safe_reason"] is None

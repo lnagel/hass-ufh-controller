@@ -20,6 +20,7 @@ from custom_components.ufh_controller.const import (
     DEFAULT_VALVE_OPEN_THRESHOLD,
     FAIL_SAFE_TIMEOUT,
     INITIALIZING_TIMEOUT,
+    DHWPriority,
     OperationMode,
     TimingConfig,
     ValveState,
@@ -493,6 +494,8 @@ def evaluate_zone(  # noqa: PLR0911
 
     Implements quota-based scheduling and flush circuit priority.
     Note: Window blocking is handled via PID pause, not valve control.
+    Absolute DHW priority (controller.dhw_block) does close valves, because
+    the hazard it guards against is hydraulic rather than thermal.
 
     Args:
         zone: Current zone state.
@@ -509,6 +512,10 @@ def evaluate_zone(  # noqa: PLR0911
 
     # Zone disabled - always off
     if not zone.enabled:
+        return ZoneAction.STAY_OFF if valve_off else ZoneAction.TURN_OFF
+
+    # Absolute DHW priority - all circuit types closed, overrides every other path
+    if controller.dhw_block:
         return ZoneAction.STAY_OFF if valve_off else ZoneAction.TURN_OFF
 
     # Flush circuit activation
@@ -549,7 +556,11 @@ def evaluate_zone(  # noqa: PLR0911
         if estimated_runtime < timing.min_run_time:
             return ZoneAction.STAY_OFF if valve_off else ZoneAction.TURN_OFF
 
-        if controller.dhw_active and zone.circuit_type == CircuitType.REGULAR:
+        if (
+            controller.dhw_active
+            and controller.dhw_priority == DHWPriority.PARTIAL
+            and zone.circuit_type == CircuitType.REGULAR
+        ):
             # Wait for DHW heating to finish
             return ZoneAction.STAY_OFF if valve_off else ZoneAction.TURN_OFF
 

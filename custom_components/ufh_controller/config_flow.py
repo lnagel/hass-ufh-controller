@@ -17,6 +17,7 @@ from homeassistant.helpers import selector
 from slugify import slugify
 
 from .const import (
+    DEFAULT_DHW_PRIORITY,
     DEFAULT_OUTDOOR_TEMP_COLD,
     DEFAULT_OUTDOOR_TEMP_WARM,
     DEFAULT_PID,
@@ -41,12 +42,14 @@ from .const import (
     UI_TEMP_EMA_TIME_CONSTANT,
     UI_TIMING_CLOSING_WARNING,
     UI_TIMING_CONTROLLER_LOOP_INTERVAL,
+    UI_TIMING_DHW_RECOVERY_TIME,
     UI_TIMING_FLUSH_DURATION,
     UI_TIMING_MIN_RUN_TIME,
     UI_TIMING_OBSERVATION_PERIOD,
     UI_TIMING_VALVE_CLOSE_TIME,
     UI_TIMING_VALVE_OPEN_TIME,
     UI_TIMING_WINDOW_BLOCK_TIME,
+    DHWPriority,
     TimingDefaults,
 )
 from .core.zone import CircuitType
@@ -56,6 +59,7 @@ CONF_CONTROLLER_ID = "controller_id"
 CONF_PUMP_REQUEST_ENTITY = "pump_request_entity"
 CONF_HEAT_REQUEST_ENTITY = "heat_request_entity"
 CONF_DHW_ACTIVE_ENTITY = "dhw_active_entity"
+CONF_DHW_PRIORITY = "dhw_priority"
 CONF_SUMMER_MODE_ENTITY = "summer_mode_entity"
 CONF_SUPPLY_TEMP_ENTITY = "supply_temp_entity"
 CONF_SUPPLY_TARGET_TEMP = "supply_target_temp"
@@ -64,6 +68,45 @@ CONF_OUTDOOR_TEMP_WARM = "outdoor_temp_warm"
 CONF_OUTDOOR_TEMP_COLD = "outdoor_temp_cold"
 CONF_SUPPLY_TEMP_WARM = "supply_temp_warm"
 CONF_SUPPLY_TEMP_COLD = "supply_temp_cold"
+
+
+def _suggest(values: dict[str, Any], key: str) -> dict[str, Any]:
+    """Redisplay a submitted value, so a validation error costs no typing."""
+    return {"suggested_value": values.get(key)}
+
+
+def validate_dhw_priority(user_input: dict[str, Any]) -> dict[str, str]:
+    """
+    Reject a DHW priority that cannot function with the configured entities.
+
+    Absolute priority is inert without a DHW sensor: the controller never
+    learns that a charge is in progress, so no circuit is ever closed and the
+    dhw_block sensor is not even created. Someone who correctly identifies
+    their manifold as at-risk would be left unprotected with nothing in the UI
+    to reveal it, so this is an error rather than a silent no-op.
+
+    Args:
+        user_input: Submitted form values.
+
+    Returns:
+        Field-keyed errors, empty when the combination is usable.
+
+    """
+    priority = user_input.get(CONF_DHW_PRIORITY, DEFAULT_DHW_PRIORITY.value)
+    if priority == DHWPriority.ABSOLUTE and not user_input.get(CONF_DHW_ACTIVE_ENTITY):
+        return {CONF_DHW_PRIORITY: "dhw_priority_requires_sensor"}
+    return {}
+
+
+def get_dhw_priority_selector() -> selector.SelectSelector:
+    """Get the selector for DHW priority, translated via strings.json."""
+    return selector.SelectSelector(
+        selector.SelectSelectorConfig(
+            options=[priority.value for priority in DHWPriority],
+            mode=selector.SelectSelectorMode.DROPDOWN,
+            translation_key=CONF_DHW_PRIORITY,
+        )
+    )
 
 
 def get_timing_schema(timing: TimingDefaults | None = None) -> vol.Schema:
@@ -174,6 +217,20 @@ def get_timing_schema(timing: TimingDefaults | None = None) -> vol.Schema:
                     min=UI_TIMING_FLUSH_DURATION["min"],
                     max=UI_TIMING_FLUSH_DURATION["max"],
                     step=UI_TIMING_FLUSH_DURATION["step"],
+                    unit_of_measurement=UnitOfTime.SECONDS,
+                )
+            ),
+            vol.Required(
+                "dhw_recovery_time",
+                default=timing.get(
+                    "dhw_recovery_time",
+                    DEFAULT_TIMING["dhw_recovery_time"],
+                ),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=UI_TIMING_DHW_RECOVERY_TIME["min"],
+                    max=UI_TIMING_DHW_RECOVERY_TIME["max"],
+                    step=UI_TIMING_DHW_RECOVERY_TIME["step"],
                     unit_of_measurement=UnitOfTime.SECONDS,
                 )
             ),
@@ -559,8 +616,12 @@ class UFHControllerFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> config_entries.ConfigFlowResult:
         """Handle a flow initialized by the user."""
         errors: dict[str, str] = {}
+        entered: dict[str, Any] = user_input or {}
 
         if user_input is not None:
+            errors = validate_dhw_priority(user_input)
+
+        if user_input is not None and not errors:
             # Generate controller_id from name if not provided
             controller_id = user_input.get(CONF_CONTROLLER_ID) or slugify(
                 user_input[CONF_NAME]
@@ -582,6 +643,9 @@ class UFHControllerFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_PUMP_REQUEST_ENTITY: user_input.get(CONF_PUMP_REQUEST_ENTITY),
                     CONF_HEAT_REQUEST_ENTITY: user_input.get(CONF_HEAT_REQUEST_ENTITY),
                     CONF_DHW_ACTIVE_ENTITY: user_input.get(CONF_DHW_ACTIVE_ENTITY),
+                    CONF_DHW_PRIORITY: user_input.get(
+                        CONF_DHW_PRIORITY, DEFAULT_DHW_PRIORITY.value
+                    ),
                     CONF_SUMMER_MODE_ENTITY: user_input.get(CONF_SUMMER_MODE_ENTITY),
                 },
                 options={
@@ -593,19 +657,39 @@ class UFHControllerFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="user",
             data_schema=vol.Schema(
                 {
-                    vol.Required(CONF_NAME): selector.TextSelector(
+                    vol.Required(
+                        CONF_NAME, description=_suggest(entered, CONF_NAME)
+                    ): selector.TextSelector(
                         selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
                     ),
-                    vol.Optional(CONF_PUMP_REQUEST_ENTITY): selector.EntitySelector(
+                    vol.Optional(
+                        CONF_PUMP_REQUEST_ENTITY,
+                        description=_suggest(entered, CONF_PUMP_REQUEST_ENTITY),
+                    ): selector.EntitySelector(
                         selector.EntitySelectorConfig(domain="switch")
                     ),
-                    vol.Optional(CONF_HEAT_REQUEST_ENTITY): selector.EntitySelector(
+                    vol.Optional(
+                        CONF_HEAT_REQUEST_ENTITY,
+                        description=_suggest(entered, CONF_HEAT_REQUEST_ENTITY),
+                    ): selector.EntitySelector(
                         selector.EntitySelectorConfig(domain="switch")
                     ),
-                    vol.Optional(CONF_DHW_ACTIVE_ENTITY): selector.EntitySelector(
+                    vol.Optional(
+                        CONF_DHW_ACTIVE_ENTITY,
+                        description=_suggest(entered, CONF_DHW_ACTIVE_ENTITY),
+                    ): selector.EntitySelector(
                         selector.EntitySelectorConfig(domain="binary_sensor")
                     ),
-                    vol.Optional(CONF_SUMMER_MODE_ENTITY): selector.EntitySelector(
+                    vol.Required(
+                        CONF_DHW_PRIORITY,
+                        default=entered.get(
+                            CONF_DHW_PRIORITY, DEFAULT_DHW_PRIORITY.value
+                        ),
+                    ): get_dhw_priority_selector(),
+                    vol.Optional(
+                        CONF_SUMMER_MODE_ENTITY,
+                        description=_suggest(entered, CONF_SUMMER_MODE_ENTITY),
+                    ): selector.EntitySelector(
                         selector.EntitySelectorConfig(domain="select")
                     ),
                 }
@@ -649,13 +733,21 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
         user_input: dict[str, Any] | None = None,
     ) -> config_entries.ConfigFlowResult:
         """Configure control entities (heat request, summer mode, etc.)."""
+        errors: dict[str, str] = {}
+
         if user_input is not None:
+            errors = validate_dhw_priority(user_input)
+
+        if user_input is not None and not errors:
             # Update the config entry data with new control entities
             new_data = {
                 **self.config_entry.data,
                 CONF_PUMP_REQUEST_ENTITY: user_input.get(CONF_PUMP_REQUEST_ENTITY),
                 CONF_HEAT_REQUEST_ENTITY: user_input.get(CONF_HEAT_REQUEST_ENTITY),
                 CONF_DHW_ACTIVE_ENTITY: user_input.get(CONF_DHW_ACTIVE_ENTITY),
+                CONF_DHW_PRIORITY: user_input.get(
+                    CONF_DHW_PRIORITY, DEFAULT_DHW_PRIORITY.value
+                ),
                 CONF_SUMMER_MODE_ENTITY: user_input.get(CONF_SUMMER_MODE_ENTITY),
             }
             self.hass.config_entries.async_update_entry(
@@ -664,8 +756,10 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
             )
             return self.async_create_entry(title="", data={})
 
-        # Get current values from config entry data
-        current_data = self.config_entry.data
+        # Redisplay the rejected input verbatim. Merging over stored data would
+        # reinstate a field the user cleared, since a cleared optional selector
+        # is absent from user_input rather than present and empty.
+        current_data = user_input if user_input is not None else self.config_entry.data
 
         return self.async_show_form(
             step_id="control_entities",
@@ -699,6 +793,12 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
                     ): selector.EntitySelector(
                         selector.EntitySelectorConfig(domain="binary_sensor")
                     ),
+                    vol.Required(
+                        CONF_DHW_PRIORITY,
+                        default=current_data.get(
+                            CONF_DHW_PRIORITY, DEFAULT_DHW_PRIORITY.value
+                        ),
+                    ): get_dhw_priority_selector(),
                     vol.Optional(
                         CONF_SUMMER_MODE_ENTITY,
                         description={
@@ -709,6 +809,7 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
                     ),
                 }
             ),
+            errors=errors,
         )
 
     async def async_step_timing(
@@ -735,6 +836,7 @@ class UFHControllerOptionsFlowHandler(config_entries.OptionsFlow):
                 "window_block_time": int(user_input["window_block_time"]),
                 "controller_loop_interval": int(user_input["controller_loop_interval"]),
                 "flush_duration": int(user_input["flush_duration"]),
+                "dhw_recovery_time": int(user_input["dhw_recovery_time"]),
             }
 
             # Update the controller subentry with new timing

@@ -74,9 +74,16 @@ def _status_value(data: dict[str, Any]) -> bool:
 
 
 def _status_attrs(data: dict[str, Any]) -> dict[str, Any]:
-    """Return additional status attributes."""
+    """
+    Return additional status attributes.
+
+    fail_safe_reason exists because a DHW sensor fault reaches fail-safe with
+    every zone still healthy, so zones_fail_safe reads 0 and the state would
+    otherwise look like a bug.
+    """
     return {
         "status": data.get("status"),
+        "fail_safe_reason": data.get("fail_safe_reason"),
         "zones_initializing": data.get("zones_initializing"),
         "zones_normal": data.get("zones_normal"),
         "zones_degraded": data.get("zones_degraded"),
@@ -115,6 +122,24 @@ FLUSH_REQUEST_SENSOR = UFHControllerBinarySensorEntityDescription(
 )
 
 
+def _dhw_block_attrs(data: dict[str, Any]) -> dict[str, Any]:
+    """Return context explaining why circuits are held closed."""
+    return {
+        "dhw_priority": data.get("dhw_priority"),
+        "dhw_active": data.get("dhw_active"),
+        "dhw_sensor_available": data.get("dhw_sensor_available"),
+        "dhw_block_until": data.get("dhw_block_until"),
+    }
+
+
+DHW_BLOCK_SENSOR = UFHControllerBinarySensorEntityDescription(
+    key="dhw_block",
+    translation_key="dhw_block",
+    value_fn=lambda data: bool(data.get("dhw_block")),
+    attrs_fn=_dhw_block_attrs,
+)
+
+
 async def async_setup_entry(
     _hass: HomeAssistant,
     entry: UFHControllerConfigEntry,
@@ -132,9 +157,10 @@ async def async_setup_entry(
             HEAT_REQUEST_SENSOR,
         ]
 
-        # Only create flush_request sensor if DHW entity is configured
+        # Only create DHW-derived sensors if the DHW entity is configured
         if entry.data.get("dhw_active_entity"):
             controller_descriptions.append(FLUSH_REQUEST_SENSOR)
+            controller_descriptions.append(DHW_BLOCK_SENSOR)
 
         async_add_entities(
             [

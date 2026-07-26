@@ -7,6 +7,7 @@ from homeassistant.data_entry_flow import FlowResultType
 from custom_components.ufh_controller.const import (
     DEFAULT_TIMING,
     DOMAIN,
+    DHWPriority,
 )
 
 
@@ -118,3 +119,132 @@ async def test_user_flow_generates_controller_id(
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"]["controller_id"] == "living-room-heating-system"
+
+
+async def test_user_flow_defaults_to_partial_dhw_priority(
+    hass: HomeAssistant,
+    mock_setup_entry: None,
+) -> None:
+    """Test a new entry keeps the historical soft-gate behaviour by default."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        user_input={"name": "Default Priority"},
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"]["dhw_priority"] == DHWPriority.PARTIAL.value
+    assert (
+        result["options"]["timing"]["dhw_recovery_time"]
+        == (DEFAULT_TIMING["dhw_recovery_time"])
+    )
+
+
+async def test_user_flow_with_absolute_dhw_priority(
+    hass: HomeAssistant,
+    mock_setup_entry: None,
+) -> None:
+    """Test selecting absolute priority during initial setup."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        user_input={
+            "name": "Unmixed Manifold",
+            "dhw_active_entity": "binary_sensor.dhw_active",
+            "dhw_priority": DHWPriority.ABSOLUTE.value,
+        },
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"]["dhw_priority"] == DHWPriority.ABSOLUTE.value
+
+
+async def test_user_flow_rejects_absolute_without_dhw_sensor(
+    hass: HomeAssistant,
+    mock_setup_entry: None,
+) -> None:
+    """Test absolute priority without a DHW sensor is rejected, not silently inert."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        user_input={
+            "name": "No Sensor",
+            "dhw_priority": DHWPriority.ABSOLUTE.value,
+        },
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"dhw_priority": "dhw_priority_requires_sensor"}
+
+
+async def test_user_flow_allows_non_absolute_without_dhw_sensor(
+    hass: HomeAssistant,
+    mock_setup_entry: None,
+) -> None:
+    """Test parallel and partial remain valid with no DHW sensor configured."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        user_input={
+            "name": "No Sensor Parallel",
+            "dhw_priority": DHWPriority.PARALLEL.value,
+        },
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"]["dhw_priority"] == DHWPriority.PARALLEL.value
+
+
+async def test_user_flow_error_preserves_entered_values(
+    hass: HomeAssistant,
+    mock_setup_entry: None,
+) -> None:
+    """
+    Test a validation error costs no typing and keeps the chosen priority.
+
+    Previously every field came back blank and dhw_priority silently reverted
+    to partial, so adding the sensor and resubmitting would quietly configure
+    a weaker setting than the user asked for.
+    """
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+
+    submitted = {
+        "name": "My Heating",
+        "pump_request_entity": "switch.pump",
+        "heat_request_entity": "switch.boiler",
+        "summer_mode_entity": "select.summer",
+        "dhw_priority": DHWPriority.ABSOLUTE.value,
+    }
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input=submitted
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"dhw_priority": "dhw_priority_requires_sensor"}
+
+    schema = result["data_schema"]
+    assert schema is not None
+    redisplayed: dict[str, object] = {}
+    for key in schema.schema:
+        description = getattr(key, "description", None) or {}
+        if "suggested_value" in description:
+            redisplayed[key.schema] = description["suggested_value"]
+        else:
+            redisplayed[key.schema] = key.default()
+
+    for field, value in submitted.items():
+        assert redisplayed[field] == value, f"{field} was not redisplayed"

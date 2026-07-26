@@ -81,4 +81,4 @@ Dependencies flow downward:
 
 ### 4. Fault Isolation
 
-Zones track their own failure state independently. One zone failing doesn't affect other zones. The controller aggregates zone statuses to determine overall health.
+Zones track their own failure state independently. One zone failing doesn't affect other zones. The controller aggregates zone statuses to determine overall health, and a controller-level fault can raise that status further. See [fault_isolation.md](fault_isolation.md#controller-status).

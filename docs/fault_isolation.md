@@ -39,6 +39,8 @@ Derived from zone statuses:
 | Some zones failing, at least one normal | `degraded` |
 | All zones in fail-safe | `fail_safe` |
 
+A controller-level fault can then raise this status, but never lower it, so the controller can report `fail_safe` with every zone healthy. The only one today is an unreadable DHW sensor under [`absolute` priority](configuration.md#dhw_priority).
+
 The `binary_sensor.{controller_id}_status` entity shows `on` (problem) when degraded or fail-safe.
 
 When the controller status is `fail_safe`, all valves are closed and pump and heat
@@ -57,10 +59,10 @@ mode to "auto", handing the heating circuit back to the boiler so valve
 controllers acting as offline thermostats can still receive heated water.
 
 This applies in `heat` mode only, whether one zone or all zones have failed. Every
-other mode is an explicit instruction that a zone failure must not override:
+other mode is an explicit instruction that a failure must not override:
 
-| Mode | Summer mode while any zone is in fail-safe |
-|------|--------------------------------------------|
+| Mode | Summer mode while the controller or any zone is in fail-safe |
+|------|--------------------------------------------------------------|
 | `heat` | `auto` — delegated to the boiler |
 | `flush` | `summer` — circulation only, no firing |
 | `cycle` | `summer` — maintenance rotation, no firing |

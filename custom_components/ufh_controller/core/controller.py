@@ -12,8 +12,11 @@ from datetime import datetime, timedelta
 
 from custom_components.ufh_controller.const import (
     DEFAULT_CYCLE_MODE_HOURS,
+    DEFAULT_DHW_PRIORITY,
+    FAIL_SAFE_TIMEOUT,
     INITIALIZING_TIMEOUT,
     ControllerStatus,
+    DHWPriority,
     OperationMode,
     SummerMode,
     TimingConfig,
@@ -47,6 +50,12 @@ class ControllerState:
     heat_request: bool | None = None
     flush_enabled: bool = False
     dhw_active: bool = False
+    dhw_priority: DHWPriority = DEFAULT_DHW_PRIORITY
+    dhw_sensor_available: bool = True
+    dhw_sensor_fault: bool = False
+    dhw_sensor_fault_since: datetime | None = None
+    dhw_block: bool = False
+    dhw_block_until: datetime | None = None
     flush_until: datetime | None = None
     flush_request: bool = False
     zones: dict[str, ZoneState] = field(default_factory=dict)
@@ -64,6 +73,7 @@ class ControllerConfig:
     pump_request_entity: str | None = None
     heat_request_entity: str | None = None
     dhw_active_entity: str | None = None
+    dhw_priority: DHWPriority = DEFAULT_DHW_PRIORITY
     summer_mode_entity: str | None = None
     supply_temp_entity: str | None = None
     outdoor_temp_entity: str | None = None
@@ -86,10 +96,39 @@ class ControllerActions:
     flush_request: bool = False
 
 
-def compute_flush_request(
+def is_dhw_sensor_faulted(
+    *,
+    sensor_available: bool,
+    priority: DHWPriority,
+) -> bool:
+    """
+    Decide whether an unreadable DHW sensor is a fault.
+
+    A sensor reading unavailable or unknown carries no information at all.
+    Under absolute priority that is not a state to be inferred: the setting
+    exists because we must be certain DHW is not charging before opening a
+    circuit, and neither "assume off" nor "assume the last known value" can
+    provide that certainty. It is treated as a fault instead.
+
+    Parallel and partial keep the historical behaviour of resolving an
+    unreadable sensor to "off", where the cost is comfort rather than damage.
+
+    Args:
+        sensor_available: Whether the DHW sensor reported a usable state.
+        priority: Configured DHW priority level.
+
+    Returns:
+        True if the unreadable sensor should be treated as a fault.
+
+    """
+    return not sensor_available and priority == DHWPriority.ABSOLUTE
+
+
+def compute_flush_request(  # noqa: PLR0913
     *,
     flush_enabled: bool,
     dhw_active: bool,
+    dhw_block: bool,
     flush_until: datetime | None,
     any_regular_on: bool,
     now: datetime,
@@ -100,12 +139,19 @@ def compute_flush_request(
     Flush circuits activate when:
     - flush_enabled is True (user has enabled the feature)
     - DHW is NOT currently active
+    - Absolute DHW priority is NOT holding circuits closed
     - Post-DHW timer is active
     - No regular circuits are currently ON
+
+    Latent heat capture and absolute DHW priority are opposing answers to the
+    same question: what to do with the water left in the primary when DHW
+    finishes. The block wins, which makes the two mutually exclusive by
+    construction rather than merely by evaluation order.
 
     Args:
         flush_enabled: User toggle for flush feature.
         dhw_active: Whether DHW is currently heating.
+        dhw_block: Whether absolute DHW priority is holding circuits closed.
         flush_until: Post-DHW timer expiration, or None.
         any_regular_on: Whether any regular zones have valves ON.
         now: Current time for timer comparison.
@@ -117,7 +163,7 @@ def compute_flush_request(
     if not flush_enabled:
         return False
 
-    if dhw_active:
+    if dhw_active or dhw_block:
         return False
 
     if flush_until is None or now >= flush_until:
@@ -150,7 +196,11 @@ class HeatingController:
 
         """
         self.config = config
-        self._state = ControllerState(started_at=started_at, mode=OperationMode.HEAT)
+        self._state = ControllerState(
+            started_at=started_at,
+            mode=OperationMode.HEAT,
+            dhw_priority=config.dhw_priority,
+        )
         self._zones: dict[str, ZoneRuntime] = {}
 
         # Initialize zones from config
@@ -204,6 +254,7 @@ class HeatingController:
 
         if not zone_statuses:
             self._state.status = ControllerStatus.NORMAL
+            self._apply_dhw_fault_status(now)
             return
 
         # Count zones in each state
@@ -237,6 +288,32 @@ class HeatingController:
             self._state.status = ControllerStatus.FAIL_SAFE
         else:
             # Mix of degraded and fail-safe, but no normal or initializing
+            self._state.status = ControllerStatus.DEGRADED
+
+        self._apply_dhw_fault_status(now)
+
+    def _apply_dhw_fault_status(self, now: datetime) -> None:
+        """
+        Raise the controller status while the DHW sensor is faulted.
+
+        Two stages, matching how zone failures already escalate. The block
+        applied in update_dhw_state is the protective half and is immediate;
+        this is the reporting half. Escalation to fail-safe is deferred by
+        FAIL_SAFE_TIMEOUT because the valves are already shut, so it adds no
+        protection - it signals a persistent fault and hands the boiler back
+        its own thermostats.
+
+        Applied after zone aggregation so it cannot be overwritten, and after
+        the INITIALIZING deferral so a sensor that has not loaded yet during
+        startup does not trip it.
+        """
+        if not self._state.dhw_sensor_fault:
+            return
+
+        since = self._state.dhw_sensor_fault_since
+        if since is not None and (now - since).total_seconds() > FAIL_SAFE_TIMEOUT:
+            self._state.status = ControllerStatus.FAIL_SAFE
+        elif self._state.status != ControllerStatus.FAIL_SAFE:
             self._state.status = ControllerStatus.DEGRADED
 
     def get_zone_state(self, zone_id: str) -> ZoneState:
@@ -355,8 +432,13 @@ class HeatingController:
         """
         Flush mode - all valves open, circulation only (no boiler firing).
 
-        Permanently not heating: heat_request=False.
+        Permanently not heating: heat_request=False. Suspended while absolute
+        DHW priority holds the circuits closed; the mode itself is retained and
+        resumes once the block clears.
         """
+        if self._state.dhw_block:
+            return self._evaluate_all_off_mode()
+
         valve_actions = {
             zid: (
                 ZoneAction.STAY_ON
@@ -379,8 +461,13 @@ class HeatingController:
         Hour 0: all closed (rest hour)
         Hours 1-7: zones open sequentially
 
-        Permanently not heating: heat_request=False.
+        Permanently not heating: heat_request=False. Suspended while absolute
+        DHW priority holds the circuits closed; the rotation is retained and
+        resumes once the block clears.
         """
+        if self._state.dhw_block:
+            return self._evaluate_all_off_mode()
+
         cycle_hour = now.hour % DEFAULT_CYCLE_MODE_HOURS
         zone_ids = list(self._zones.keys())
 
@@ -417,6 +504,14 @@ class HeatingController:
         Uses PID-based quota scheduling for regular zones, then evaluates
         flush circuits based on whether any regular zones are running.
 
+        Both the heat and pump requests are gated on dhw_block. Thermal
+        actuators need minutes to close, so a circuit still reports flow at the
+        instant DHW asserts; without the gate the controller would ask the
+        boiler to fire mid-charge and keep an independent circulation pump
+        pushing cylinder-temperature water through the closing circuit. Since
+        pump_request_entity drives a pump the controller owns, stopping it is
+        the one part of that exposure window software can actually shorten.
+
         Returns raw computed values; the coordinator handles change detection.
         """
         valve_actions: dict[str, ZoneAction] = {}
@@ -436,6 +531,7 @@ class HeatingController:
         flush_request = compute_flush_request(
             flush_enabled=self._state.flush_enabled,
             dhw_active=self._state.dhw_active,
+            dhw_block=self._state.dhw_block,
             flush_until=self._state.flush_until,
             any_regular_on=any_regular_on,
             now=now,
@@ -451,18 +547,24 @@ class HeatingController:
                     flush_request=flush_request,
                 )
 
-        # Pump request: any zone with confirmed flow
-        pump_request = any(rt.state.flow for rt in self._zones.values())
+        # Pump request: any zone with confirmed flow, unless DHW holds us closed
+        pump_request = not self._state.dhw_block and any(
+            rt.state.flow for rt in self._zones.values()
+        )
 
-        # Aggregate heat request from per-zone decisions, gated on pump
+        # Aggregate heat request from per-zone decisions, gated on pump and DHW
         remaining_durations = {
             zone_id: rt.state.remaining_duration
             for zone_id, rt in self._zones.items()
             if rt.state.flow
         }
-        heat_request = pump_request and any(
-            rd > self.config.timing.closing_warning_duration
-            for rd in remaining_durations.values()
+        heat_request = (
+            not self._state.dhw_block
+            and pump_request
+            and any(
+                rd > self.config.timing.closing_warning_duration
+                for rd in remaining_durations.values()
+            )
         )
 
         return ControllerActions(
@@ -544,30 +646,87 @@ class HeatingController:
 
         return SummerMode.WINTER if heat_request else SummerMode.SUMMER
 
-    def update_dhw_state(self, *, dhw_active: bool, now: datetime) -> None:
+    def _apply_dhw_sensor_fault(self, now: datetime) -> None:
         """
-        Update DHW state and manage post-DHW flush timer.
+        Hold everything still while the DHW sensor cannot be read.
+
+        No edge detection and no timer changes: an unreadable sensor gives no
+        information to detect edges from, and inventing one would either arm
+        the recovery hold-off from a charge that has not ended or release a
+        hold-off that should still be running. Circuits are blocked outright
+        instead, and the fault clock starts so a sustained outage can escalate.
+        """
+        self._state.dhw_sensor_available = False
+        self._state.dhw_block = True
+        if not self._state.dhw_sensor_fault:
+            self._state.dhw_sensor_fault = True
+            self._state.dhw_sensor_fault_since = now
+
+    def update_dhw_state(
+        self, *, dhw_active: bool, now: datetime, sensor_available: bool = True
+    ) -> None:
+        """
+        Update DHW state and manage the block and post-DHW flush timers.
 
         Detects transitions:
-        - ON→OFF: starts post-flush timer if flush enabled and duration > 0
+        - ON→OFF: arms the recovery hold-off and starts the post-flush timer if
+          flush enabled and duration > 0
         - OFF→ON: clears flush_until timer
 
+        Recomputes dhw_block on every call so the hold-off expires on time.
+
         Args:
-            dhw_active: Current DHW active state.
-            now: Current time for flush timer calculation.
+            dhw_active: Current DHW active state, already resolved against
+                sensor availability by resolve_dhw_active.
+            now: Current time for timer calculation.
+            sensor_available: Whether the DHW sensor reported a usable state,
+                recorded for diagnostics.
 
         """
+        self._state.dhw_priority = self.config.dhw_priority
+        absolute = self.config.dhw_priority == DHWPriority.ABSOLUTE
+        recovery = self.config.timing.dhw_recovery_time
+
+        if is_dhw_sensor_faulted(
+            sensor_available=sensor_available, priority=self.config.dhw_priority
+        ):
+            self._apply_dhw_sensor_fault(now)
+            return
+
+        self._state.dhw_sensor_available = sensor_available
+        self._state.dhw_sensor_fault = False
+        self._state.dhw_sensor_fault_since = None
+
         # Detect DHW OFF transition (was on, now off)
         if self._state.dhw_active and not dhw_active:
+            # Safety timer, armed regardless of the flush feature but only
+            # where a block can actually engage
+            if absolute:
+                self._state.dhw_block_until = now + timedelta(seconds=recovery)
+
             flush_duration = self.config.timing.flush_duration
             if flush_duration > 0 and self._state.flush_enabled:
-                self._state.flush_until = now + timedelta(seconds=flush_duration)
+                # Flush opens after the hold-off under absolute, at once otherwise
+                offset = recovery if absolute else 0
+                self._state.flush_until = now + timedelta(
+                    seconds=offset + flush_duration
+                )
 
         # Clear flush_until when DHW starts
         if dhw_active and not self._state.dhw_active:
             self._state.flush_until = None
 
+        # Drop an expired deadline so it stops being reported as pending
+        if (
+            self._state.dhw_block_until is not None
+            and now >= self._state.dhw_block_until
+        ):
+            self._state.dhw_block_until = None
+
         self._state.dhw_active = dhw_active
+        self._state.dhw_block = absolute and (
+            dhw_active or self._state.dhw_block_until is not None
+        )
 
     def handle_observation_period_transition(self, now: datetime) -> bool:
         """
@@ -605,6 +764,18 @@ class HeatingController:
             self._state.last_force_update = now
 
         return new_period
+
+    @property
+    def fail_safe_reason(self) -> str | None:
+        """Explain a degraded or fail-safe status, or None when normal."""
+        if self._state.status not in (
+            ControllerStatus.DEGRADED,
+            ControllerStatus.FAIL_SAFE,
+        ):
+            return None
+        if self._state.dhw_sensor_fault:
+            return "dhw_sensor_unavailable"
+        return "zone_failures"
 
     @property
     def any_zone_in_fail_safe(self) -> bool:

@@ -450,7 +450,7 @@ A switch entity that signals the boiler to provide heat. When zones request heat
 
 A binary sensor indicating when the boiler is heating domestic hot water (DHW).
 
-**How it works:** When this sensor is "on", DHW priority is activated:
+**How it works:** When this sensor is "on", DHW priority is activated. What that means depends on [dhw_priority](#dhw_priority); the default (`partial`) behaves as follows:
 
 - **Regular circuits already ON**: Continue running (STAY_ON). This allows existing heating to continue circulating water through the floor, maintaining heat distribution even though no new heat is being added.
 - **Regular circuits currently OFF**: Cannot turn ON (STAY_OFF). New heating cycles are blocked until DHW completes.
@@ -459,6 +459,77 @@ A binary sensor indicating when the boiler is heating domestic hot water (DHW).
 **Example:** `binary_sensor.boiler_tapwater_active` → When DHW heating starts, this turns on. Regular zones that were already heating continue to circulate water, but zones that were off wait until DHW finishes.
 
 **Why it matters:** Prevents new heating demands from competing with DHW heating, which typically has priority. Allowing existing valves to stay open enables continued water circulation through the thermal mass of the floor, providing some heat distribution even during DHW priority. Also enables flush circuits to capture waste heat.
+
+#### dhw_priority
+
+**Type:** Select (`parallel` / `partial` / `absolute`)
+**Required:** No
+**Default:** `partial`
+**Config location:** ConfigEntry → `data.dhw_priority`
+
+How the heating circuits behave while the heat source is charging domestic hot water. The naming follows established boiler control terminology (*Vorrangschaltung*), where the same three positions appear on Viessmann, Vaillant, Buderus and Weishaupt controls.
+
+| Value | Behaviour while DHW is active |
+|-------|-------------------------------|
+| `parallel` | No restriction. Zone scheduling ignores DHW entirely. |
+| `partial` | Circuits already open stay open; closed circuits cannot start. This is the historical behaviour and the default. |
+| `absolute` | **All circuits are actively closed** for the duration of DHW plus [dhw_recovery_time](#dhw_recovery_time). |
+
+**How it works:** `parallel` and `partial` never close a running circuit. `absolute` does: it overrides the already-on path, the end-of-period valve freeze, and applies to flush circuits as well as regular ones. It also suppresses both the boiler heat request and the pump request while in force, so an independent circulation pump stops immediately rather than pushing cylinder-temperature water through circuits that are still closing. It applies in `heat`, `flush` and `cycle` modes; the manual overrides `all_on`, `all_off` and `off` state explicit user intent and are left alone.
+
+**Which one do I need?** Look at what your heat source does to the flow temperature when it charges the cylinder:
+
+- If a **3-way diverter valve** hydraulically isolates the heating circuit during DHW, or a **mixing valve** on the manifold limits flow temperature independently, DHW water never reaches your floor. Use `parallel` or `partial`.
+- If the boiler simply raises its flow setpoint for DHW — for example ~45 °C for heating and ~70 °C for the cylinder — and nothing isolates or mixes the manifold, then **any open zone valve puts cylinder-temperature water into your screed**. Use `absolute`.
+
+**Example:** A boiler running 45 °C for underfloor heating and 70 °C for cylinder charging, with the underfloor manifold fed directly from the boiler flow. With `partial`, a zone that happens to be open when DHW starts keeps circulating 70 °C water through the floor. With `absolute`, that zone is commanded closed the moment DHW asserts.
+
+**Why it matters:** Sustained over-temperature flow damages screed and floor coverings — wood and vinyl generally want a surface temperature at or below 27 °C — and thermal shock stresses the pipework. `absolute` is a safety setting, not a comfort preference.
+
+**Requires a DHW sensor.** `absolute` cannot function without [dhw_active_entity](#dhw_active_entity) — the controller would never learn that a charge had started. The config flow rejects the combination rather than accepting a setting that silently does nothing.
+
+**Behaviour when the DHW sensor drops out:** under `absolute`, a sensor that is missing, `unavailable` or `unknown` is treated as a **fault**, not as a state to be guessed. Absolute priority exists because you must be certain DHW is not charging before opening a circuit, and neither "assume off" nor "assume the last known value" provides that certainty.
+
+The fault escalates in two stages, matching how zone failures already escalate:
+
+| Stage | When | Effect |
+|-------|------|--------|
+| Block | First control cycle that cannot read the sensor | All circuits closed, both deadlines held, controller status `degraded` |
+| Escalation | Fault sustained for 1 hour | Controller status `fail_safe`; valves closed in every mode except `off`, and boiler summer mode set to `auto` |
+
+The deadlines are held rather than advanced, because an unreadable sensor gives nothing to detect a DHW end from. When the sensor returns, the recovery hold-off is timed from the moment visibility was regained.
+
+**Detection is on the control cycle, not instantaneous.** A sensor going unavailable does not trigger an immediate re-evaluation, so the block engages on the next cycle — within `controller_loop_interval` (default 60 s). This is deliberate: it debounces brief dropouts, which would otherwise close and reopen every valve for a momentary reconnect.
+
+**Nothing is commanded during startup.** While the controller is `initializing` — up to two minutes, until every configured entity has reported — no valve command is issued at all, including this block. The controller does not act on state it cannot yet track. A valve left open across a restart therefore stays as it is until initialization completes.
+
+The `dhw_block` sensor's `dhw_sensor_available` attribute and the `status` sensor's `fail_safe_reason` attribute both show when this is happening.
+
+**Residual risk:** while the sensor is unreadable, you have **no heating at all**. This is deliberate — the DHW hazard is chosen over the freeze hazard — but be aware that the `auto` summer mode at escalation does *not* soften it: the controller keeps every valve shut, so the boiler's own thermostats cannot deliver floor heat either. Watch `binary_sensor.{controller_id}_status`, which reports a problem from the first blocked cycle.
+
+**A note on flapping sensors:** because the block latches immediately, a brief dropout (an MQTT reconnect, a gateway reboot) closes every valve and reopens them, bypassing `min_run_time`. This is partly self-limiting, since actuators need around `valve_close_time` to travel, so a short flap may not move the valve far.
+
+`parallel` and `partial` keep the historical behaviour of treating an unreadable reading as off, where the cost is comfort rather than damage, and never raise this fault.
+
+**Limitation to be aware of:** Thermal actuators typically need around 3.5 minutes to close (see [valve_close_time](#valve_close_time)). The controller commands closure the instant DHW asserts, but it cannot make the valve close faster than the hardware allows, so a brief exposure window is unavoidable. Where the boiler offers its own diverter valve or a mixing valve can be fitted, that hardware solution remains preferable to a software one.
+
+#### dhw_recovery_time
+
+**Type:** Integer (seconds)
+**Default:** 300 (5 minutes)
+**Config location:** Controller subentry → `data.timing.dhw_recovery_time`
+
+How long circuits stay closed after DHW charging ends, under `absolute` priority only.
+
+**How it works:** When the DHW sensor transitions from ON to OFF, the block is held for a further `dhw_recovery_time` seconds. The primary circuit still holds cylinder-temperature water at that moment, so reopening immediately would be nearly as damaging as opening during the charge itself. Set to 0 to release circuits as soon as DHW ends.
+
+**Interaction with the flush feature:** The post-DHW [flush window](#flush_duration) is deferred rather than cancelled. With `dhw_recovery_time=300` and `flush_duration=480`, flush circuits are eligible from 5 minutes after DHW ends until 13 minutes after.
+
+The window closes at a fixed time, so anything that delays its start eats into it rather than shifting it. If the DHW sensor drops out during the hold-off, the block persists until the sensor returns and only the remainder of the window is used — a 90-second dropout leaves 390 seconds of a configured 480. That is the safe direction, since the delay implies the primary was hotter for longer than expected.
+
+**A caution on latent heat capture under `absolute`:** the recovery hold-off makes deferred harvesting *safer*, not provably *safe*. On a system with no mixing valve there is no guarantee the primary has actually cooled by the time the window opens — the timer is an estimate, not a measurement. Unless you have a supply temperature sensor confirming the primary has come down, consider leaving `flush_enabled` off on these systems. It defaults to off.
+
+**Why it matters:** Without a hold-off, the controller would reopen circuits into a primary that is still at cylinder temperature, defeating the point of `absolute` priority.
 
 #### summer_mode_entity
 

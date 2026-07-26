@@ -21,6 +21,7 @@ To control the boiler, configure either a Heat Request Switch or Summer Mode Sel
 | pump_request_entity | entity (switch) | No | Switch to control independent circulation pump |
 | heat_request_entity | entity (switch) | No | Switch to signal heat demand to boiler |
 | dhw_active_entity | entity (binary_sensor) | No | Sensor indicating DHW tank is heating |
+| dhw_priority | select | No | How circuits behave during DHW: `parallel`, `partial` (default) or `absolute` |
 | summer_mode_entity | entity (select) | No | Select to enable/disable boiler UFH circuit |
 
 On entry setup, a **controller subentry** is automatically created to:
@@ -75,6 +76,7 @@ The options flow provides access to **timing parameters** that apply to the enti
 | window_block_time | number (s) | Window open time to trigger blocking (default: 600s / 10min) |
 | controller_loop_interval | number (s) | PID update interval (default: 60s / 1min) |
 | flush_duration | number (s) | Flush duration after DHW ends (default: 480s / 8min) |
+| dhw_recovery_time | number (s) | Hold-off after DHW under absolute priority (default: 300s / 5min) |
 
 These settings are stored in the **controller subentry** data.
 

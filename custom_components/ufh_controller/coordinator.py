@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from .config_flow import (
     CONF_DHW_ACTIVE_ENTITY,
+    CONF_DHW_PRIORITY,
     CONF_HEAT_REQUEST_ENTITY,
     CONF_OUTDOOR_TEMP_ENTITY,
     CONF_PUMP_REQUEST_ENTITY,
@@ -22,6 +23,7 @@ from homeassistant.components.select import SERVICE_SELECT_OPTION
 from homeassistant.const import (
     SERVICE_TURN_OFF,
     SERVICE_TURN_ON,
+    STATE_ON,
     STATE_UNAVAILABLE,
     STATE_UNKNOWN,
     Platform,
@@ -36,6 +38,7 @@ from homeassistant.helpers.update_coordinator import TimestampDataUpdateCoordina
 from sqlalchemy.exc import SQLAlchemyError
 
 from .const import (
+    DEFAULT_DHW_PRIORITY,
     DEFAULT_OUTDOOR_TEMP_COLD,
     DEFAULT_OUTDOOR_TEMP_WARM,
     DEFAULT_PID,
@@ -51,6 +54,7 @@ from .const import (
     SUBENTRY_TYPE_CONTROLLER,
     SUBENTRY_TYPE_ZONE,
     ControllerStatus,
+    DHWPriority,
     OperationMode,
     SummerMode,
     TimingConfig,
@@ -73,6 +77,39 @@ from .recorder import get_valve_position, was_any_window_open_recently
 # Storage constants
 STORAGE_VERSION = 3
 STORAGE_KEY = "ufh_controller"
+
+
+def _isoformat(value: datetime | None) -> str | None:
+    """
+    Render a timestamp for the state dict.
+
+    The dict doubles as the Store payload and as the input to
+    async_reload_config, which passes it back in memory. Storing an ISO string
+    rather than a datetime makes both paths round-trip identically.
+    """
+    return value.isoformat() if value is not None else None
+
+
+def _parse_dhw_priority(value: Any) -> DHWPriority:
+    """
+    Parse a stored DHW priority, falling back to the default.
+
+    Constructing the enum directly raises on any unrecognised value, and that
+    exception propagates out of setup, leaving the integration with no heating
+    control at all rather than a mistuned one. Reachable by downgrading after
+    a new level is added, or by a hand-edited config entry.
+    """
+    if not value:
+        return DEFAULT_DHW_PRIORITY
+    try:
+        return DHWPriority(value)
+    except ValueError:
+        LOGGER.warning(
+            "Unrecognised dhw_priority %r, falling back to %s",
+            value,
+            DEFAULT_DHW_PRIORITY.value,
+        )
+        return DEFAULT_DHW_PRIORITY
 
 
 class UFHControllerStore(Store[dict[str, Any]]):
@@ -225,6 +262,9 @@ class UFHControllerDataUpdateCoordinator(
             flush_duration=timing_opts.get(
                 "flush_duration", DEFAULT_TIMING["flush_duration"]
             ),
+            dhw_recovery_time=timing_opts.get(
+                "dhw_recovery_time", DEFAULT_TIMING["dhw_recovery_time"]
+            ),
         )
 
         # Build zones from subentries
@@ -283,6 +323,7 @@ class UFHControllerDataUpdateCoordinator(
             pump_request_entity=data.get(CONF_PUMP_REQUEST_ENTITY),
             heat_request_entity=data.get(CONF_HEAT_REQUEST_ENTITY),
             dhw_active_entity=data.get(CONF_DHW_ACTIVE_ENTITY),
+            dhw_priority=_parse_dhw_priority(data.get(CONF_DHW_PRIORITY)),
             summer_mode_entity=data.get(CONF_SUMMER_MODE_ENTITY),
             supply_temp_entity=data.get(CONF_SUPPLY_TEMP_ENTITY),
             outdoor_temp_entity=data.get(CONF_OUTDOOR_TEMP_ENTITY),
@@ -600,7 +641,7 @@ class UFHControllerDataUpdateCoordinator(
                 seconds=self._controller.config.timing.controller_loop_interval
             )
 
-        # If ALL zones are in fail-safe, execute controller-level fail-safe
+        # Controller fail-safe, from all zones failing or a controller-level fault
         if (
             self._controller.status == ControllerStatus.FAIL_SAFE
             and self._controller.mode != OperationMode.OFF
@@ -655,9 +696,14 @@ class UFHControllerDataUpdateCoordinator(
             return
 
         state = self.hass.states.get(dhw_entity)
-        current_dhw_active = state is not None and state.state == "on"
+        available = state is not None and state.state not in (
+            STATE_UNAVAILABLE,
+            STATE_UNKNOWN,
+        )
         self._controller.update_dhw_state(
-            dhw_active=current_dhw_active, now=datetime.now(UTC)
+            dhw_active=state is not None and state.state == STATE_ON,
+            now=datetime.now(UTC),
+            sensor_available=available,
         )
 
     def _get_supply_temp(self) -> float | None:
@@ -1091,13 +1137,18 @@ class UFHControllerDataUpdateCoordinator(
                 "observation_start": self._controller.state.observation_start,
                 "period_elapsed": self._controller.state.period_elapsed,
                 "status": self._controller.status.value,
+                "fail_safe_reason": self._controller.fail_safe_reason,
                 "zones_initializing": zones_initializing,
                 "zones_normal": zones_normal,
                 "zones_degraded": zones_degraded,
                 "zones_fail_safe": zones_fail_safe,
                 "flush_enabled": self._controller.state.flush_enabled,
                 "dhw_active": self._controller.state.dhw_active,
-                "flush_until": self._controller.state.flush_until,
+                "dhw_priority": self._controller.state.dhw_priority.value,
+                "dhw_sensor_available": self._controller.state.dhw_sensor_available,
+                "dhw_block": self._controller.state.dhw_block,
+                "dhw_block_until": _isoformat(self._controller.state.dhw_block_until),
+                "flush_until": _isoformat(self._controller.state.flush_until),
                 "flush_request": self._controller.state.flush_request,
                 "pump_request": self._controller.state.pump_request,
                 "heat_request": self._controller.state.heat_request,
@@ -1165,6 +1216,26 @@ class UFHControllerDataUpdateCoordinator(
         self._controller.state.flush_enabled = enabled
         await self.async_request_refresh()
 
+    def _restore_dhw_state(self, controller_data: dict[str, Any]) -> None:
+        """
+        Restore the DHW deadlines, and only the deadlines.
+
+        Both are armed on the DHW ON->OFF edge, and a restart or an in-place
+        config reload destroys the controller that saw that edge. Losing them
+        reopens circuits early into a primary still at cylinder temperature,
+        so they cannot be reconstructed and must be persisted.
+
+        Everything else is derived and is recomputed from live inputs on the
+        first cycle. Restoring dhw_active would synthesise a false end-of-charge
+        when a mid-charge save meets a sensor that now reads off; restoring
+        dhw_block would strand a stale block forever, because the only code
+        that recomputes it is skipped when no DHW sensor is configured.
+        """
+        for key in ("dhw_block_until", "flush_until"):
+            if ts := controller_data.get(key):
+                with contextlib.suppress(ValueError, TypeError):
+                    setattr(self._controller.state, key, datetime.fromisoformat(ts))
+
     def _restore_controller_state(self, controller_data: dict[str, Any]) -> None:
         """Restore controller-level state from V2 storage format."""
         if "mode" in controller_data:
@@ -1179,6 +1250,8 @@ class UFHControllerDataUpdateCoordinator(
             self._controller.state.supply_target_temp = controller_data[
                 "supply_target_temp"
             ]
+
+        self._restore_dhw_state(controller_data)
 
         if ts := controller_data.get("last_force_update"):
             with contextlib.suppress(ValueError, TypeError):

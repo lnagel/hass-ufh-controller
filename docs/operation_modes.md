@@ -10,7 +10,7 @@ Default mode. Full PID control with quota-based scheduling.
 - Pump request: flow-gated (on when any zone has confirmed flow)
 - Heat request: flow-gated and gated on pump request
 - Window blocking active
-- DHW priority active (if configured)
+- DHW priority active (if configured), at the configured `dhw_priority` level
 - Post-DHW residual heat capture active (if configured)
 - Boiler summer_mode follows heat request, or "auto" when any zone is in fail-safe
   (see [Fault Isolation](fault_isolation.md#summer-mode-safety))
@@ -20,6 +20,7 @@ Default mode. Full PID control with quota-based scheduling.
 System maintenance mode for pipe flushing.
 
 - All valves forced OPEN
+- Suspended while absolute DHW priority holds circuits closed (all valves CLOSED, pump and heat request OFF); the mode is retained and resumes when the block clears
 - Pump request ON (circulation is the mode's purpose)
 - Heat request OFF
 - Boiler summer_mode set to "summer" (circulation only, no firing)
@@ -30,6 +31,7 @@ System maintenance mode for pipe flushing.
 Diagnostic mode that rotates through zones.
 
 - One zone open at a time on 8-hour rotation
+- Suspended while absolute DHW priority holds circuits closed; the rotation is retained and resumes when the block clears
 - Hour 0: all closed (rest)
 - Hours 1-7: zones open sequentially
 - Pump request: flow-gated (on when the active zone has confirmed flow)
@@ -41,6 +43,8 @@ Diagnostic mode that rotates through zones.
 Manual override - maximum heating.
 
 - All valves forced OPEN
+- **Not** overridden by a normal absolute DHW priority block: an explicit manual override states user intent
+- **Is** overridden by a sustained DHW sensor fault, which reaches controller fail-safe and closes valves in every mode except `off`
 - Pump request ON
 - Heat request ON
 - Boiler summer_mode set to "winter"
