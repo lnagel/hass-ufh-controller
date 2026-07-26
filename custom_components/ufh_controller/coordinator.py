@@ -79,6 +79,17 @@ STORAGE_VERSION = 3
 STORAGE_KEY = "ufh_controller"
 
 
+def _isoformat(value: datetime | None) -> str | None:
+    """
+    Render a timestamp for the state dict.
+
+    The dict doubles as the Store payload and as the input to
+    async_reload_config, which passes it back in memory. Storing an ISO string
+    rather than a datetime makes both paths round-trip identically.
+    """
+    return value.isoformat() if value is not None else None
+
+
 def _parse_dhw_priority(value: Any) -> DHWPriority:
     """
     Parse a stored DHW priority, falling back to the default.
@@ -1141,13 +1152,8 @@ class UFHControllerDataUpdateCoordinator(
                 "dhw_priority": self._controller.state.dhw_priority.value,
                 "dhw_sensor_available": self._controller.state.dhw_sensor_available,
                 "dhw_block": self._controller.state.dhw_block,
-                # ISO string so the in-place reload path round-trips like storage
-                "dhw_block_until": (
-                    self._controller.state.dhw_block_until.isoformat()
-                    if self._controller.state.dhw_block_until is not None
-                    else None
-                ),
-                "flush_until": self._controller.state.flush_until,
+                "dhw_block_until": _isoformat(self._controller.state.dhw_block_until),
+                "flush_until": _isoformat(self._controller.state.flush_until),
                 "flush_request": self._controller.state.flush_request,
                 "pump_request": self._controller.state.pump_request,
                 "heat_request": self._controller.state.heat_request,
@@ -1217,26 +1223,23 @@ class UFHControllerDataUpdateCoordinator(
 
     def _restore_dhw_state(self, controller_data: dict[str, Any]) -> None:
         """
-        Restore the DHW block and its recovery deadline.
+        Restore the DHW deadlines, and only the deadlines.
 
-        The hold-off is armed only on the DHW ON->OFF edge, and a restart or an
-        in-place config reload destroys the controller that saw it. Without
-        this the deadline is lost and circuits reopen early into a primary that
-        is still at cylinder temperature.
+        Both are armed on the DHW ON->OFF edge, and a restart or an in-place
+        config reload destroys the controller that saw that edge. Losing them
+        reopens circuits early into a primary still at cylinder temperature,
+        so they cannot be reconstructed and must be persisted.
 
-        dhw_active is restored so the edge detector has the right prior state,
-        but the live sensor is re-read on the next cycle and overrides it. An
-        already-expired deadline simply lapses on the first recompute.
+        Everything else is derived and is recomputed from live inputs on the
+        first cycle. Restoring dhw_active would synthesise a false end-of-charge
+        when a mid-charge save meets a sensor that now reads off; restoring
+        dhw_block would strand a stale block forever, because the only code
+        that recomputes it is skipped when no DHW sensor is configured.
         """
-        if "dhw_active" in controller_data:
-            self._controller.state.dhw_active = bool(controller_data["dhw_active"])
-
-        if "dhw_block" in controller_data:
-            self._controller.state.dhw_block = bool(controller_data["dhw_block"])
-
-        if ts := controller_data.get("dhw_block_until"):
-            with contextlib.suppress(ValueError, TypeError):
-                self._controller.state.dhw_block_until = datetime.fromisoformat(ts)
+        for key in ("dhw_block_until", "flush_until"):
+            if ts := controller_data.get(key):
+                with contextlib.suppress(ValueError, TypeError):
+                    setattr(self._controller.state, key, datetime.fromisoformat(ts))
 
     def _restore_controller_state(self, controller_data: dict[str, Any]) -> None:
         """Restore controller-level state from V2 storage format."""

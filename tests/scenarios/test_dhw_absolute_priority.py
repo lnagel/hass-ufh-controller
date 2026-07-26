@@ -8,13 +8,18 @@ capture is deferred rather than cancelled.
 """
 
 from datetime import UTC, datetime, timedelta
+from unittest.mock import patch
 
 from homeassistant.const import STATE_OFF, STATE_ON
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ufh_controller.const import (
+    DEFAULT_TIMING,
+    DOMAIN,
+    SUBENTRY_TYPE_ZONE,
     DHWPriority,
+    OperationMode,
     TimingConfig,
     ValveState,
 )
@@ -27,12 +32,55 @@ from custom_components.ufh_controller.core.zone import (
     ZoneAction,
     ZoneConfig,
 )
-from tests.conftest import setup_zone_historical, setup_zone_pid
+from tests.conftest import (
+    MOCK_CONTROLLER_ID,
+    MOCK_ZONE_DATA,
+    setup_zone_historical,
+    setup_zone_pid,
+)
 
 NOW = datetime(2026, 2, 1, 12, 0, 0, tzinfo=UTC)
 RECOVERY = 300
 FLUSH_DURATION = 480
 DHW_DURATION = 900
+
+
+def absolute_entry(
+    *,
+    dhw_entity: str | None = "binary_sensor.dhw_active",
+    priority: DHWPriority = DHWPriority.ABSOLUTE,
+) -> MockConfigEntry:
+    """
+    Build an entry carrying dhw_priority in entry data.
+
+    Set through entry data rather than by mutating controller.config, so
+    _parse_dhw_priority and the CONF_DHW_PRIORITY wiring are exercised.
+    """
+    timing = dict(DEFAULT_TIMING)
+    timing["dhw_recovery_time"] = RECOVERY
+    timing["flush_duration"] = FLUSH_DURATION
+    return MockConfigEntry(
+        domain=DOMAIN,
+        title="Test Controller",
+        data={
+            "name": "Test Controller",
+            "controller_id": MOCK_CONTROLLER_ID,
+            "dhw_active_entity": dhw_entity,
+            "dhw_priority": priority.value,
+        },
+        options={"timing": timing},
+        entry_id="test_entry_dhw_scenarios",
+        unique_id=MOCK_CONTROLLER_ID,
+        subentries_data=[
+            {
+                "data": MOCK_ZONE_DATA,
+                "subentry_id": "subentry_zone1",
+                "subentry_type": SUBENTRY_TYPE_ZONE,
+                "title": "Test Zone 1",
+                "unique_id": "zone1",
+            }
+        ],
+    )
 
 
 def build_controller() -> HeatingController:
@@ -244,36 +292,129 @@ async def test_hold_off_survives_config_reload(
 
 async def test_hold_off_survives_restart(
     hass: HomeAssistant,
-    mock_config_entry: MockConfigEntry,
     mock_temp_sensor: None,
 ) -> None:
-    """A restart mid-recovery restores the deadline from storage."""
+    """
+    A restart mid-recovery restores the deadline through real storage.
+
+    Goes through Store.async_load and entry setup rather than calling
+    _restore_controller_state directly, so a serialisation or storage-version
+    regression is caught.
+    """
     hass.states.async_set("binary_sensor.dhw_active", STATE_OFF)
-
-    mock_config_entry.add_to_hass(hass)
-    await hass.config_entries.async_setup(mock_config_entry.entry_id)
-    await hass.async_block_till_done()
-
-    coordinator = mock_config_entry.runtime_data.coordinator
     deadline = datetime.now(UTC) + timedelta(seconds=RECOVERY)
     stored = {
-        "dhw_active": False,
-        "dhw_block": True,
-        "dhw_block_until": deadline.isoformat(),
+        "controller": {
+            "mode": OperationMode.HEAT.value,
+            "dhw_block_until": deadline.isoformat(),
+        },
+        "zones": {},
     }
 
-    coordinator.controller.config.dhw_priority = DHWPriority.ABSOLUTE
-    coordinator._restore_controller_state(stored)
+    entry = absolute_entry()
+    with patch("homeassistant.helpers.storage.Store.async_load", return_value=stored):
+        entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
 
-    assert coordinator.controller.state.dhw_block is True
+    coordinator = entry.runtime_data.coordinator
     assert coordinator.controller.state.dhw_block_until == deadline
-
-    # The restored deadline still governs the next recompute
-    coordinator.controller.update_dhw_state(
-        dhw_active=False, now=deadline - timedelta(seconds=1)
-    )
     assert coordinator.controller.state.dhw_block is True
-    coordinator.controller.update_dhw_state(
-        dhw_active=False, now=deadline + timedelta(seconds=1)
-    )
+
+    await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_flush_window_survives_restart(
+    hass: HomeAssistant,
+    mock_temp_sensor: None,
+) -> None:
+    """The post-DHW flush deadline is restored too, not just the block."""
+    hass.states.async_set("binary_sensor.dhw_active", STATE_OFF)
+    deadline = datetime.now(UTC) + timedelta(seconds=FLUSH_DURATION)
+    stored = {
+        "controller": {
+            "mode": OperationMode.HEAT.value,
+            "flush_until": deadline.isoformat(),
+        },
+        "zones": {},
+    }
+
+    entry = absolute_entry()
+    with patch("homeassistant.helpers.storage.Store.async_load", return_value=stored):
+        entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+    coordinator = entry.runtime_data.coordinator
+    assert coordinator.controller.state.flush_until == deadline
+
+    await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_stale_dhw_block_is_not_restored(
+    hass: HomeAssistant,
+    mock_temp_sensor: None,
+) -> None:
+    """
+    A stale dhw_block in storage must not strand the controller.
+
+    dhw_block is only recomputed by update_dhw_state, which is skipped when no
+    DHW sensor is configured, so restoring it would close every valve forever
+    under any priority.
+    """
+    stored = {
+        "controller": {
+            "mode": OperationMode.HEAT.value,
+            "dhw_block": True,
+            "dhw_active": True,
+        },
+        "zones": {},
+    }
+
+    entry = absolute_entry(dhw_entity=None, priority=DHWPriority.PARTIAL)
+    with patch("homeassistant.helpers.storage.Store.async_load", return_value=stored):
+        entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+    coordinator = entry.runtime_data.coordinator
     assert coordinator.controller.state.dhw_block is False
+    assert coordinator.controller.state.dhw_active is False
+
+    await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_restart_does_not_synthesise_end_of_charge(
+    hass: HomeAssistant,
+    mock_temp_sensor: None,
+) -> None:
+    """
+    A mid-charge save meeting an off sensor must not arm the flush window.
+
+    Restoring dhw_active would make the edge detector see ON->OFF for a charge
+    that had already finished, opening a flush circuit into a cold primary.
+    """
+    hass.states.async_set("binary_sensor.dhw_active", STATE_OFF)
+    stored = {
+        "controller": {
+            "mode": OperationMode.HEAT.value,
+            "dhw_active": True,
+            "flush_enabled": True,
+        },
+        "zones": {},
+    }
+
+    entry = absolute_entry(priority=DHWPriority.PARTIAL)
+    with patch("homeassistant.helpers.storage.Store.async_load", return_value=stored):
+        entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+    coordinator = entry.runtime_data.coordinator
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    assert coordinator.controller.state.flush_until is None
+    assert coordinator.controller.state.dhw_block_until is None
+
+    await hass.config_entries.async_unload(entry.entry_id)
