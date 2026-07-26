@@ -40,8 +40,11 @@ from tests.conftest import (
 )
 
 NOW = datetime(2026, 2, 1, 12, 0, 0, tzinfo=UTC)
-RECOVERY = 300
-FLUSH_DURATION = 480
+# Deliberately not DEFAULT_TIMING's values. Matching the defaults would make a
+# configured value and a fallback indistinguishable, so the config wiring could
+# break silently while every assertion below still passed.
+RECOVERY = 180
+FLUSH_DURATION = 240
 DHW_DURATION = 900
 
 
@@ -416,5 +419,61 @@ async def test_restart_does_not_synthesise_end_of_charge(
 
     assert coordinator.controller.state.flush_until is None
     assert coordinator.controller.state.dhw_block_until is None
+
+    await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_configured_timing_reaches_the_controller(
+    hass: HomeAssistant,
+    mock_temp_sensor: None,
+) -> None:
+    """
+    Configured DHW timing is wired through, not silently defaulted.
+
+    The values differ from DEFAULT_TIMING on purpose: with matching values a
+    broken lookup would fall back to the same number and every other
+    assertion in this module would still pass.
+    """
+    hass.states.async_set("binary_sensor.dhw_active", STATE_OFF)
+
+    entry = absolute_entry()
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    timing = entry.runtime_data.coordinator.controller.config.timing
+    assert timing.dhw_recovery_time == RECOVERY
+    assert timing.flush_duration == FLUSH_DURATION
+    assert DEFAULT_TIMING["dhw_recovery_time"] != RECOVERY
+    assert DEFAULT_TIMING["flush_duration"] != FLUSH_DURATION
+
+    await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_hold_off_uses_the_configured_recovery_time(
+    hass: HomeAssistant,
+    mock_temp_sensor: None,
+) -> None:
+    """The armed deadline reflects the configured hold-off, not the default."""
+    hass.states.async_set("binary_sensor.dhw_active", STATE_ON)
+
+    entry = absolute_entry()
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = entry.runtime_data.coordinator
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    hass.states.async_set("binary_sensor.dhw_active", STATE_OFF)
+    before = datetime.now(UTC)
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    armed = coordinator.controller.state.dhw_block_until
+    assert armed is not None
+    elapsed = (armed - before).total_seconds()
+    assert RECOVERY - 5 <= elapsed <= RECOVERY + 5
 
     await hass.config_entries.async_unload(entry.entry_id)
