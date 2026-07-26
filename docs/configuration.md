@@ -494,10 +494,14 @@ The fault escalates in two stages, matching how zone failures already escalate:
 
 | Stage | When | Effect |
 |-------|------|--------|
-| Block | First cycle that cannot read the sensor | All circuits closed, both timers frozen, controller status `degraded` |
+| Block | First control cycle that cannot read the sensor | All circuits closed, both deadlines held, controller status `degraded` |
 | Escalation | Fault sustained for 1 hour | Controller status `fail_safe`; valves closed in every mode except `off`, and boiler summer mode set to `auto` |
 
-The timers freeze rather than run, because an unreadable sensor gives nothing to detect a DHW end from. When the sensor returns, the recovery hold-off is timed from the moment visibility was regained.
+The deadlines are held rather than advanced, because an unreadable sensor gives nothing to detect a DHW end from. When the sensor returns, the recovery hold-off is timed from the moment visibility was regained.
+
+**Detection is on the control cycle, not instantaneous.** A sensor going unavailable does not trigger an immediate re-evaluation, so the block engages on the next cycle — within `controller_loop_interval` (default 60 s). This is deliberate: it debounces brief dropouts, which would otherwise close and reopen every valve for a momentary reconnect.
+
+**Nothing is commanded during startup.** While the controller is `initializing` — up to two minutes, until every configured entity has reported — no valve command is issued at all, including this block. The controller does not act on state it cannot yet track. A valve left open across a restart therefore stays as it is until initialization completes.
 
 The `dhw_block` sensor's `dhw_sensor_available` attribute and the `status` sensor's `fail_safe_reason` attribute both show when this is happening.
 
@@ -519,7 +523,9 @@ How long circuits stay closed after DHW charging ends, under `absolute` priority
 
 **How it works:** When the DHW sensor transitions from ON to OFF, the block is held for a further `dhw_recovery_time` seconds. The primary circuit still holds cylinder-temperature water at that moment, so reopening immediately would be nearly as damaging as opening during the charge itself. Set to 0 to release circuits as soon as DHW ends.
 
-**Interaction with the flush feature:** The post-DHW [flush window](#flush_duration) is deferred by the same amount rather than shortened. With `dhw_recovery_time=300` and `flush_duration=480`, flush circuits are eligible from 5 minutes after DHW ends until 13 minutes after. The configured flush duration is fully preserved.
+**Interaction with the flush feature:** The post-DHW [flush window](#flush_duration) is deferred rather than cancelled. With `dhw_recovery_time=300` and `flush_duration=480`, flush circuits are eligible from 5 minutes after DHW ends until 13 minutes after.
+
+The window closes at a fixed time, so anything that delays its start eats into it rather than shifting it. If the DHW sensor drops out during the hold-off, the block persists until the sensor returns and only the remainder of the window is used — a 90-second dropout leaves 390 seconds of a configured 480. That is the safe direction, since the delay implies the primary was hotter for longer than expected.
 
 **A caution on latent heat capture under `absolute`:** the recovery hold-off makes deferred harvesting *safer*, not provably *safe*. On a system with no mixing valve there is no guarantee the primary has actually cooled by the time the window opens — the timer is an estimate, not a measurement. Unless you have a supply temperature sensor confirming the primary has come down, consider leaving `flush_enabled` off on these systems. It defaults to off.
 

@@ -28,7 +28,8 @@ The DHW block sensor reports whether the [absolute DHW priority](configuration.m
 - **Manual override modes ignore it:** `heat`, `flush` and `cycle` act on the block; `all_on` and `off` do not, so the sensor can read ON while those modes hold valves open. Read it alongside the mode select rather than as a guarantee about valve positions
 - **Attributes:** `dhw_priority` (the configured level), `dhw_active` (resolved DHW state), `dhw_sensor_available` (false while the DHW sensor is unavailable and the block is being held) and `dhw_block_until` (when the hold-off expires)
 - **Survives restarts:** the recovery deadline is persisted, so a restart or an options change mid-recovery does not release circuits early. Only deadlines are restored; everything else is recomputed from live inputs
-- **DHW sensor unreadable:** under `absolute` this is a fault — circuits are blocked and the controller goes `degraded`, escalating to `fail_safe` after an hour. See [dhw_priority](configuration.md#dhw_priority)
+- **DHW sensor unreadable:** under `absolute` this is a fault — circuits are blocked and the controller goes `degraded`, escalating to `fail_safe` after an hour. Detected on the next control cycle rather than instantly, which debounces brief dropouts. See [dhw_priority](configuration.md#dhw_priority)
+- **Only armed under `absolute`:** `dhw_block_until` stays empty for `parallel` and `partial`, since no block can engage there
 
 **Flush Enabled Behavior:**
 - **Enabled:** Flush-type circuits can turn on for a configurable period after DHW ends (`flush_duration`) to capture latent heat (only when no regular circuits are currently running with valve ON).
