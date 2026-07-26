@@ -91,10 +91,11 @@ class ControllerActions:
     flush_request: bool = False
 
 
-def compute_flush_request(
+def compute_flush_request(  # noqa: PLR0913
     *,
     flush_enabled: bool,
     dhw_active: bool,
+    dhw_block: bool,
     flush_until: datetime | None,
     any_regular_on: bool,
     now: datetime,
@@ -105,12 +106,19 @@ def compute_flush_request(
     Flush circuits activate when:
     - flush_enabled is True (user has enabled the feature)
     - DHW is NOT currently active
+    - Absolute DHW priority is NOT holding circuits closed
     - Post-DHW timer is active
     - No regular circuits are currently ON
+
+    Latent heat capture and absolute DHW priority are opposing answers to the
+    same question: what to do with the water left in the primary when DHW
+    finishes. The block wins, which makes the two mutually exclusive by
+    construction rather than merely by evaluation order.
 
     Args:
         flush_enabled: User toggle for flush feature.
         dhw_active: Whether DHW is currently heating.
+        dhw_block: Whether absolute DHW priority is holding circuits closed.
         flush_until: Post-DHW timer expiration, or None.
         any_regular_on: Whether any regular zones have valves ON.
         now: Current time for timer comparison.
@@ -122,7 +130,7 @@ def compute_flush_request(
     if not flush_enabled:
         return False
 
-    if dhw_active:
+    if dhw_active or dhw_block:
         return False
 
     if flush_until is None or now >= flush_until:
@@ -451,6 +459,7 @@ class HeatingController:
         flush_request = compute_flush_request(
             flush_enabled=self._state.flush_enabled,
             dhw_active=self._state.dhw_active,
+            dhw_block=self._state.dhw_block,
             flush_until=self._state.flush_until,
             any_regular_on=any_regular_on,
             now=now,
