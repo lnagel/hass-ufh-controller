@@ -97,7 +97,7 @@ The controller computes a single heat request signal from all zones with active 
 - Only zones with `flow=True` (valve confirmed fully open) are considered
 - A zone contributes to the heat request when its `remaining_duration` exceeds the `closing_warning_duration` (zone won't close imminently)
 - If any qualifying zone needs heat, the boiler heat request is enabled
-- While a DHW block is in force the heat request is suppressed outright. Thermal actuators take minutes to close, so a circuit still reports flow immediately after DHW asserts; without this the controller would ask the boiler to fire for space heating mid-charge. Pump request stays flow-driven and decays naturally as the valves close.
+- While a DHW block is in force both the heat request and the pump request are suppressed outright. Thermal actuators take minutes to close, so a circuit still reports flow immediately after DHW asserts; without this the controller would ask the boiler to fire mid-charge and keep an independent circulation pump pushing cylinder-temperature water through the closing circuit.
 
 ### Boiler Summer Mode Management
 

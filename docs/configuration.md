@@ -475,7 +475,7 @@ How the heating circuits behave while the heat source is charging domestic hot w
 | `partial` | Circuits already open stay open; closed circuits cannot start. This is the historical behaviour and the default. |
 | `absolute` | **All circuits are actively closed** for the duration of DHW plus [dhw_recovery_time](#dhw_recovery_time). |
 
-**How it works:** `parallel` and `partial` never close a running circuit. `absolute` does: it overrides the already-on path, the end-of-period valve freeze, and applies to flush circuits as well as regular ones. It also suppresses the boiler heat request while in force. It applies in `heat`, `flush` and `cycle` modes; the manual overrides `all_on`, `all_off` and `off` state explicit user intent and are left alone.
+**How it works:** `parallel` and `partial` never close a running circuit. `absolute` does: it overrides the already-on path, the end-of-period valve freeze, and applies to flush circuits as well as regular ones. It also suppresses both the boiler heat request and the pump request while in force, so an independent circulation pump stops immediately rather than pushing cylinder-temperature water through circuits that are still closing. It applies in `heat`, `flush` and `cycle` modes; the manual overrides `all_on`, `all_off` and `off` state explicit user intent and are left alone.
 
 **Which one do I need?** Look at what your heat source does to the flow temperature when it charges the cylinder:
 
@@ -485,6 +485,10 @@ How the heating circuits behave while the heat source is charging domestic hot w
 **Example:** A boiler running 45 °C for underfloor heating and 70 °C for cylinder charging, with the underfloor manifold fed directly from the boiler flow. With `partial`, a zone that happens to be open when DHW starts keeps circulating 70 °C water through the floor. With `absolute`, that zone is commanded closed the moment DHW asserts.
 
 **Why it matters:** Sustained over-temperature flow damages screed and floor coverings — wood and vinyl generally want a surface temperature at or below 27 °C — and thermal shock stresses the pipework. `absolute` is a safety setting, not a comfort preference.
+
+**Requires a DHW sensor.** `absolute` cannot function without [dhw_active_entity](#dhw_active_entity) — the controller would never learn that a charge had started. The config flow rejects the combination rather than accepting a setting that silently does nothing.
+
+**Behaviour when the DHW sensor drops out:** under `absolute`, an `unavailable` or `unknown` reading holds the last known DHW state instead of being treated as "off". Treating it as off would synthesise a false end-of-charge, start the recovery countdown, and reopen every circuit mid-charge. The `dhw_block` sensor's `dhw_sensor_available` attribute shows when this is happening. `parallel` and `partial` keep the historical behaviour of treating an unusable reading as off, where the cost is comfort rather than damage.
 
 **Limitation to be aware of:** Thermal actuators typically need around 3.5 minutes to close (see [valve_close_time](#valve_close_time)). The controller commands closure the instant DHW asserts, but it cannot make the valve close faster than the hardware allows, so a brief exposure window is unavoidable. Where the boiler offers its own diverter valve or a mixing valve can be fitted, that hardware solution remains preferable to a software one.
 

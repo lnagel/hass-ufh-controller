@@ -25,7 +25,8 @@ All controller entities belong to a device named after the controller (user-defi
 The DHW block sensor reports whether [absolute DHW priority](configuration.md#dhw_priority) is currently forcing every circuit closed:
 - **ON:** While DHW is charging, and throughout the `dhw_recovery_time` hold-off after it ends
 - **OFF:** Whenever `dhw_priority` is `parallel` or `partial`, since neither closes running circuits
-- **Attributes:** `dhw_priority` (the configured level), `dhw_active` (the raw sensor state) and `dhw_block_until` (when the hold-off expires)
+- **Attributes:** `dhw_priority` (the configured level), `dhw_active` (resolved DHW state), `dhw_sensor_available` (false while the DHW sensor is unavailable and the block is being held) and `dhw_block_until` (when the hold-off expires)
+- **Survives restarts:** the block and its deadline are persisted, so a restart or an options change mid-recovery does not release circuits early
 
 **Flush Enabled Behavior:**
 - **Enabled:** Flush-type circuits can turn on for a configurable period after DHW ends (`flush_duration`) to capture latent heat (only when no regular circuits are currently running with valve ON).
