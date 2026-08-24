@@ -14,10 +14,11 @@ __pycache__
 coverage.xml
 coverage.json
 .ruff_cache
-.idea
+.idea/
 .vscode
 .aider*
-.claude
+.claude/settings.local.json
+.claude/worktrees/
 .env
 .env.*
 notes/
