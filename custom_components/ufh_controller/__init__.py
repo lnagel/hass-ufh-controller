@@ -56,8 +56,7 @@ async def async_setup_entry(
     coordinator = UFHControllerDataUpdateCoordinator(hass=hass, entry=entry)
     await coordinator.async_config_entry_first_refresh()
 
-    # Register the controller device before the platforms are set up, so zone
-    # devices can reference it by device id (via_device tuples are deprecated).
+    # Register the controller device first, so zones can reference it by id.
     controller_device = dr.async_get(hass).async_get_or_create(
         config_entry_id=entry.entry_id,
         config_subentry_id=get_controller_subentry_id(entry),
