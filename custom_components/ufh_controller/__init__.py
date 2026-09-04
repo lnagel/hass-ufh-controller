@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 from homeassistant.config_entries import ConfigSubentry
 from homeassistant.const import Platform
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import device_registry as dr
 
 from .const import (
     DEFAULT_TIMING,
@@ -23,10 +24,11 @@ from .const import (
 )
 from .coordinator import UFHControllerDataUpdateCoordinator
 from .data import UFHControllerData
+from .device import get_controller_device_info
+from .entity import get_controller_subentry_id
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
-    from homeassistant.helpers import device_registry as dr
 
     from .data import UFHControllerConfigEntry
 
@@ -54,7 +56,17 @@ async def async_setup_entry(
     coordinator = UFHControllerDataUpdateCoordinator(hass=hass, entry=entry)
     await coordinator.async_config_entry_first_refresh()
 
-    entry.runtime_data = UFHControllerData(coordinator=coordinator)
+    # Register the controller device first, so zones can reference it by id.
+    controller_device = dr.async_get(hass).async_get_or_create(
+        config_entry_id=entry.entry_id,
+        config_subentry_id=get_controller_subentry_id(entry),
+        **get_controller_device_info(coordinator),
+    )
+
+    entry.runtime_data = UFHControllerData(
+        coordinator=coordinator,
+        controller_device_id=controller_device.id,
+    )
 
     # Register coordinator cleanup for entry unload (handles listener cleanup)
     entry.async_on_unload(coordinator.shutdown)

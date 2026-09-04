@@ -6,12 +6,14 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from homeassistant.config_entries import ConfigSubentry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ufh_controller import _async_handle_config_update
 from custom_components.ufh_controller.const import (
     DEFAULT_PID,
     DEFAULT_SETPOINT,
+    DOMAIN,
     SUBENTRY_TYPE_CONTROLLER,
     SUBENTRY_TYPE_ZONE,
 )
@@ -30,6 +32,35 @@ async def test_setup_entry(
 
     assert mock_config_entry.runtime_data is not None
     assert mock_config_entry.runtime_data.coordinator is not None
+
+
+async def test_zone_devices_linked_to_controller_device(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Test zone devices reference the controller device by device id."""
+    mock_config_entry.add_to_hass(hass)
+
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    device_registry = dr.async_get(hass)
+    controller_device = device_registry.async_get_device_by_identifier(
+        (DOMAIN, mock_config_entry.entry_id), mock_config_entry.entry_id
+    )
+    assert controller_device is not None
+    assert mock_config_entry.runtime_data.controller_device_id == controller_device.id
+
+    zone_devices = [
+        device
+        for device in dr.async_entries_for_config_entry(
+            device_registry, mock_config_entry.entry_id
+        )
+        if device.id != controller_device.id
+    ]
+    assert zone_devices
+    for zone_device in zone_devices:
+        assert zone_device.via_device_id == controller_device.id
 
 
 async def test_setup_entry_no_zones(

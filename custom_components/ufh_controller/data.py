@@ -19,3 +19,4 @@ class UFHControllerData:
     """Data for the Underfloor Heating Controller integration."""
 
     coordinator: UFHControllerDataUpdateCoordinator
+    controller_device_id: str

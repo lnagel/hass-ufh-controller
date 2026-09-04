@@ -54,7 +54,12 @@ class UFHControllerZoneEntity(CoordinatorEntity[UFHControllerDataUpdateCoordinat
         super().__init__(coordinator)
         self._zone_id = zone_id
         self._attr_config_subentry_id = subentry_id
-        self._attr_device_info = get_zone_device_info(coordinator, zone_id, zone_name)
+        self._attr_device_info = get_zone_device_info(
+            coordinator,
+            zone_id,
+            zone_name,
+            coordinator.config_entry.runtime_data.controller_device_id,
+        )
 
     @property
     def zone_id(self) -> str:
