@@ -29,6 +29,7 @@ def get_zone_device_info(
     coordinator: UFHControllerDataUpdateCoordinator,
     zone_id: str,
     zone_name: str,
+    controller_device_id: str,
 ) -> DeviceInfo:
     """Get device info for a zone device linked to a subentry."""
     return DeviceInfo(
@@ -36,5 +37,5 @@ def get_zone_device_info(
         name=zone_name,
         manufacturer="Underfloor Heating Controller",
         model="Heating Zone",
-        via_device=(DOMAIN, coordinator.config_entry.entry_id),
+        via_device_id=controller_device_id,
     )
