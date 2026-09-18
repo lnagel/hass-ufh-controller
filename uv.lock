@@ -1150,7 +1150,7 @@ dev = [
 dev = [
     { name = "bump-my-version" },
     { name = "diff-cover" },
-    { name = "pytest-homeassistant-custom-component", specifier = "==0.13.364" },
+    { name = "pytest-homeassistant-custom-component" },
     { name = "ruff" },
     { name = "ty" },
 ]
