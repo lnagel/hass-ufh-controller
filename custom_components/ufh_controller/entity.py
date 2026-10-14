@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from homeassistant.core import callback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import SUBENTRY_TYPE_CONTROLLER
@@ -22,7 +23,25 @@ def get_controller_subentry_id(entry: UFHControllerConfigEntry) -> str | None:
     return None
 
 
-class UFHControllerEntity(CoordinatorEntity[UFHControllerDataUpdateCoordinator]):
+class UFHCoordinatorEntity(CoordinatorEntity[UFHControllerDataUpdateCoordinator]):
+    """Base class that derives entity state from coordinator data."""
+
+    async def async_added_to_hass(self) -> None:
+        """Populate state attributes before the first state write."""
+        await super().async_added_to_hass()
+        self._update_attrs()
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Refresh state attributes from coordinator data and write state."""
+        self._update_attrs()
+        super()._handle_coordinator_update()
+
+    def _update_attrs(self) -> None:
+        """Set the _attr_* state attributes from coordinator data."""
+
+
+class UFHControllerEntity(UFHCoordinatorEntity):
     """Base class for controller-level Underfloor Heating Controller entities."""
 
     _attr_has_entity_name = True
@@ -38,7 +57,7 @@ class UFHControllerEntity(CoordinatorEntity[UFHControllerDataUpdateCoordinator])
         self._attr_device_info = get_controller_device_info(coordinator)
 
 
-class UFHControllerZoneEntity(CoordinatorEntity[UFHControllerDataUpdateCoordinator]):
+class UFHControllerZoneEntity(UFHCoordinatorEntity):
     """Base class for zone-level Underfloor Heating Controller entities."""
 
     _attr_has_entity_name = True

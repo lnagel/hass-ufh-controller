@@ -288,18 +288,12 @@ class UFHZoneSensor(UFHControllerZoneEntity, SensorEntity):
         controller_id = coordinator.config_entry.data.get("controller_id", "")
         self._attr_unique_id = f"{controller_id}_{zone_id}_{description.key}"
 
-    @property
-    def native_value(self) -> float | None:
-        """Return the sensor value."""
+    def _update_attrs(self) -> None:
+        """Set the sensor value and dynamic icon from coordinator data."""
         zone_data = self.coordinator.data.get("zones", {}).get(self._zone_id, {})
-        return self.entity_description.value_fn(zone_data)
-
-    @property
-    def icon(self) -> str | None:
-        """Return dynamic icon if icon_fn is defined."""
+        self._attr_native_value = self.entity_description.value_fn(zone_data)
         if self.entity_description.icon_fn is not None:
-            return self.entity_description.icon_fn(self.native_value)
-        return None
+            self._attr_icon = self.entity_description.icon_fn(self._attr_native_value)
 
     @property
     def available(self) -> bool:
@@ -339,15 +333,9 @@ class UFHControllerSensor(UFHControllerEntity, SensorEntity):
         controller_id = coordinator.config_entry.data.get("controller_id", "")
         self._attr_unique_id = f"{controller_id}_{description.key}"
 
-    @property
-    def native_value(self) -> float | int | None:
-        """Return the sensor value."""
+    def _update_attrs(self) -> None:
+        """Set the sensor value and dynamic icon from coordinator data."""
         controller_data = self.coordinator.data.get("controller", {})
-        return self.entity_description.value_fn(controller_data)
-
-    @property
-    def icon(self) -> str | None:
-        """Return dynamic icon if icon_fn is defined."""
+        self._attr_native_value = self.entity_description.value_fn(controller_data)
         if self.entity_description.icon_fn is not None:
-            return self.entity_description.icon_fn(self.native_value)
-        return None
+            self._attr_icon = self.entity_description.icon_fn(self._attr_native_value)

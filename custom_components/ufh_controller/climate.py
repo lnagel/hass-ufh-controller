@@ -98,44 +98,31 @@ class UFHZoneClimate(UFHControllerZoneEntity, ClimateEntity):
 
         self._attr_supported_features = features
 
-    @property
-    def preset_mode(self) -> str | None:
-        """Return the current preset mode from coordinator data."""
+    def _update_attrs(self) -> None:
+        """Set the climate state from coordinator data."""
         zone_data = self.coordinator.data.get("zones", {}).get(self._zone_id, {})
-        return zone_data.get("preset_mode")
+        enabled = zone_data.get("enabled", True)
 
-    @property
-    def hvac_mode(self) -> HVACMode:
-        """Return the current HVAC mode."""
-        zone_data = self.coordinator.data.get("zones", {}).get(self._zone_id, {})
-        if zone_data.get("enabled", True):
-            return HVACMode.HEAT
-        return HVACMode.OFF
-
-    @property
-    def hvac_action(self) -> HVACAction:
-        """Return the current HVAC action."""
-        zone_data = self.coordinator.data.get("zones", {}).get(self._zone_id, {})
-
-        if not zone_data.get("enabled", True):
-            return HVACAction.OFF
-
-        if zone_data.get("heat", False):
-            return HVACAction.HEATING
-
-        return HVACAction.IDLE
-
-    @property
-    def current_temperature(self) -> float | None:
-        """Return the current temperature."""
-        zone_data = self.coordinator.data.get("zones", {}).get(self._zone_id, {})
-        return zone_data.get("current")
-
-    @property
-    def target_temperature(self) -> float | None:
-        """Return the target temperature."""
-        zone_data = self.coordinator.data.get("zones", {}).get(self._zone_id, {})
-        return zone_data.get("setpoint")
+        self._attr_preset_mode = zone_data.get("preset_mode")
+        self._attr_hvac_mode = HVACMode.HEAT if enabled else HVACMode.OFF
+        if not enabled:
+            self._attr_hvac_action = HVACAction.OFF
+        elif zone_data.get("heat", False):
+            self._attr_hvac_action = HVACAction.HEATING
+        else:
+            self._attr_hvac_action = HVACAction.IDLE
+        self._attr_current_temperature = zone_data.get("current")
+        self._attr_target_temperature = zone_data.get("setpoint")
+        self._attr_extra_state_attributes = {
+            "duty_cycle": zone_data.get("duty_cycle"),
+            "pid_error": zone_data.get("pid_error"),
+            "pid_proportional": zone_data.get("pid_proportional"),
+            "pid_integral": zone_data.get("pid_integral"),
+            "pid_derivative": zone_data.get("pid_derivative"),
+            "window": zone_data.get("window"),
+            "heat": zone_data.get("heat"),
+            "zone_status": zone_data.get("zone_status"),
+        }
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
         """Set the target temperature."""
@@ -168,18 +155,3 @@ class UFHZoneClimate(UFHControllerZoneEntity, ClimateEntity):
         setpoint = self._presets[preset_mode]
         await self.coordinator.set_zone_setpoint(self._zone_id, setpoint)
         await self.coordinator.set_zone_preset_mode(self._zone_id, preset_mode)
-
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        """Return additional state attributes."""
-        zone_data = self.coordinator.data.get("zones", {}).get(self._zone_id, {})
-        return {
-            "duty_cycle": zone_data.get("duty_cycle"),
-            "pid_error": zone_data.get("pid_error"),
-            "pid_proportional": zone_data.get("pid_proportional"),
-            "pid_integral": zone_data.get("pid_integral"),
-            "pid_derivative": zone_data.get("pid_derivative"),
-            "window": zone_data.get("window"),
-            "heat": zone_data.get("heat"),
-            "zone_status": zone_data.get("zone_status"),
-        }

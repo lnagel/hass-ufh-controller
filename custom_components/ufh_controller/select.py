@@ -52,11 +52,10 @@ class UFHModeSelect(UFHControllerEntity, SelectEntity):
         controller_id = coordinator.config_entry.data.get("controller_id", "")
         self._attr_unique_id = f"{controller_id}_mode"
 
-    @property
-    def current_option(self) -> str:
-        """Return the current mode."""
+    def _update_attrs(self) -> None:
+        """Set the current mode from coordinator data."""
         controller_data = self.coordinator.data.get("controller", {})
-        return controller_data.get("mode")
+        self._attr_current_option = controller_data.get("mode")
 
     async def async_select_option(self, option: str) -> None:
         """Set the operation mode."""

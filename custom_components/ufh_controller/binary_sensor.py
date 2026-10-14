@@ -214,11 +214,10 @@ class UFHZoneBinarySensor(UFHControllerZoneEntity, BinarySensorEntity):
         controller_id = coordinator.config_entry.data.get("controller_id", "")
         self._attr_unique_id = f"{controller_id}_{zone_id}_{description.key}"
 
-    @property
-    def is_on(self) -> bool | None:
-        """Return the sensor state."""
+    def _update_attrs(self) -> None:
+        """Set the sensor state from coordinator data."""
         zone_data = self.coordinator.data.get("zones", {}).get(self._zone_id, {})
-        return self.entity_description.value_fn(zone_data)
+        self._attr_is_on = self.entity_description.value_fn(zone_data)
 
     @property
     def available(self) -> bool:
@@ -256,16 +255,11 @@ class UFHControllerBinarySensor(UFHControllerEntity, BinarySensorEntity):
         controller_id = coordinator.config_entry.data.get("controller_id", "")
         self._attr_unique_id = f"{controller_id}_{description.key}"
 
-    @property
-    def is_on(self) -> bool | None:
-        """Return the sensor state."""
+    def _update_attrs(self) -> None:
+        """Set the sensor state and attributes from coordinator data."""
         controller_data = self.coordinator.data.get("controller", {})
-        return self.entity_description.value_fn(controller_data)
-
-    @property
-    def extra_state_attributes(self) -> dict[str, Any] | None:
-        """Return additional state attributes if defined."""
+        self._attr_is_on = self.entity_description.value_fn(controller_data)
         if self.entity_description.attrs_fn is not None:
-            controller_data = self.coordinator.data.get("controller", {})
-            return self.entity_description.attrs_fn(controller_data)
-        return None
+            self._attr_extra_state_attributes = self.entity_description.attrs_fn(
+                controller_data
+            )
