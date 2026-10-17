@@ -270,7 +270,6 @@ async def async_setup_entry(
 class UFHZoneSensor(UFHControllerZoneEntity, SensorEntity):
     """Sensor entity for zone metrics."""
 
-    entity_description: UFHZoneSensorEntityDescription
     _attr_entity_registry_visible_default = False
 
     def __init__(
@@ -284,6 +283,7 @@ class UFHZoneSensor(UFHControllerZoneEntity, SensorEntity):
         """Initialize the sensor entity."""
         super().__init__(coordinator, zone_id, zone_name, subentry_id)
         self.entity_description = description
+        self._description = description
 
         controller_id = coordinator.config_entry.data.get("controller_id", "")
         self._attr_unique_id = f"{controller_id}_{zone_id}_{description.key}"
@@ -297,12 +297,12 @@ class UFHZoneSensor(UFHControllerZoneEntity, SensorEntity):
     def _compute_native_value(self) -> float | None:
         """Return the sensor value."""
         zone_data = self.coordinator.data.get("zones", {}).get(self._zone_id, {})
-        return self.entity_description.value_fn(zone_data)
+        return self._description.value_fn(zone_data)
 
     def _compute_icon(self) -> str | None:
         """Return dynamic icon if icon_fn is defined."""
-        if self.entity_description.icon_fn is not None:
-            return self.entity_description.icon_fn(self._compute_native_value())
+        if self._description.icon_fn is not None:
+            return self._description.icon_fn(self._compute_native_value())
         return None
 
     @property
@@ -325,8 +325,6 @@ class UFHZoneSensor(UFHControllerZoneEntity, SensorEntity):
 class UFHControllerSensor(UFHControllerEntity, SensorEntity):
     """Generic sensor entity for controller-level metrics."""
 
-    entity_description: UFHControllerSensorEntityDescription
-
     def __init__(
         self,
         coordinator: UFHControllerDataUpdateCoordinator,
@@ -336,6 +334,7 @@ class UFHControllerSensor(UFHControllerEntity, SensorEntity):
         """Initialize the sensor entity."""
         super().__init__(coordinator, subentry_id)
         self.entity_description = description
+        self._description = description
         self._attr_entity_registry_visible_default = (
             description.entity_registry_visible_default
         )
@@ -352,10 +351,10 @@ class UFHControllerSensor(UFHControllerEntity, SensorEntity):
     def _compute_native_value(self) -> float | int | None:
         """Return the sensor value."""
         controller_data = self.coordinator.data.get("controller", {})
-        return self.entity_description.value_fn(controller_data)
+        return self._description.value_fn(controller_data)
 
     def _compute_icon(self) -> str | None:
         """Return dynamic icon if icon_fn is defined."""
-        if self.entity_description.icon_fn is not None:
-            return self.entity_description.icon_fn(self._compute_native_value())
+        if self._description.icon_fn is not None:
+            return self._description.icon_fn(self._compute_native_value())
         return None

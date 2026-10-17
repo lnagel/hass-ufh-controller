@@ -196,7 +196,6 @@ async def async_setup_entry(
 class UFHZoneBinarySensor(UFHControllerZoneEntity, BinarySensorEntity):
     """Binary sensor entity for zone status."""
 
-    entity_description: UFHZoneBinarySensorEntityDescription
     _attr_entity_registry_visible_default = False
 
     def __init__(
@@ -210,6 +209,7 @@ class UFHZoneBinarySensor(UFHControllerZoneEntity, BinarySensorEntity):
         """Initialize the binary sensor entity."""
         super().__init__(coordinator, zone_id, zone_name, subentry_id)
         self.entity_description = description
+        self._description = description
 
         controller_id = coordinator.config_entry.data.get("controller_id", "")
         self._attr_unique_id = f"{controller_id}_{zone_id}_{description.key}"
@@ -222,7 +222,7 @@ class UFHZoneBinarySensor(UFHControllerZoneEntity, BinarySensorEntity):
     def _compute_is_on(self) -> bool | None:
         """Return the sensor state."""
         zone_data = self.coordinator.data.get("zones", {}).get(self._zone_id, {})
-        return self.entity_description.value_fn(zone_data)
+        return self._description.value_fn(zone_data)
 
     @property
     def available(self) -> bool:
@@ -242,8 +242,6 @@ class UFHZoneBinarySensor(UFHControllerZoneEntity, BinarySensorEntity):
 class UFHControllerBinarySensor(UFHControllerEntity, BinarySensorEntity):
     """Generic binary sensor entity for controller-level status."""
 
-    entity_description: UFHControllerBinarySensorEntityDescription
-
     def __init__(
         self,
         coordinator: UFHControllerDataUpdateCoordinator,
@@ -253,6 +251,7 @@ class UFHControllerBinarySensor(UFHControllerEntity, BinarySensorEntity):
         """Initialize the binary sensor entity."""
         super().__init__(coordinator, subentry_id)
         self.entity_description = description
+        self._description = description
         self._attr_entity_registry_visible_default = (
             description.entity_registry_visible_default
         )
@@ -270,11 +269,11 @@ class UFHControllerBinarySensor(UFHControllerEntity, BinarySensorEntity):
     def _compute_is_on(self) -> bool | None:
         """Return the sensor state."""
         controller_data = self.coordinator.data.get("controller", {})
-        return self.entity_description.value_fn(controller_data)
+        return self._description.value_fn(controller_data)
 
     def _compute_extra_state_attributes(self) -> dict[str, Any] | None:
         """Return additional state attributes if defined."""
-        if self.entity_description.attrs_fn is not None:
+        if self._description.attrs_fn is not None:
             controller_data = self.coordinator.data.get("controller", {})
-            return self.entity_description.attrs_fn(controller_data)
+            return self._description.attrs_fn(controller_data)
         return None
