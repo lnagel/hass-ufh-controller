@@ -55,10 +55,15 @@ class UFHFlushEnabledSwitch(UFHControllerEntity, SwitchEntity):
 
         controller_id = coordinator.config_entry.data.get("controller_id", "")
         self._attr_unique_id = f"{controller_id}_flush_enabled"
+        self._update_attrs()
 
     def _update_attrs(self) -> None:
-        """Set the flush enabled status from controller state."""
-        self._attr_is_on = self.coordinator.controller.state.flush_enabled
+        """Set the switch state from coordinator data."""
+        self._attr_is_on = self._compute_is_on()
+
+    def _compute_is_on(self) -> bool:
+        """Return the flush enabled status."""
+        return self.coordinator.controller.state.flush_enabled
 
     async def async_turn_on(self, **_kwargs: Any) -> None:
         """Enable DHW latent heat capture."""

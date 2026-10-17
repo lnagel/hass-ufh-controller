@@ -287,13 +287,23 @@ class UFHZoneSensor(UFHControllerZoneEntity, SensorEntity):
 
         controller_id = coordinator.config_entry.data.get("controller_id", "")
         self._attr_unique_id = f"{controller_id}_{zone_id}_{description.key}"
+        self._update_attrs()
 
     def _update_attrs(self) -> None:
-        """Set the sensor value and dynamic icon from coordinator data."""
+        """Set the sensor state from coordinator data."""
+        self._attr_native_value = self._compute_native_value()
+        self._attr_icon = self._compute_icon()
+
+    def _compute_native_value(self) -> float | None:
+        """Return the sensor value."""
         zone_data = self.coordinator.data.get("zones", {}).get(self._zone_id, {})
-        self._attr_native_value = self.entity_description.value_fn(zone_data)
+        return self.entity_description.value_fn(zone_data)
+
+    def _compute_icon(self) -> str | None:
+        """Return dynamic icon if icon_fn is defined."""
         if self.entity_description.icon_fn is not None:
-            self._attr_icon = self.entity_description.icon_fn(self._attr_native_value)
+            return self.entity_description.icon_fn(self._compute_native_value())
+        return None
 
     @property
     def available(self) -> bool:
@@ -332,10 +342,20 @@ class UFHControllerSensor(UFHControllerEntity, SensorEntity):
 
         controller_id = coordinator.config_entry.data.get("controller_id", "")
         self._attr_unique_id = f"{controller_id}_{description.key}"
+        self._update_attrs()
 
     def _update_attrs(self) -> None:
-        """Set the sensor value and dynamic icon from coordinator data."""
+        """Set the sensor state from coordinator data."""
+        self._attr_native_value = self._compute_native_value()
+        self._attr_icon = self._compute_icon()
+
+    def _compute_native_value(self) -> float | int | None:
+        """Return the sensor value."""
         controller_data = self.coordinator.data.get("controller", {})
-        self._attr_native_value = self.entity_description.value_fn(controller_data)
+        return self.entity_description.value_fn(controller_data)
+
+    def _compute_icon(self) -> str | None:
+        """Return dynamic icon if icon_fn is defined."""
         if self.entity_description.icon_fn is not None:
-            self._attr_icon = self.entity_description.icon_fn(self._attr_native_value)
+            return self.entity_description.icon_fn(self._compute_native_value())
+        return None
