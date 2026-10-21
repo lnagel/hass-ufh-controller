@@ -201,10 +201,10 @@ class UFHControllerDataUpdateCoordinator(
         super().__init__(
             hass,
             LOGGER,
+            config_entry=entry,
             name=DOMAIN,
             update_interval=timedelta(seconds=INITIALIZING_UPDATE_INTERVAL),
         )
-        self.config_entry = entry
 
         # Storage for crash resilience
         self._store = UFHControllerStore(
