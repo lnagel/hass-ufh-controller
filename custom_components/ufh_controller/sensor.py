@@ -11,7 +11,7 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.const import PERCENTAGE, UnitOfTemperature, UnitOfTime
+from homeassistant.const import UnitOfRatio, UnitOfTemperature, UnitOfTime
 
 from .const import (
     ICON_GAUGE_THRESHOLDS,
@@ -94,7 +94,7 @@ ZONE_SENSORS: tuple[UFHZoneSensorEntityDescription, ...] = (
     UFHZoneSensorEntityDescription(
         key="pid_proportional",
         translation_key="pid_proportional",
-        native_unit_of_measurement=PERCENTAGE,
+        native_unit_of_measurement=UnitOfRatio.PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=1,
         value_fn=lambda data: data.get("pid_proportional"),
@@ -102,7 +102,7 @@ ZONE_SENSORS: tuple[UFHZoneSensorEntityDescription, ...] = (
     UFHZoneSensorEntityDescription(
         key="pid_integral",
         translation_key="pid_integral",
-        native_unit_of_measurement=PERCENTAGE,
+        native_unit_of_measurement=UnitOfRatio.PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=1,
         value_fn=lambda data: data.get("pid_integral"),
@@ -110,7 +110,7 @@ ZONE_SENSORS: tuple[UFHZoneSensorEntityDescription, ...] = (
     UFHZoneSensorEntityDescription(
         key="pid_derivative",
         translation_key="pid_derivative",
-        native_unit_of_measurement=PERCENTAGE,
+        native_unit_of_measurement=UnitOfRatio.PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
         value_fn=lambda data: data.get("pid_derivative"),
@@ -131,7 +131,7 @@ PID_ERROR_SENSOR = UFHZoneSensorEntityDescription(
 DUTY_CYCLE_SENSOR = UFHZoneSensorEntityDescription(
     key="duty_cycle",
     translation_key="duty_cycle",
-    native_unit_of_measurement=PERCENTAGE,
+    native_unit_of_measurement=UnitOfRatio.PERCENTAGE,
     state_class=SensorStateClass.MEASUREMENT,
     suggested_display_precision=1,
     value_fn=lambda data: data.get("duty_cycle"),
@@ -141,7 +141,7 @@ DUTY_CYCLE_SENSOR = UFHZoneSensorEntityDescription(
 SUPPLY_COEFFICIENT_SENSOR = UFHZoneSensorEntityDescription(
     key="supply_coefficient",
     translation_key="supply_coefficient",
-    native_unit_of_measurement=PERCENTAGE,
+    native_unit_of_measurement=UnitOfRatio.PERCENTAGE,
     state_class=SensorStateClass.MEASUREMENT,
     suggested_display_precision=0,
     value_fn=lambda data: data.get("supply_coefficient"),
