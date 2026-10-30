@@ -288,9 +288,11 @@ class UFHControllerDataUpdateCoordinator(
                     window_sensors=zone_data.get("window_sensors", []),
                     setpoint_min=setpoint_opts.get("min", DEFAULT_SETPOINT["min"]),
                     setpoint_max=setpoint_opts.get("max", DEFAULT_SETPOINT["max"]),
+                    setpoint_step=setpoint_opts.get("step", DEFAULT_SETPOINT["step"]),
                     setpoint_default=setpoint_opts.get(
                         "default", DEFAULT_SETPOINT["default"]
                     ),
+                    presets=dict(zone_data.get("presets", {})),
                     kp=pid_opts.get("kp", DEFAULT_PID["kp"]),
                     ki=pid_opts.get("ki", DEFAULT_PID["ki"]),
                     kd=pid_opts.get("kd", DEFAULT_PID["kd"]),
@@ -507,8 +509,10 @@ class UFHControllerDataUpdateCoordinator(
         if "enabled" in zone_state and zone_state["enabled"] != runtime.state.enabled:
             self._controller.set_zone_enabled(zone_id, enabled=zone_state["enabled"])
 
-        if "preset_mode" in zone_state:
-            runtime.state.preset_mode = zone_state["preset_mode"]
+        # A preset removed by reconfiguration is not restored
+        preset_mode = zone_state.get("preset_mode")
+        if preset_mode is None or preset_mode in runtime.config.presets:
+            runtime.state.preset_mode = preset_mode
 
         # Restore EMA-smoothed temperature for PID continuity
         if "current" in zone_state:
@@ -1206,10 +1210,9 @@ class UFHControllerDataUpdateCoordinator(
         await self.async_request_refresh()
 
     async def set_zone_preset_mode(self, zone_id: str, preset_mode: str | None) -> None:
-        """Set zone preset mode and trigger refresh."""
-        runtime = self._controller.get_zone_runtime(zone_id)
-        runtime.state.preset_mode = preset_mode
-        await self.async_request_refresh()
+        """Apply or clear zone preset mode and trigger refresh."""
+        if self._controller.set_zone_preset_mode(zone_id, preset_mode):
+            await self.async_request_refresh()
 
     async def set_flush_enabled(self, *, enabled: bool) -> None:
         """Enable or disable flush and trigger refresh."""

@@ -10,6 +10,7 @@ from homeassistant.components.climate import (
     SERVICE_SET_HVAC_MODE,
     SERVICE_SET_PRESET_MODE,
     SERVICE_SET_TEMPERATURE,
+    ClimateEntityFeature,
     HVACAction,
     HVACMode,
 )
@@ -18,7 +19,10 @@ from homeassistant.components.climate import (
 )
 from homeassistant.const import ATTR_ENTITY_ID, ATTR_TEMPERATURE
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+from custom_components.ufh_controller.const import SUBENTRY_TYPE_ZONE
 
 
 @pytest.fixture
@@ -244,8 +248,12 @@ async def test_climate_set_preset_comfort(
             blocking=True,
         )
 
-        # Verify refresh was requested (twice: once for setpoint, once for preset_mode)
-        assert mock_refresh.call_count == 2
+        # Setpoint and preset_mode are applied together with a single refresh
+        assert mock_refresh.call_count == 1
+
+    zone_state = coordinator.controller.get_zone_runtime("zone1").state
+    assert zone_state.setpoint == 22.0
+    assert zone_state.preset_mode == "comfort"
 
 
 async def test_climate_set_preset_eco(
@@ -271,8 +279,12 @@ async def test_climate_set_preset_eco(
             blocking=True,
         )
 
-        # Verify refresh was requested (twice: once for setpoint, once for preset_mode)
-        assert mock_refresh.call_count == 2
+        # Setpoint and preset_mode are applied together with a single refresh
+        assert mock_refresh.call_count == 1
+
+    zone_state = coordinator.controller.get_zone_runtime("zone1").state
+    assert zone_state.setpoint == 19.0
+    assert zone_state.preset_mode == "eco"
 
 
 async def test_climate_extra_attributes(
@@ -479,3 +491,98 @@ async def test_climate_preset_cleared_when_none_stored(
     assert state is not None
     assert state.attributes.get(ATTR_PRESET_MODE) is None
     assert state.attributes.get(ATTR_TEMPERATURE) == 23.5
+
+
+async def test_climate_config_change_applies_in_place(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_temp_sensor: None,
+    climate_entity_id: str,
+) -> None:
+    """Test setpoint limits and presets update without recreating the entity."""
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    await hass.services.async_call(
+        CLIMATE_DOMAIN,
+        SERVICE_SET_PRESET_MODE,
+        {ATTR_ENTITY_ID: climate_entity_id, ATTR_PRESET_MODE: "away"},
+        blocking=True,
+    )
+
+    zone_subentry = next(
+        subentry
+        for subentry in mock_config_entry.subentries.values()
+        if subentry.subentry_type == SUBENTRY_TYPE_ZONE
+    )
+    with patch(
+        "homeassistant.config_entries.ConfigEntries.async_reload"
+    ) as mock_reload:
+        hass.config_entries.async_update_subentry(
+            mock_config_entry,
+            zone_subentry,
+            data={
+                **zone_subentry.data,
+                "setpoint": {"min": 10.0, "max": 30.0, "step": 0.1, "default": 21.0},
+                "presets": {"home": 19.3, "eco": 18.0},
+            },
+        )
+        await hass.async_block_till_done()
+        mock_reload.assert_not_called()
+
+    state = hass.states.get(climate_entity_id)
+    assert state is not None
+    assert state.attributes.get("min_temp") == 10.0
+    assert state.attributes.get("max_temp") == 30.0
+    assert state.attributes.get("target_temp_step") == 0.1
+    assert state.attributes.get("preset_modes") == ["home", "eco"]
+    # The active preset was removed from config, so it is cleared
+    assert state.attributes.get(ATTR_PRESET_MODE) is None
+
+    entry = er.async_get(hass).async_get(climate_entity_id)
+    assert entry is not None
+    assert entry.capabilities is not None
+    assert entry.capabilities["target_temp_step"] == 0.1
+
+    await hass.services.async_call(
+        CLIMATE_DOMAIN,
+        SERVICE_SET_PRESET_MODE,
+        {ATTR_ENTITY_ID: climate_entity_id, ATTR_PRESET_MODE: "home"},
+        blocking=True,
+    )
+    coordinator = mock_config_entry.runtime_data.coordinator
+    zone_state = coordinator.controller.get_zone_runtime("zone1").state
+    assert zone_state.setpoint == 19.3
+    assert zone_state.preset_mode == "home"
+
+
+async def test_climate_presets_removed_in_place(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_temp_sensor: None,
+    climate_entity_id: str,
+) -> None:
+    """Test removing all presets drops the preset feature in place."""
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    zone_subentry = next(
+        subentry
+        for subentry in mock_config_entry.subentries.values()
+        if subentry.subentry_type == SUBENTRY_TYPE_ZONE
+    )
+    hass.config_entries.async_update_subentry(
+        mock_config_entry,
+        zone_subentry,
+        data={**zone_subentry.data, "presets": {}},
+    )
+    await hass.async_block_till_done()
+
+    state = hass.states.get(climate_entity_id)
+    assert state is not None
+    assert state.attributes.get("preset_modes") is None
+    assert not (
+        state.attributes["supported_features"] & ClimateEntityFeature.PRESET_MODE
+    )
