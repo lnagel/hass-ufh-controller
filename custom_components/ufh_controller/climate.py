@@ -12,7 +12,7 @@ from homeassistant.components.climate import (
 )
 from homeassistant.const import UnitOfTemperature
 
-from .const import DEFAULT_SETPOINT, SUBENTRY_TYPE_ZONE
+from .const import SUBENTRY_TYPE_ZONE
 from .entity import UFHControllerZoneEntity
 
 if TYPE_CHECKING:
@@ -41,7 +41,6 @@ async def async_setup_entry(
                     coordinator=coordinator,
                     zone_id=subentry.data["id"],
                     zone_name=subentry.data["name"],
-                    zone_config=dict(subentry.data),
                     subentry_id=subentry.subentry_id,
                 )
             ],
@@ -61,7 +60,6 @@ class UFHZoneClimate(UFHControllerZoneEntity, ClimateEntity):
         coordinator: UFHControllerDataUpdateCoordinator,
         zone_id: str,
         zone_name: str,
-        zone_config: dict[str, Any],
         subentry_id: str,
     ) -> None:
         """Initialize the climate entity."""
@@ -69,43 +67,41 @@ class UFHZoneClimate(UFHControllerZoneEntity, ClimateEntity):
 
         controller_id = coordinator.config_entry.data.get("controller_id", "")
         self._attr_unique_id = f"{controller_id}_{zone_id}_climate"
-
-        # Temperature settings
-        setpoint_config = zone_config.get("setpoint", DEFAULT_SETPOINT)
-        self._attr_min_temp = setpoint_config.get("min", DEFAULT_SETPOINT["min"])
-        self._attr_max_temp = setpoint_config.get("max", DEFAULT_SETPOINT["max"])
-        self._attr_target_temperature_step = setpoint_config.get(
-            "step", DEFAULT_SETPOINT["step"]
-        )
-
-        # Supported features
-        features = (
-            ClimateEntityFeature.TARGET_TEMPERATURE
-            | ClimateEntityFeature.TURN_ON
-            | ClimateEntityFeature.TURN_OFF
-        )
-
-        # Presets
-        presets = zone_config.get("presets", {})
-        if presets:
-            features |= ClimateEntityFeature.PRESET_MODE
-            self._attr_preset_modes = list(presets.keys())
-            self._presets = presets
-        else:
-            self._attr_preset_modes = None
-            self._presets = {}
-
-        self._attr_supported_features = features
         self._update_attrs()
 
     def _update_attrs(self) -> None:
-        """Set the climate state from coordinator data."""
+        """Set the climate state from zone config and coordinator data."""
+        self._update_config_attrs()
         self._attr_preset_mode = self._compute_preset_mode()
         self._attr_hvac_mode = self._compute_hvac_mode()
         self._attr_hvac_action = self._compute_hvac_action()
         self._attr_current_temperature = self._compute_current_temperature()
         self._attr_target_temperature = self._compute_target_temperature()
         self._attr_extra_state_attributes = self._compute_extra_state_attributes()
+
+    def _update_config_attrs(self) -> None:
+        """
+        Set setpoint limits and presets from the zone config.
+
+        Read on every update so in-place config reloads take effect without
+        recreating the entity.
+        """
+        config = self.coordinator.controller.get_zone_runtime(self._zone_id).config
+        self._attr_min_temp = config.setpoint_min
+        self._attr_max_temp = config.setpoint_max
+        self._attr_target_temperature_step = config.setpoint_step
+
+        features = (
+            ClimateEntityFeature.TARGET_TEMPERATURE
+            | ClimateEntityFeature.TURN_ON
+            | ClimateEntityFeature.TURN_OFF
+        )
+        if config.presets:
+            features |= ClimateEntityFeature.PRESET_MODE
+            self._attr_preset_modes = list(config.presets)
+        else:
+            self._attr_preset_modes = None
+        self._attr_supported_features = features
 
     def _compute_preset_mode(self) -> str | None:
         """Return the current preset mode from coordinator data."""
@@ -165,12 +161,6 @@ class UFHZoneClimate(UFHControllerZoneEntity, ClimateEntity):
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         """Set the preset mode."""
-        if preset_mode not in self._presets:
-            return
-
-        # Presets are stored as simple floats (temperature values)
-        setpoint = self._presets[preset_mode]
-        await self.coordinator.set_zone_setpoint(self._zone_id, setpoint)
         await self.coordinator.set_zone_preset_mode(self._zone_id, preset_mode)
 
     def _compute_extra_state_attributes(self) -> dict[str, Any]:
