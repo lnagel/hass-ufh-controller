@@ -100,6 +100,7 @@
         "data": {
           "setpoint_min": "Minimum setpoint",
           "setpoint_max": "Maximum setpoint",
+          "setpoint_step": "Temperature step",
           "setpoint_default": "Default setpoint",
           "temp_ema_time_constant": "Temperature smoothing time constant",
           "kp": "PID proportional gain (Kp)",
@@ -173,6 +174,7 @@
             "window_sensors": "Window sensors",
             "setpoint_min": "Minimum setpoint",
             "setpoint_max": "Maximum setpoint",
+            "setpoint_step": "Temperature step",
             "setpoint_default": "Default setpoint",
             "temp_ema_time_constant": "Temperature smoothing time constant",
             "kp": "PID proportional gain (Kp)",
@@ -205,6 +207,7 @@
           "data": {
             "setpoint_min": "Minimum setpoint",
             "setpoint_max": "Maximum setpoint",
+            "setpoint_step": "Temperature step",
             "setpoint_default": "Default setpoint",
             "temp_ema_time_constant": "Temperature smoothing time constant",
             "kp": "PID proportional gain (Kp)",

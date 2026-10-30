@@ -46,6 +46,7 @@ Zones are managed as **config subentries**. Users interact with zones through:
 | window_sensors | multi-entity | No | Window/door sensors that block this zone |
 | setpoint_min | float | No | Minimum allowed setpoint (default: 16°C) |
 | setpoint_max | float | No | Maximum allowed setpoint (default: 28°C) |
+| setpoint_step | float | No | Setpoint adjustment increment (default: 0.5°C) |
 | setpoint_default | float | No | Initial setpoint (default: 21°C) |
 | temp_ema_time_constant | number (s) | No | Temperature EMA filter time constant (default: 600s / 10 min) |
 | kp | float | No | PID proportional gain (default: 50.0) |

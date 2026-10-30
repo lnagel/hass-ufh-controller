@@ -41,6 +41,7 @@ from .const import (
     UI_SETPOINT_DEFAULT,
     UI_SETPOINT_MAX,
     UI_SETPOINT_MIN,
+    UI_SETPOINT_STEP,
     UI_SUPPLY_TARGET_TEMP,
     UI_TEMP_EMA_TIME_CONSTANT,
     UI_TIMING_CLOSING_WARNING,
@@ -305,6 +306,18 @@ def get_zone_schema(
                 )
             ),
             vol.Optional(
+                "setpoint_step",
+                default=setpoint.get("step", DEFAULT_SETPOINT["step"]),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=UI_SETPOINT_STEP["min"],
+                    max=UI_SETPOINT_STEP["max"],
+                    step=UI_SETPOINT_STEP["step"],
+                    unit_of_measurement=UnitOfTemperature.CELSIUS,
+                    mode=selector.NumberSelectorMode.BOX,
+                )
+            ),
+            vol.Optional(
                 "setpoint_default",
                 default=setpoint.get("default", DEFAULT_SETPOINT["default"]),
             ): selector.NumberSelector(
@@ -429,6 +442,18 @@ def get_zone_temperature_schema(
                     step=UI_SETPOINT_MAX["step"],
                     unit_of_measurement=UnitOfTemperature.CELSIUS,
                     mode=selector.NumberSelectorMode.SLIDER,
+                )
+            ),
+            vol.Optional(
+                "setpoint_step",
+                default=setpoint.get("step", DEFAULT_SETPOINT["step"]),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=UI_SETPOINT_STEP["min"],
+                    max=UI_SETPOINT_STEP["max"],
+                    step=UI_SETPOINT_STEP["step"],
+                    unit_of_measurement=UnitOfTemperature.CELSIUS,
+                    mode=selector.NumberSelectorMode.BOX,
                 )
             ),
             vol.Optional(
@@ -1084,8 +1109,11 @@ class ZoneSubentryFlowHandler(ConfigSubentryFlow):
                 "setpoint": {
                     "min": user_input.get("setpoint_min", DEFAULT_SETPOINT["min"]),
                     "max": user_input.get("setpoint_max", DEFAULT_SETPOINT["max"]),
-                    "step": current_data.get("setpoint", {}).get(
-                        "step", DEFAULT_SETPOINT["step"]
+                    "step": user_input.get(
+                        "setpoint_step",
+                        current_data.get("setpoint", {}).get(
+                            "step", DEFAULT_SETPOINT["step"]
+                        ),
                     ),
                     "default": user_input.get(
                         "setpoint_default", DEFAULT_SETPOINT["default"]

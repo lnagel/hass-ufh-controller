@@ -270,6 +270,7 @@ UI_TIMING_DHW_RECOVERY_TIME = {"min": 0, "max": 3600, "step": 60}  # 0-60 minute
 UI_SETPOINT_MIN = {"min": 5.0, "max": 30.0, "step": 0.1}
 UI_SETPOINT_MAX = {"min": 5.0, "max": 35.0, "step": 0.1}
 UI_SETPOINT_DEFAULT = {"min": 5.0, "max": 35.0, "step": 0.1}
+UI_SETPOINT_STEP = {"min": 0.1, "max": 1.0, "step": 0.1}
 
 # Temperature smoothing (EMA low-pass filter)
 DEFAULT_TEMP_EMA_TIME_CONSTANT = 600  # 10 minutes in seconds

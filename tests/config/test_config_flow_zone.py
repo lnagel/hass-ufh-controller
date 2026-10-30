@@ -102,6 +102,7 @@ async def test_zone_subentry_user_create_zone_with_options(
             "window_sensors": ["binary_sensor.bathroom_window"],
             "setpoint_min": 18.0,
             "setpoint_max": 26.0,
+            "setpoint_step": 0.1,
             "setpoint_default": 22.0,
             "kp": 40.0,
             "ki": 0.03,
@@ -114,6 +115,7 @@ async def test_zone_subentry_user_create_zone_with_options(
     assert result["data"]["window_sensors"] == ["binary_sensor.bathroom_window"]
     assert result["data"]["setpoint"]["min"] == 18.0
     assert result["data"]["setpoint"]["max"] == 26.0
+    assert result["data"]["setpoint"]["step"] == 0.1
     assert result["data"]["setpoint"]["default"] == 22.0
     assert result["data"]["pid"]["kp"] == 40.0
     assert result["data"]["pid"]["ki"] == 0.03
@@ -352,6 +354,7 @@ async def test_zone_subentry_update_temperature_control(
         user_input={
             "setpoint_min": 17.0,
             "setpoint_max": 27.0,
+            "setpoint_step": 0.2,
             "setpoint_default": 23.0,
             "kp": 60.0,
             "ki": 0.002,
@@ -367,6 +370,7 @@ async def test_zone_subentry_update_temperature_control(
     assert updated_subentry is not None
     assert updated_subentry.data["setpoint"]["min"] == 17.0
     assert updated_subentry.data["setpoint"]["max"] == 27.0
+    assert updated_subentry.data["setpoint"]["step"] == 0.2
     assert updated_subentry.data["setpoint"]["default"] == 23.0
     assert updated_subentry.data["pid"]["kp"] == 60.0
     assert updated_subentry.data["pid"]["ki"] == 0.002
@@ -567,6 +571,7 @@ def test_get_zone_schema_with_defaults() -> None:
     assert "window_sensors" in schema_keys
     assert "setpoint_min" in schema_keys
     assert "setpoint_max" in schema_keys
+    assert "setpoint_step" in schema_keys
     assert "setpoint_default" in schema_keys
     assert "kp" in schema_keys
     assert "ki" in schema_keys
@@ -769,6 +774,7 @@ def test_get_zone_temperature_schema_with_defaults() -> None:
     schema_keys = {str(key) for key in schema.schema}
     assert "setpoint_min" in schema_keys
     assert "setpoint_max" in schema_keys
+    assert "setpoint_step" in schema_keys
     assert "setpoint_default" in schema_keys
     assert "kp" in schema_keys
     assert "ki" in schema_keys
