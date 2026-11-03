@@ -343,6 +343,24 @@ class HeatingController:
         runtime.set_setpoint(setpoint)
         return True
 
+    def set_zone_preset_mode(self, zone_id: str, preset_mode: str | None) -> bool:
+        """
+        Apply or clear a preset for a zone.
+
+        Args:
+            zone_id: Zone identifier.
+            preset_mode: Preset name, or None to clear the preset.
+
+        Returns:
+            True if the preset was applied or cleared, False if zone not found
+            or preset not configured.
+
+        """
+        runtime = self._zones.get(zone_id)
+        if runtime is None:
+            return False
+        return runtime.set_preset_mode(preset_mode)
+
     def set_zone_enabled(self, zone_id: str, *, enabled: bool) -> bool:
         """
         Enable or disable a zone.

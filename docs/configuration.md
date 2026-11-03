@@ -289,6 +289,8 @@ The maximum allowed value for the integral term in percentage units. This preven
 
 Setpoint parameters define the allowed temperature range and precision for each zone's target temperature.
 
+**Reconfiguration:** Changes made via the zone's Temperature Control menu apply immediately. The climate entity's slider range and step update in place, without a restart or integration reload, and the current setpoint is kept (clamped to the new range).
+
 #### setpoint_min
 
 **Default:** 16.0°C
@@ -405,6 +407,8 @@ Maximum temperature for rapid heating or special situations.
 **Example:** Bathroom zone needs extra warmth, switch to "Boost" preset → setpoint jumps to 25°C for quick warmth, then returns to normal.
 
 **Note:** All presets are optional. If not configured during zone setup, preset support is disabled and users control temperature via the setpoint slider only.
+
+**Reconfiguration:** Preset changes made via the zone's Presets menu apply immediately, without a restart or integration reload. Selecting a preset uses its new temperature, adding the first preset enables preset support, and removing all presets disables it. If the active preset is removed, the zone keeps its current setpoint and switches to manual control. An active preset whose temperature changed is not re-applied until it is selected again.
 
 ---
 

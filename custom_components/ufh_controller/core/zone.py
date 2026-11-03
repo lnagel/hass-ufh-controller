@@ -137,7 +137,9 @@ class ZoneConfig:
     window_sensors: list[str] = field(default_factory=list)
     setpoint_min: float = DEFAULT_SETPOINT["min"]
     setpoint_max: float = DEFAULT_SETPOINT["max"]
+    setpoint_step: float = DEFAULT_SETPOINT["step"]
     setpoint_default: float = DEFAULT_SETPOINT["default"]
+    presets: dict[str, float] = field(default_factory=dict)
     kp: float = DEFAULT_PID["kp"]
     ki: float = DEFAULT_PID["ki"]
     kd: float = DEFAULT_PID["kd"]
@@ -368,6 +370,28 @@ class ZoneRuntime:
             min(self.config.setpoint_max, setpoint),
         )
         self.state.setpoint = clamped
+
+    def set_preset_mode(self, preset_mode: str | None) -> bool:
+        """
+        Apply a configured preset, or clear the preset for manual control.
+
+        Applying a preset sets the setpoint to the preset temperature.
+
+        Args:
+            preset_mode: Preset name, or None to clear the preset.
+
+        Returns:
+            True if the preset was applied or cleared, False if not configured.
+
+        """
+        if preset_mode is None:
+            self.state.preset_mode = None
+            return True
+        if preset_mode not in self.config.presets:
+            return False
+        self.set_setpoint(self.config.presets[preset_mode])
+        self.state.preset_mode = preset_mode
+        return True
 
     def set_enabled(self, *, enabled: bool) -> None:
         """

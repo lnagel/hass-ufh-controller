@@ -158,6 +158,73 @@ class TestSetZoneSetpoint:
         assert result is False
 
 
+class TestSetZonePresetMode:
+    """Test set_zone_preset_mode method."""
+
+    @pytest.fixture
+    def preset_config(self) -> ControllerConfig:
+        """Create a controller configuration with one zone that has presets."""
+        return ControllerConfig(
+            controller_id="heating",
+            name="Heating Controller",
+            zones=[
+                ZoneConfig(
+                    zone_id="living_room",
+                    name="Living Room",
+                    temp_sensor="sensor.living_room_temp",
+                    valve_switch="switch.living_room_valve",
+                    presets={"eco": 19.0, "boost": 30.0},
+                ),
+            ],
+        )
+
+    def test_apply_preset(self, preset_config: ControllerConfig) -> None:
+        """Test applying a preset sets the setpoint and preset mode."""
+        controller = HeatingController(preset_config, started_at=NOW)
+        result = controller.set_zone_preset_mode("living_room", "eco")
+
+        assert result is True
+        state = controller.get_zone_state("living_room")
+        assert state.setpoint == 19.0
+        assert state.preset_mode == "eco"
+
+    def test_apply_preset_clamped(self, preset_config: ControllerConfig) -> None:
+        """Test preset temperature is clamped to setpoint limits."""
+        controller = HeatingController(preset_config, started_at=NOW)
+        controller.set_zone_preset_mode("living_room", "boost")
+
+        state = controller.get_zone_state("living_room")
+        assert state.setpoint == 28.0  # Default max
+        assert state.preset_mode == "boost"
+
+    def test_clear_preset(self, preset_config: ControllerConfig) -> None:
+        """Test clearing the preset keeps the setpoint."""
+        controller = HeatingController(preset_config, started_at=NOW)
+        controller.set_zone_preset_mode("living_room", "eco")
+        result = controller.set_zone_preset_mode("living_room", None)
+
+        assert result is True
+        state = controller.get_zone_state("living_room")
+        assert state.setpoint == 19.0
+        assert state.preset_mode is None
+
+    def test_unknown_preset(self, preset_config: ControllerConfig) -> None:
+        """Test applying an unconfigured preset changes nothing."""
+        controller = HeatingController(preset_config, started_at=NOW)
+        setpoint = controller.get_zone_state("living_room").setpoint
+        result = controller.set_zone_preset_mode("living_room", "away")
+
+        assert result is False
+        state = controller.get_zone_state("living_room")
+        assert state.setpoint == setpoint
+        assert state.preset_mode is None
+
+    def test_unknown_zone(self, preset_config: ControllerConfig) -> None:
+        """Test applying a preset for an unknown zone."""
+        controller = HeatingController(preset_config, started_at=NOW)
+        assert controller.set_zone_preset_mode("unknown", "eco") is False
+
+
 class TestSetZoneEnabled:
     """Test set_zone_enabled method."""
 
