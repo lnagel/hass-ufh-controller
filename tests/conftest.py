@@ -354,7 +354,7 @@ def mock_setup_entry() -> Generator[None]:
     """Mock setting up a config entry."""
     with patch(
         "custom_components.ufh_controller.async_setup_entry",
-        return_value=True,
+        return_value=None,
     ):
         yield
 
