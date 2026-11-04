@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 from homeassistant.const import STATE_OFF, STATE_ON
 from homeassistant.core import HomeAssistant
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant.common import MockConfigEntry
 
 from custom_components.ufh_controller.const import (
     DEFAULT_TIMING,

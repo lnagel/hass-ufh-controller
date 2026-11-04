@@ -54,7 +54,7 @@ class UFHZoneClimate(UFHControllerZoneEntity, ClimateEntity):
 
     _attr_hvac_modes = [HVACMode.HEAT, HVACMode.OFF]
     _attr_translation_key = "thermostat"
-    _attr_temperature_unit = UnitOfTemperature.CELSIUS
+    _attr_native_temperature_unit = UnitOfTemperature.CELSIUS
 
     def __init__(
         self,
@@ -103,8 +103,8 @@ class UFHZoneClimate(UFHControllerZoneEntity, ClimateEntity):
         self._attr_preset_mode = self._compute_preset_mode()
         self._attr_hvac_mode = self._compute_hvac_mode()
         self._attr_hvac_action = self._compute_hvac_action()
-        self._attr_current_temperature = self._compute_current_temperature()
-        self._attr_target_temperature = self._compute_target_temperature()
+        self._attr_native_current_temperature = self._compute_current_temperature()
+        self._attr_native_target_temperature = self._compute_target_temperature()
         self._attr_extra_state_attributes = self._compute_extra_state_attributes()
 
     def _compute_preset_mode(self) -> str | None:

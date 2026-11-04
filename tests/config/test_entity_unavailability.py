@@ -6,7 +6,7 @@ from unittest.mock import patch
 import pytest
 from homeassistant.const import STATE_ON, STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant.common import MockConfigEntry
 from sqlalchemy.exc import OperationalError
 
 from custom_components.ufh_controller.const import (

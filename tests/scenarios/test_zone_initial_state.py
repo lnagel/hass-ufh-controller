@@ -14,7 +14,7 @@ from datetime import UTC, datetime
 import pytest
 from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant.common import MockConfigEntry
 
 from custom_components.ufh_controller.core.controller import (
     ControllerConfig,

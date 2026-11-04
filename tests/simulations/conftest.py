@@ -30,11 +30,6 @@ NOW = datetime(2024, 1, 15, 12, 0, 0, tzinfo=UTC)
 
 
 @pytest.fixture(autouse=True)
-def auto_enable_custom_integrations() -> None:
-    """No-op override — simulations don't use HA."""
-
-
-@pytest.fixture(autouse=True)
 def expected_lingering_timers() -> bool:
     """Allow lingering timers (no-op override)."""
     return True
