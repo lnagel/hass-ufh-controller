@@ -4,10 +4,10 @@ from types import MappingProxyType
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from homeassistant.config_entries import ConfigSubentry
+from homeassistant.config_entries import ConfigEntryState, ConfigSubentry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant.common import MockConfigEntry
 
 from custom_components.ufh_controller import _async_handle_config_update
 from custom_components.ufh_controller.const import (
@@ -86,6 +86,27 @@ async def test_unload_entry(
 
     assert await hass.config_entries.async_unload(mock_config_entry.entry_id)
     await hass.async_block_till_done()
+
+
+async def test_unload_entry_platform_failure(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Test unload fails and skips saving state when a platform fails to unload."""
+    mock_config_entry.add_to_hass(hass)
+
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = mock_config_entry.runtime_data.coordinator
+    with (
+        patch.object(hass.config_entries, "async_unload_platforms", return_value=False),
+        patch.object(coordinator, "async_save_state") as mock_save,
+    ):
+        assert not await hass.config_entries.async_unload(mock_config_entry.entry_id)
+
+    assert mock_config_entry.state is ConfigEntryState.FAILED_UNLOAD
+    mock_save.assert_not_called()
 
 
 async def test_reload_entry(

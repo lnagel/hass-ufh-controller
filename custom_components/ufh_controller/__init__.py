@@ -46,7 +46,7 @@ PLATFORMS: list[Platform] = [
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: UFHControllerConfigEntry,
-) -> bool:
+) -> None:
     """Set up Underfloor Heating Controller from a config entry."""
     LOGGER.debug("Setting up Underfloor Heating Controller entry: %s", entry.entry_id)
 
@@ -91,8 +91,6 @@ async def async_setup_entry(
         hass.bus.async_listen("config_subentry_updated", _async_handle_subentry_update)
     )
 
-    return True
-
 
 async def _async_ensure_controller_subentry(
     hass: HomeAssistant,
@@ -123,16 +121,16 @@ async def _async_ensure_controller_subentry(
 async def async_unload_entry(
     hass: HomeAssistant,
     entry: UFHControllerConfigEntry,
-) -> bool:
+) -> None:
     """Handle removal of an entry."""
     LOGGER.debug("Unloading Underfloor Heating Controller entry: %s", entry.entry_id)
 
-    # Save state before unloading
+    await hass.config_entries.async_unload_platforms_or_raise(entry, PLATFORMS)
+
+    # Save state after the platforms have unloaded
     if entry.runtime_data is not None:
         coordinator = entry.runtime_data.coordinator
         await coordinator.async_save_state()
-
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
 
 async def _async_handle_config_update(

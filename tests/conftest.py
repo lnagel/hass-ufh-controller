@@ -14,7 +14,7 @@ from homeassistant.helpers.recorder import (
     DATA_RECORDER,
     RecorderData,
 )
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant.common import MockConfigEntry
 
 from custom_components.ufh_controller.const import (
     DEFAULT_PID,
@@ -332,13 +332,6 @@ def mock_config_entry_with_supply_temp() -> MockConfigEntry:
 
 
 @pytest.fixture(autouse=True)
-def auto_enable_custom_integrations(
-    enable_custom_integrations: None,
-) -> None:
-    """Enable custom integrations for all tests."""
-
-
-@pytest.fixture(autouse=True)
 def expected_lingering_timers() -> bool:
     """Allow lingering timers for coordinator updates."""
     return True
@@ -361,7 +354,7 @@ def mock_setup_entry() -> Generator[None]:
     """Mock setting up a config entry."""
     with patch(
         "custom_components.ufh_controller.async_setup_entry",
-        return_value=True,
+        return_value=None,
     ):
         yield
 

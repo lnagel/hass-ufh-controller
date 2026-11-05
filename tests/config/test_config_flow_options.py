@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant.common import MockConfigEntry
 
 from custom_components.ufh_controller.const import (
     DEFAULT_OUTDOOR_TEMP_COLD,
@@ -185,7 +185,7 @@ async def test_options_flow_reads_controller_subentry(
 
     with patch(
         "custom_components.ufh_controller.async_setup_entry",
-        return_value=True,
+        return_value=None,
     ):
         await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
@@ -389,7 +389,7 @@ async def test_options_flow_backwards_compatible(
 
     with patch(
         "custom_components.ufh_controller.async_setup_entry",
-        return_value=True,
+        return_value=None,
     ):
         await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
