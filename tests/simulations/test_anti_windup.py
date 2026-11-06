@@ -9,6 +9,7 @@ import pytest
 from .conftest import (
     ROOM_ARCHETYPES,
     assert_integral_bounded,
+    assert_integral_converged,
     assert_integral_stable,
 )
 
@@ -140,11 +141,12 @@ class TestAntiWindup:
 
 class TestBackCalculation:
     """
-    Verify back-calculation anti-windup per plan.
+    Verify integral behavior with back-calculation anti-windup.
 
     When actual valve delivery differs from PID-requested duty, the
-    integral term should adjust to prevent ratcheting.  These tests
-    will fail if the controller lacks a back-calculation mechanism.
+    back-calculation corrects the integral term at period boundaries.
+    These tests verify the integral stays at physically reasonable
+    levels and the system handles demand transitions safely.
     """
 
     def test_under_delivery_correction(
@@ -208,14 +210,15 @@ class TestBackCalculation:
         ],
     ) -> None:
         """
-        Sub-threshold demand for many periods: integral converges.
+        Sub-threshold demand for many periods: integral converges low.
 
         With well_insulated (0.56 W/(K·m²), 30 W/m²) at outdoor=19.67:
-        theoretical duty = 0.56*(21-19.67)/30*100 = 2.5%.  Even with
-        integral accumulation, duty stays below the 7.5% threshold so
-        the valve never fires.  Without back-calculation the integral
-        will ratchet to 100%.  With proper anti-windup the integral
-        should converge to a steady value.
+        theoretical duty = 0.56*(21-19.67)/30*100 = 2.5%.  The PID
+        output oscillates below the 7.5% min-run threshold, so the valve
+        fires sporadically (roughly every other period).
+
+        The integral should converge to a value consistent with the
+        steady-state duty (~2.5%), not ratchet toward the 100 clamp.
         """
         room = ROOM_ARCHETYPES["well_insulated"]
         harness, _controller, zid = make_single_zone_system(
@@ -227,7 +230,94 @@ class TestBackCalculation:
         # Integral must be bounded (this is the basic clamp check)
         assert_integral_bounded(log, zid)
 
-        # KEY CHECK: Integral should converge to a steady value, not
-        # keep growing to the clamp.  If the integral grows monotonically
-        # to 100, the controller lacks back-calculation anti-windup.
+        # Integral should converge to a steady value, not keep drifting
         assert_integral_stable(log, zid, after_hours=24, max_drift=5.0)
+
+        # Integral should stay in the same order of magnitude as the
+        # steady-state duty (~2.5%), not climb toward the 100 clamp.
+        assert_integral_converged(log, zid, max_value=15, after_hours=24)
+
+    def test_low_kp_integral_converges(
+        self,
+        make_single_zone_system: Callable[
+            ..., tuple[SimulationHarness, HeatingController, str]
+        ],
+    ) -> None:
+        """
+        Low proportional gain: integral converges to steady-state level.
+
+        With kp=10 at outdoor=19°C, the proportional term only exceeds
+        the 7.5% min-run threshold when error > 0.75°C.  Once the room
+        is near setpoint (error < 0.75°C), the integral provides the
+        base demand and P provides the fine correction.
+
+        Steady-state duty at outdoor=19°C:
+          0.56*(21-19)/30*100 = 3.73%
+
+        The integral should settle in the single digits, consistent
+        with the steady-state heating need.
+        """
+        room = ROOM_ARCHETYPES["well_insulated"]
+        harness, _controller, zid = make_single_zone_system(
+            room,
+            outdoor_temp=19.0,
+            initial_temp=20.0,
+            setpoint=21.0,
+            kp=10.0,
+            ki=0.001,
+        )
+
+        log = harness.run(48 * 3600)  # 48 hours
+
+        # Integral must stabilize
+        assert_integral_stable(log, zid, after_hours=24, max_drift=10.0)
+
+        # Integral should stay well below the clamp — in the same
+        # ballpark as the theoretical duty (3.73%), not at 100.
+        assert_integral_converged(log, zid, max_value=15, after_hours=24)
+
+    def test_demand_transition_bounded_overshoot(
+        self,
+        make_single_zone_system: Callable[
+            ..., tuple[SimulationHarness, HeatingController, str]
+        ],
+    ) -> None:
+        """
+        Cold snap after mild weather: temperature stays within safe bounds.
+
+        Phase 1 (0-24h): outdoor=20°C, kp=10 — low demand.
+          duty ≈ 0.56*(21-20)/30*100 = 1.87%.
+        Phase 2 (24-48h): outdoor drops to 0°C — high demand.
+          duty ≈ 0.56*(21-0)/30*100 = 39.2%.
+
+        Verifies the controller handles a sudden demand increase
+        without temperature exceeding setpoint + 2°C.
+        """
+        room = ROOM_ARCHETYPES["well_insulated"]
+        harness, _controller, zid = make_single_zone_system(
+            room,
+            outdoor_temp=20.0,
+            initial_temp=21.0,
+            setpoint=21.0,
+            kp=10.0,
+            ki=0.001,
+        )
+
+        def drop_outdoor(h: SimulationHarness) -> None:
+            """Simulate sudden cold snap."""
+            h.outdoor_temp = 0.0
+            h.rooms[zid].outdoor_temp = 0.0
+
+        log = harness.run(
+            48 * 3600,
+            mutations=[(24 * 3600, drop_outdoor)],
+        )
+
+        # Temperature should not overshoot more than 2°C above setpoint
+        entries_phase2 = log.zone_entries_after(zid, 24 * 3600)
+        temps = [e.room_temp for e in entries_phase2]
+        max_temp = max(temps)
+        assert max_temp < 21.0 + 2.0, (
+            f"Max temp {max_temp:.2f}°C during demand transition exceeds "
+            f"setpoint + 2°C (23°C)"
+        )

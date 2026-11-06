@@ -11,7 +11,7 @@ from custom_components.ufh_controller.const import (
     ValveState,
 )
 from custom_components.ufh_controller.core.controller import ControllerState
-from custom_components.ufh_controller.core.pid import PIDController
+from custom_components.ufh_controller.core.pid import PIDController, PIDState
 from custom_components.ufh_controller.core.zone import (
     CircuitType,
     ZoneAction,
@@ -553,3 +553,210 @@ class TestZoneRuntimeRequestedDuration:
         # Don't call update_pid - state is None
         zone_runtime.update_requested_duration(7200)
         assert zone_runtime.state.requested_duration == 0.0
+
+
+class TestZoneRuntimeBackCalculation:
+    """Test apply_period_end_back_calculation method."""
+
+    @pytest.fixture
+    def zone_runtime(self) -> ZoneRuntime:
+        """Create a zone runtime with known PID gains for testing."""
+        config = ZoneConfig(
+            zone_id="test",
+            name="Test Zone",
+            temp_sensor="sensor.test",
+            valve_switch="switch.test",
+            kp=50.0,
+            ki=0.001,
+            kd=0.0,
+        )
+        pid = PIDController(kp=50.0, ki=0.001, kd=0.0)
+        state = ZoneState(zone_id="test")
+        return ZoneRuntime(config=config, pid=pid, state=state)
+
+    def test_correction_applied_at_period_end(self, zone_runtime: ZoneRuntime) -> None:
+        """Integral reduced when used < commanded."""
+        zone_runtime.pid.set_state(
+            PIDState(
+                error=0.5,
+                proportional=25.0,
+                integral=30.0,
+                derivative=0.0,
+                duty_cycle=50.0,
+            )
+        )
+        # Convergence point recorded with 50% requested (3600s / 7200s)
+        zone_runtime.state.last_action_at = NOW
+        zone_runtime.state.last_requested_duration = 3600.0
+        # Zone only delivered 360s out of 7200s = 5% actual
+        zone_runtime.state.used_duration = 360.0
+
+        zone_runtime.apply_period_end_back_calculation(7200)
+
+        # Kt = 0.001/50 = 0.00002
+        # correction = 0.00002 * (5 - 50) * 7200 = -6.48
+        # new_integral = 30 - 6.48 = 23.52
+        assert zone_runtime.pid.state is not None
+        assert zone_runtime.pid.state.integral == pytest.approx(23.52)
+
+    def test_no_correction_zone_disabled(self, zone_runtime: ZoneRuntime) -> None:
+        """Skipped when zone disabled."""
+        zone_runtime.pid.set_state(
+            PIDState(
+                error=0.5,
+                proportional=25.0,
+                integral=30.0,
+                derivative=0.0,
+                duty_cycle=50.0,
+            )
+        )
+        zone_runtime.state.last_action_at = NOW
+        zone_runtime.state.last_requested_duration = 3600.0
+        zone_runtime.state.used_duration = 360.0
+        zone_runtime.state.enabled = False
+
+        zone_runtime.apply_period_end_back_calculation(7200)
+
+        assert zone_runtime.pid.state is not None
+        assert zone_runtime.pid.state.integral == 30.0  # Unchanged
+
+    def test_no_correction_when_fully_delivered(
+        self, zone_runtime: ZoneRuntime
+    ) -> None:
+        """No change when used_duration matches commanded duty cycle."""
+        zone_runtime.pid.set_state(
+            PIDState(
+                error=0.5,
+                proportional=25.0,
+                integral=30.0,
+                derivative=0.0,
+                duty_cycle=50.0,
+            )
+        )
+        zone_runtime.state.last_action_at = NOW
+        zone_runtime.state.last_requested_duration = 3600.0
+        # 50% of 7200 = 3600s delivered exactly
+        zone_runtime.state.used_duration = 3600.0
+
+        zone_runtime.apply_period_end_back_calculation(7200)
+
+        assert zone_runtime.pid.state is not None
+        assert zone_runtime.pid.state.integral == 30.0  # Unchanged
+
+    def test_no_correction_no_pid_state(self, zone_runtime: ZoneRuntime) -> None:
+        """No crash when PID state is None."""
+        assert zone_runtime.pid.state is None
+        zone_runtime.state.used_duration = 360.0
+
+        zone_runtime.apply_period_end_back_calculation(7200)
+
+        assert zone_runtime.pid.state is None
+
+    def test_uses_convergence_point_not_current_duty_cycle(
+        self, zone_runtime: ZoneRuntime
+    ) -> None:
+        """
+        Correction uses convergence-point snapshot, not drifted end-of-period value.
+
+        Scenario: PI outputs 15% at convergence point, valve opens for min_run_time
+        (12.5% actual), then room warms and duty cycle drops to 6% by period end.
+        Correction should compare actual (12.5%) vs commanded (15%), not vs 6%.
+        """
+        zone_runtime.pid.set_state(
+            PIDState(
+                error=0.1,
+                proportional=5.0,
+                integral=30.0,
+                derivative=0.0,
+                duty_cycle=6.0,  # End-of-period value (drifted down)
+            )
+        )
+        # Convergence point: 15% requested = 1080s / 7200s
+        zone_runtime.state.last_action_at = NOW
+        zone_runtime.state.last_requested_duration = 1080.0
+        # Valve ran for min_run_time: 900s / 7200s = 12.5% actual
+        zone_runtime.state.used_duration = 900.0
+
+        zone_runtime.apply_period_end_back_calculation(7200)
+
+        # Kt = 0.001/50 = 0.00002
+        # correction = 0.00002 * (12.5 - 15) * 7200 = 0.00002 * -2.5 * 7200 = -0.36
+        # new_integral = 30 - 0.36 = 29.64 (small downward nudge, correct direction)
+        assert zone_runtime.pid.state is not None
+        assert zone_runtime.pid.state.integral == pytest.approx(29.64)
+
+
+class TestZoneRuntimeMarkConvergencePoint:
+    """Test mark_convergence_point method."""
+
+    def test_records_timestamp_and_requested_duration(self) -> None:
+        """Convergence point captures timestamp and requested_duration."""
+        config = ZoneConfig(
+            zone_id="test",
+            name="Test Zone",
+            temp_sensor="sensor.test",
+            valve_switch="switch.test",
+        )
+        pid = PIDController(kp=50.0, ki=0.001, kd=0.0)
+        state = ZoneState(zone_id="test")
+        state.requested_duration = 3600.0
+        runtime = ZoneRuntime(config=config, pid=pid, state=state)
+
+        runtime.mark_convergence_point(NOW)
+
+        assert runtime.state.last_action_at == NOW
+        assert runtime.state.last_requested_duration == 3600.0
+
+    def test_updates_on_subsequent_calls(self) -> None:
+        """Later convergence point overwrites previous values."""
+        config = ZoneConfig(
+            zone_id="test",
+            name="Test Zone",
+            temp_sensor="sensor.test",
+            valve_switch="switch.test",
+        )
+        pid = PIDController(kp=50.0, ki=0.001, kd=0.0)
+        state = ZoneState(zone_id="test")
+        state.requested_duration = 3600.0
+        runtime = ZoneRuntime(config=config, pid=pid, state=state)
+
+        runtime.mark_convergence_point(NOW)
+
+        # Change requested_duration and mark again
+        later = datetime(2026, 2, 1, 12, 30, 0, tzinfo=UTC)
+        state.requested_duration = 1800.0
+        runtime.mark_convergence_point(later)
+
+        assert runtime.state.last_action_at == later
+        assert runtime.state.last_requested_duration == 1800.0
+
+    def test_no_correction_when_no_convergence_point(self) -> None:
+        """Back-calculation skipped when last_action_at is None."""
+        config = ZoneConfig(
+            zone_id="test",
+            name="Test Zone",
+            temp_sensor="sensor.test",
+            valve_switch="switch.test",
+            kp=50.0,
+            ki=0.001,
+            kd=0.0,
+        )
+        pid = PIDController(kp=50.0, ki=0.001, kd=0.0)
+        pid.set_state(
+            PIDState(
+                error=0.5,
+                proportional=25.0,
+                integral=30.0,
+                derivative=0.0,
+                duty_cycle=50.0,
+            )
+        )
+        state = ZoneState(zone_id="test")
+        state.used_duration = 360.0
+        runtime = ZoneRuntime(config=config, pid=pid, state=state)
+
+        # No convergence point set (last_action_at is None)
+        runtime.apply_period_end_back_calculation(7200)
+
+        assert runtime.pid.state is not None
+        assert runtime.pid.state.integral == 30.0  # Unchanged
