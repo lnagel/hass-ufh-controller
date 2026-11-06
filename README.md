@@ -2,7 +2,7 @@
 
 [![GitHub Release](https://img.shields.io/github/v/release/lnagel/hass-ufh-controller)](https://github.com/lnagel/hass-ufh-controller/releases)
 [![License](https://img.shields.io/github/license/lnagel/hass-ufh-controller)](https://github.com/lnagel/hass-ufh-controller/blob/main/LICENSE)
-[![HACS](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=lnagel&repository=hass-ufh-controller&category=integration)
+[![Marketplace](https://img.shields.io/badge/Home_Assistant-Marketplace-41BDF5.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=lnagel&repository=hass-ufh-controller&category=integration)
 [![CI](https://img.shields.io/github/actions/workflow/status/lnagel/hass-ufh-controller/checks.yml?branch=main&label=tests)](https://github.com/lnagel/hass-ufh-controller/actions)
 [![codecov](https://codecov.io/gh/lnagel/hass-ufh-controller/branch/main/graph/badge.svg)](https://codecov.io/gh/lnagel/hass-ufh-controller)
 
@@ -159,21 +159,11 @@ This code controls heating for real homes. A bug can mean frozen pipes, burst pl
 
 ## Installation
 
-[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=lnagel&repository=hass-ufh-controller&category=integration)
+[![Open your Home Assistant instance and open a repository in the Marketplace.](https://my.home-assistant.io/badges/marketplace_repository.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=lnagel&repository=hass-ufh-controller&category=integration)
 
-### HACS (Recommended)
-
-1. Open HACS in Home Assistant
-2. Click the three dots menu > **Custom repositories**
-3. Add `https://github.com/lnagel/hass-ufh-controller` with category **Integration**
-4. Search for "Underfloor Heating Controller" and install
-5. Restart Home Assistant
-
-### Manual Installation
-
-1. Download the latest release from [GitHub Releases](https://github.com/lnagel/hass-ufh-controller/releases)
-2. Extract and copy `custom_components/ufh_controller` to your `config/custom_components` directory
-3. Restart Home Assistant
+1. Open **Settings > Marketplace** in Home Assistant, or use the button above.
+2. Search for "Underfloor Heating Controller" and select **Install**.
+3. Continue with the integration setup when prompted.
 
 ## Documentation
 

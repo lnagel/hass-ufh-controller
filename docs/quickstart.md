@@ -38,19 +38,8 @@ Verify your entities are working before setup:
 
 ## Step 1: Install the Integration
 
-### Via HACS (Recommended)
-
-1. Open HACS in Home Assistant
-2. Click the three dots menu → **Custom repositories**
-3. Add `https://github.com/lnagel/hass-ufh-controller` with category **Integration**
-4. Search for "Underfloor Heating Controller" and install
-5. Restart Home Assistant
-
-### Manual Installation
-
-1. Download the latest release from [GitHub Releases](https://github.com/lnagel/hass-ufh-controller/releases)
-2. Extract `custom_components/ufh_controller` to your `config/custom_components` directory
-3. Restart Home Assistant
+1. Open **Settings > Marketplace** in Home Assistant
+2. Search for "Underfloor Heating Controller" and select **Install**
 
 After installation, the integration appears in Settings → Devices & Services → Add Integration.
 
