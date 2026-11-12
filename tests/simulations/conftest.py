@@ -106,6 +106,7 @@ class ZoneSpec:
     setpoint: float = 21.0
     kp: float = 50.0
     ki: float = 0.001
+    nominal_flow_rate: float | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -195,6 +196,8 @@ def make_multi_zone_system() -> Callable[
         min_run_time: int = 540,
         dt: float = 60.0,
         dhw_schedule: Callable[[float], bool] | None = None,
+        optimal_flow_rate_min: float | None = None,
+        optimal_flow_rate_max: float | None = None,
     ) -> tuple[SimulationHarness, HeatingController, list[str]]:
         zone_configs = []
         rooms: dict[str, RoomModel] = {}
@@ -210,6 +213,7 @@ def make_multi_zone_system() -> Callable[
                 kp=spec.kp,
                 ki=spec.ki,
                 temp_ema_time_constant=0,
+                nominal_flow_rate=spec.nominal_flow_rate,
             )
             zone_configs.append(zc)
             rooms[spec.zone_id] = RoomModel(
@@ -229,6 +233,8 @@ def make_multi_zone_system() -> Callable[
                 min_run_time=min_run_time,
             ),
             zones=zone_configs,
+            optimal_flow_rate_min=optimal_flow_rate_min,
+            optimal_flow_rate_max=optimal_flow_rate_max,
         )
         controller = HeatingController(config, started_at=NOW)
 
